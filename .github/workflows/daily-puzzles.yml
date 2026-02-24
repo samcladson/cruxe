@@ -1,7 +1,8 @@
 name: Generate Daily Puzzles
 
-# Runs at 00:05 UTC every day to generate all 101 puzzles
-# Also available as a manual trigger via workflow_dispatch
+# Runs at 00:05 UTC every day to generate all 101 puzzles.
+# Also available as a manual trigger via workflow_dispatch.
+# Runs the script directly in Node.js — no Edge Functions, no timeouts.
 on:
   schedule:
     - cron: "5 0 * * *"
@@ -15,32 +16,28 @@ on:
 jobs:
   generate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
-      - name: Generate Daily Puzzles
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate puzzles
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           DATE="${{ github.event.inputs.date || '' }}"
           if [ -z "$DATE" ]; then
             DATE=$(date -u +%Y-%m-%d)
           fi
-
-          echo "🎲 Generating puzzles for: $DATE"
-
-          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
-            "${{ secrets.SUPABASE_URL }}/functions/v1/generate-daily-puzzles" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-            -H "Content-Type: application/json" \
-            -d "{\"date\": \"$DATE\"}")
-
-          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-          BODY=$(echo "$RESPONSE" | sed '$d')
-
-          echo "📊 Response ($HTTP_CODE):"
-          echo "$BODY" | python3 -m json.tool 2>/dev/null || echo "$BODY"
-
-          if [ "$HTTP_CODE" -ge 500 ]; then
-            echo "❌ Generation failed with HTTP $HTTP_CODE"
-            exit 1
-          fi
-
-          echo "✅ Generation complete"
+          npx tsx scripts/generate-daily-puzzles.ts "$DATE"

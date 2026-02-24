@@ -153,10 +153,12 @@ export async function fetchCategoryPuzzles(
   });
 }
 
+import { buildPuzzle } from "./crosswordEngine";
+
 /**
  * Fetches the full puzzle data for a specific puzzle by ID.
- * Called when the user taps "Play" — this is the only time
- * we download the full grid JSONB.
+ * The database only stores the word list and metadata.
+ * We build the actual crossword grid layout here on the client.
  */
 export async function fetchPuzzleById(
   puzzleId: string,
@@ -172,7 +174,17 @@ export async function fetchPuzzleById(
     return null;
   }
 
-  return data.puzzle_data as Puzzle;
+  // data.puzzle_data is the lightweight DailyPuzzleData
+  const puzzleData = data.puzzle_data;
+  if (!puzzleData || !puzzleData.words) return null;
+
+  // Build the puzzle grid dynamically on the client
+  return buildPuzzle(
+    puzzleData.words,
+    puzzleData.metadata.category || "general",
+    puzzleData.metadata.difficulty || "medium",
+    puzzleData.metadata.gridSize || 10,
+  );
 }
 
 /**
@@ -199,14 +211,16 @@ export async function fetchDailyPuzzle(
     .single();
 
   if (error || !data) {
-    console.error(
-      "[puzzleService] Failed to fetch daily puzzle:",
-      error?.message,
+    console.warn(
+      `[puzzleService] No daily puzzle found for ${category}/${difficulty}/${gridSize}`,
     );
     return null;
   }
 
-  return data.puzzle_data as Puzzle;
+  const puzzleData = data.puzzle_data;
+  if (!puzzleData || !puzzleData.words) return null;
+
+  return buildPuzzle(puzzleData.words, category, difficulty, gridSize);
 }
 
 // ─── Completion recording ────────────────────────────────────────────
