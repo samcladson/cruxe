@@ -1,0 +1,299 @@
+# Daily Puzzle Pre-Generation System — Blueprint v2
+
+## Goal
+
+Move puzzle generation to a **server-side daily job** using Supabase Edge Functions. Every user sees the same daily puzzles. 80 combinations are pre-generated and served instantly on request.
+
+---
+
+## Architecture Overview
+
+```mermaid
+flowchart TD
+    subgraph "🌙 Daily Generation"
+        CRON[External Cron - GitHub Actions] -->|POST| EDGE[Edge Function]
+        EDGE -->|Gemini API| GEN[Generate 80 puzzles]
+        GEN -->|INSERT| DB[(daily_puzzles)]
+    end
+
+    subgraph "📱 Client App"
+        OPEN[App Opens] -->|Fetch metadata| META[Show today's puzzle list]
+        META -->|User picks puzzle| FETCH[Fetch full puzzle JSON]
+        FETCH --> PLAY[Game Screen]
+        PLAY -->|Save progress| LOCAL[(AsyncStorage)]
+        PLAY -->|On completion| COMP[Record completion to server]
+    end
+
+    DB -.->|Read| META
+    DB -.->|Read| FETCH
+    COMP -->|INSERT| COMPDB[(puzzle_completions)]
+```
+
+---
+
+## Edge Case Deep Dive
+
+### 1. User pauses a puzzle and the next day begins
+
+This is the most critical edge case. Here's the strategy:
+
+**Principle: In-progress game state lives locally. The server only knows about completions.**
+
+```mermaid
+flowchart TD
+    A[User opens app] --> B{In-progress puzzle in AsyncStorage?}
+    B -->|No| C[Show today's puzzles]
+    B -->|Yes| D{How old is the puzzle?}
+    D -->|Today| E[Offer RESUME prominently]
+    D -->|1-6 days old| F[Show RESUME banner + today's puzzles]
+    D -->|7+ days old| G[Auto-discard stale progress, show today's]
+    E --> H[User taps Resume → loads from local state]
+    F --> I{User chooses}
+    I -->|Resume| H
+    I -->|Play today's| J[Clear old progress, load new puzzle]
+```
+
+**How it works:**
+
+| Aspect | Strategy |
+|---|---|
+| **Where progress is stored** | `AsyncStorage` via the existing `puzzleStore` (zustand persist). Already working today. |
+| **What gets saved locally** | Full puzzle object (grid with user inputs, timer, hints used, puzzle date, puzzle ID) |
+| **Day boundary** | The puzzle's `puzzle_date` field is compared to today's date. If different, display a "Resume yesterday's puzzle" banner above today's puzzle list |
+| **Expiry** | Progress older than **7 days** is auto-discarded on app open. No stale data buildup |
+| **Completion** | When a puzzle is completed (regardless of which day it started), a lightweight completion record is sent to the server |
+| **No server sync of progress** | We do NOT save partial game state to Supabase. This keeps costs near zero and avoids complex merge conflicts |
+
+> [!NOTE]
+> Since puzzle data is pre-built on the server, the local state only needs to store the user's cell inputs, timer, and hints. Even if they delete the app, the puzzle itself can be re-fetched (they just lose their progress, which is acceptable).
+
+---
+
+### 2. All Edge Cases Catalog
+
+| # | Edge Case | Solution |
+|---|---|---|
+| 1 | **App opens before cron runs** (no puzzles for today) | Client sees "Puzzles preparing for today..." with a retry button. The cron runs at 00:05 UTC so this window is tiny. As a fallback, serve yesterday's puzzles |
+| 2 | **User plays offline** | Puzzle data is cached locally after first fetch. Progress saves to AsyncStorage. Completion record queues locally and syncs on reconnect |
+| 3 | **Timezone differences** | All dates use **UTC**. The client converts display dates to the user's locale but queries by UTC date |
+| 4 | **App crash mid-game** | Zustand persist saves state to AsyncStorage after every cell input. On reopen, the game resumes exactly where it was |
+| 5 | **User tries to play same puzzle twice** | Client checks if a completion record exists for that `puzzle_id`. If so, shows "✅ Completed" badge instead of "Play" button |
+| 6 | **Daily rotation while user is mid-game** | No interruption. The game screen doesn't care about dates — it works with whatever puzzle is in the store. They finish at their own pace |
+| 7 | **Duplicate generation** (cron fires twice) | `UNIQUE(puzzle_date, category, difficulty, grid_size)` constraint + `ON CONFLICT DO NOTHING` in the INSERT |
+| 8 | **Gemini API failure during generation** | The Edge Function logs the error, skips that combo, continues with others. Returns a report. Next invocation fills the gaps (idempotent) |
+| 9 | **Database grows unbounded** | Retention policy: a weekly cleanup job deletes `daily_puzzles` rows older than 30 days. Completed puzzle records remain forever (they're tiny) |
+| 10 | **User switches devices** | Progress is lost (local-only). Completion history syncs via `puzzle_completions` table (requires auth, Phase 2) |
+
+---
+
+## Database Schema (Cost-Optimized)
+
+### Table 1: `daily_puzzles` — Pre-generated puzzle data
+
+```sql
+CREATE TABLE daily_puzzles (
+  id            UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  puzzle_date   DATE NOT NULL,
+  category      TEXT NOT NULL,
+  difficulty    TEXT NOT NULL,
+  grid_size     INT  NOT NULL,
+  
+  -- Full puzzle payload: grid, clues, metadata
+  puzzle_data   JSONB NOT NULL,
+  
+  -- Lightweight fields for listing (avoids loading full JSONB)
+  total_words   INT NOT NULL,
+  estimated_time INT NOT NULL,
+  
+  created_at    TIMESTAMPTZ DEFAULT NOW(),
+  
+  UNIQUE (puzzle_date, category, difficulty, grid_size)
+);
+
+-- Primary query: fetch one puzzle by exact match
+CREATE INDEX idx_dp_lookup 
+  ON daily_puzzles (puzzle_date, category, difficulty, grid_size);
+```
+
+**Cost strategy:**
+- **Retention:** Delete puzzles older than 30 days via a weekly cleanup Edge Function
+- **Row size:** ~15-50KB per puzzle × 80/day × 30 days ≈ **36-120MB total**. Well within Supabase free tier (500MB)
+
+---
+
+### Table 2: `puzzle_completions` — Lightweight completion records
+
+```sql
+CREATE TABLE puzzle_completions (
+  id            UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id       TEXT NOT NULL,             -- 'guest' initially, auth user ID later
+  puzzle_id     UUID REFERENCES daily_puzzles(id),
+  
+  -- Result stats (small ints/floats, very cheap to store)
+  score         INT NOT NULL,
+  time_taken    INT NOT NULL,              -- seconds
+  accuracy      REAL NOT NULL,             -- 0.0 to 1.0
+  hints_used    INT NOT NULL DEFAULT 0,
+  coins_earned  INT NOT NULL DEFAULT 0,
+  
+  -- Denormalized for easy querying without joining daily_puzzles
+  puzzle_date   DATE NOT NULL,
+  category      TEXT NOT NULL,
+  difficulty    TEXT NOT NULL,
+  grid_size     INT NOT NULL,
+  
+  completed_at  TIMESTAMPTZ DEFAULT NOW(),
+  
+  -- One completion per user per puzzle
+  UNIQUE (user_id, puzzle_id)
+);
+
+-- User's history query (profile, stats)
+CREATE INDEX idx_pc_user ON puzzle_completions (user_id, completed_at DESC);
+
+-- Check if user already completed a specific puzzle
+CREATE INDEX idx_pc_lookup ON puzzle_completions (user_id, puzzle_id);
+```
+
+**Why this is cheap:**
+- Each row is ~200 bytes (no JSONB, just primitives)
+- 1 user completing 5 puzzles/day × 365 days = 1,825 rows ≈ **350KB per user per year**
+- 10,000 users = **3.5GB per year**. Manageable on free tier for a long time
+
+---
+
+### No `user_puzzle_progress` table (intentional!)
+
+> [!IMPORTANT]
+> We deliberately do NOT sync partial game progress to the server. This is the biggest cost saver:
+> - No writes on every cell input
+> - No read-modify-write conflicts
+> - No complex merge logic for offline/online
+> - AsyncStorage handles this perfectly for a single-device game
+
+---
+
+## Game History Display Strategy
+
+The user wants to see their play history. Here's how we do it cheaply:
+
+### On the Category Screen
+
+```
+Today's Puzzles — General
+┌──────────────────────────────┐
+│ 6×6 Easy      ✅ Completed   │  ← from puzzle_completions
+│ 8×8 Medium    ▶  Play        │  ← no completion record
+│ 10×10 Hard    ▶  Play        │
+│ 12×12 Expert  🔒 Locked      │  ← coin requirement met?
+└──────────────────────────────┘
+```
+
+**Query:** One lightweight SELECT to get today's metadata + LEFT JOIN with user's completions:
+```sql
+SELECT 
+  dp.id, dp.category, dp.difficulty, dp.grid_size, 
+  dp.total_words, dp.estimated_time,
+  pc.id IS NOT NULL AS is_completed,
+  pc.score, pc.accuracy
+FROM daily_puzzles dp
+LEFT JOIN puzzle_completions pc 
+  ON pc.puzzle_id = dp.id AND pc.user_id = $1
+WHERE dp.puzzle_date = CURRENT_DATE 
+  AND dp.category = $2
+ORDER BY dp.grid_size;
+```
+
+This returns **only metadata columns** — the full `puzzle_data` JSONB is never loaded until the user actually taps "Play".
+
+### On the Profile Screen
+
+```
+📊 Your Stats
+Puzzles Solved: 47
+Current Streak: 5 days
+Best Time: 2:14 (Easy 6×6)
+Total Points: 12,840
+
+📅 Recent Games
+Today      General Easy 6×6     ⭐ 2,840 pts
+Today      Sports Hard 10×10    ⭐ 5,120 pts  
+Yesterday  History Medium 8×8   ⭐ 3,200 pts
+```
+
+**Query:** Simple SELECT on `puzzle_completions` ordered by `completed_at DESC LIMIT 20`. All data is denormalized into the completions table — **no JOIN needed**.
+
+### Aggregate Stats (for leaderboard)
+
+Instead of computing stats on every profile load, we can:
+1. **Short-term (now):** Compute on the fly from `puzzle_completions`. With proper indexes, this is fast for <100K rows
+2. **Long-term (scale):** Add a materialized `user_stats` summary table updated on each completion
+
+---
+
+## Cron Strategy (Free Tier)
+
+Since you're on the free tier without `pg_cron`, we'll use **GitHub Actions** as the external trigger:
+
+```yaml
+# .github/workflows/daily-puzzles.yml
+name: Generate Daily Puzzles
+on:
+  schedule:
+    - cron: '5 0 * * *'   # 00:05 UTC daily
+  workflow_dispatch:        # Manual trigger button
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Edge Function
+        run: |
+          curl -X POST \
+            "${{ secrets.SUPABASE_URL }}/functions/v1/generate-daily-puzzles" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"date": "'$(date -u +%Y-%m-%d)'"}'
+```
+
+> [!TIP]
+> GitHub Actions free tier gives 2,000 minutes/month. This job runs ~2-5 minutes daily = ~75-150 min/month. Well within limits.
+
+---
+
+## Complete Data Lifecycle
+
+```mermaid
+flowchart LR
+    subgraph "Server"
+        GEN[Generate 80 puzzles] -->|Day 0| DP[(daily_puzzles)]
+        DP -->|Day 30| CLEAN[Cleanup job deletes old data]
+        COMP[(puzzle_completions)] -->|Forever| STATS[Stats & History]
+    end
+
+    subgraph "Client"
+        DP -->|Fetch on play| LOCAL[AsyncStorage - active puzzle]
+        LOCAL -->|On completion| COMP
+        LOCAL -->|After 7 days stale| DISCARD[Auto-discard]
+    end
+```
+
+| Data | Storage | Retention | Size |
+|---|---|---|---|
+| Pre-built puzzles | Supabase `daily_puzzles` | 30 days rolling | ~120MB max |
+| In-progress game state | AsyncStorage (local) | 7 days auto-discard | ~50KB |
+| Completion records | Supabase `puzzle_completions` | Forever | ~200B/record |
+| User profile/stats | Supabase (future `profiles` table) | Forever | ~1KB/user |
+
+---
+
+## Phased Execution Plan
+
+| Phase | What | Status |
+|---|---|---|
+| **1** | Supabase client SDK + [.env](file:///c:/Users/samcl/Desktop/software%20projects/cruxe/.env) config | Ready to start |
+| **2** | Database schema (`daily_puzzles` + `puzzle_completions`) | After Phase 1 |
+| **3** | Edge Function: puzzle generator | After Phase 2 |
+| **4** | GitHub Actions cron | After Phase 3 |
+| **5** | Client refactor: fetch puzzles + record completions | After Phase 3 |
+| **6** | Profile/history display from real data | After Phase 5 |

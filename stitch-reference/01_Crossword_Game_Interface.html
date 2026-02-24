@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Obsidian Editorial Crossword</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#eecd2b",
+                        "background-light": "#f8f8f6",
+                        "background-dark": "#1a1814", // Slightly darker than standard for Obsidian feel
+                        "obsidian-black": "#050505",
+                        "active-blue": "#00f0ff",
+                        "highlight-grey": "#2a2721",
+                    },
+                    fontFamily: {
+                        "display": ["Manrope", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                    boxShadow: {
+                        'glow': '0 0 10px rgba(0, 240, 255, 0.5)',
+                        'gold-glow': '0 0 8px rgba(238, 205, 43, 0.3)',
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        /* Custom scrollbar for clue list */
+        .clue-scroll::-webkit-scrollbar {
+            width: 4px;
+        }
+        .clue-scroll::-webkit-scrollbar-track {
+            background: #221f10;
+        }
+        .clue-scroll::-webkit-scrollbar-thumb {
+            background: #444;
+            border-radius: 4px;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 font-display flex flex-col h-screen overflow-hidden">
+<!-- Top Status Bar -->
+<header class="shrink-0 px-4 pt-2 pb-3 flex items-center justify-between border-b border-white/5 bg-background-dark z-20">
+<div class="flex items-center gap-3">
+<div class="flex items-center justify-center size-8 rounded-full bg-white/5 text-primary">
+<span class="material-symbols-outlined text-[20px]">timer</span>
+</div>
+<span class="text-white text-base font-bold tracking-wide font-mono">04:32</span>
+</div>
+<div class="flex flex-col items-center">
+<h1 class="text-xs font-bold tracking-[0.15em] text-white/60 uppercase">Technology • Medium</h1>
+</div>
+<div class="flex items-center gap-3">
+<div class="flex items-center gap-1.5 bg-primary/10 px-2.5 py-1 rounded-full border border-primary/20">
+<span class="text-primary text-sm font-bold">540</span>
+<span class="material-symbols-outlined text-primary text-[16px] fill-1">monetization_on</span>
+</div>
+<button class="text-white/60 hover:text-white transition-colors">
+<span class="material-symbols-outlined">settings</span>
+</button>
+</div>
+</header>
+<!-- Crossword Grid Area -->
+<main class="flex-1 flex flex-col items-center justify-start py-4 overflow-hidden relative w-full max-w-md mx-auto">
+<!-- Grid Container -->
+<div class="w-full px-2 aspect-square max-h-[50vh] flex items-center justify-center">
+<div class="grid grid-cols-12 grid-rows-12 gap-[1px] bg-white/10 w-full aspect-square border border-white/10 p-[1px] rounded-sm shadow-2xl">
+<!-- Example Row 1 -->
+<!-- Blocked Cell -->
+<div class="bg-obsidian-black w-full h-full"></div>
+<!-- Filled Cell -->
+<div class="bg-background-dark relative flex items-center justify-center text-sm font-bold text-white"><span class="absolute top-[1px] left-[2px] text-[6px] text-white/50">1</span>C</div>
+<div class="bg-background-dark relative flex items-center justify-center text-sm font-bold text-white">P</div>
+<div class="bg-background-dark relative flex items-center justify-center text-sm font-bold text-white"><span class="absolute top-[1px] left-[2px] text-[6px] text-white/50">2</span>U</div>
+<div class="bg-obsidian-black w-full h-full"></div>
+<div class="bg-background-dark relative flex items-center justify-center text-sm font-bold text-white">R</div>
+<div class="bg-background-dark relative flex items-center justify-center text-sm font-bold text-white"><span class="absolute top-[1px] left-[2px] text-[6px] text-white/50">3</span>A</div>
+<div class="bg-background-dark relative flex items-center justify-center text-sm font-bold text-white">M</div>
+<div class="bg-obsidian-black w-full h-full"></div>
+<!-- Gold Tinted Cell -->
+<div class="bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/30 relative flex items-center justify-center text-sm font-bold text-primary shadow-gold-glow"><span class="absolute top-[1px] left-[2px] text-[6px] text-primary/70">4</span>B</div>
+<div class="bg-background-dark relative flex items-center justify-center text-sm font-bold text-white">I</div>
+<div class="bg-background-dark relative flex items-center justify-center text-sm font-bold text-white">T</div>
+<!-- Example Row 2 -->
+<div class="bg-background-dark relative flex items-center justify-center text-sm font-bold text-white"><span class="absolute top-[1px] left-[2px] text-[6px] text-white/50">5</span>J</div>
+<div class="bg-background-dark relative flex items-center justify-center text-sm font-bold text-white">A</div>
+<div class="bg-background-dark relative flex items-center justify-center text-sm font-bold text-white">V</div>
+<div class="bg-background-dark relative flex items-center justify-center text-sm font-bold text-white">A</div>
+<div class="bg-obsidian-black w-full h-full"></div>
+<div class="bg-highlight-grey relative flex items-center justify-center text-sm font-bold text-white">W</div>
+<!-- Active Cell -->
+<div class="bg-background-dark ring-2 ring-active-blue z-10 shadow-glow relative flex items-center justify-center text-sm font-bold text-white"><span class="absolute top-[1px] left-[2px] text-[6px] text-active-blue">7</span>B</div>
+<div class="bg-highlight-grey relative flex items-center justify-center text-sm font-bold text-white">E</div>
+<div class="bg-highlight-grey relative flex items-center justify-center text-sm font-bold text-white">R</div>
+<div class="bg-highlight-grey relative flex items-center justify-center text-sm font-bold text-white">N</div>
+<div class="bg-highlight-grey relative flex items-center justify-center text-sm font-bold text-white">E</div>
+<div class="bg-highlight-grey relative flex items-center justify-center text-sm font-bold text-white">R</div>
+<!-- Row 3 (Simulated) -->
+<div class="bg-background-dark relative flex items-center justify-center text-sm font-bold text-white">S</div>
+<div class="bg-obsidian-black w-full h-full"></div>
+<div class="bg-background-dark relative flex items-center justify-center text-sm font-bold text-white">L</div>
+<div class="bg-background-dark relative flex items-center justify-center text-sm font-bold text-white">O</div>
+<div class="bg-background-dark relative flex items-center justify-center text-sm font-bold text-white">G</div>
+<div class="bg-background-dark relative flex items-center justify-center text-sm font-bold text-white">I</div>
+<div class="bg-background-dark relative flex items-center justify-center text-sm font-bold text-white">N</div>
+<div class="bg-obsidian-black w-full h-full"></div>
+<div class="bg-background-dark relative flex items-center justify-center text-sm font-bold text-white">K</div>
+<div class="bg-background-dark relative flex items-center justify-center text-sm font-bold text-white">E</div>
+<div class="bg-background-dark relative flex items-center justify-center text-sm font-bold text-white">Y</div>
+<div class="bg-obsidian-black w-full h-full"></div>
+<!-- Row 4-12 Fillers for visual density -->
+<!-- Repeating pattern for density -->
+<div class="bg-background-dark w-full h-full"></div><div class="bg-background-dark w-full h-full"></div><div class="bg-obsidian-black w-full h-full"></div>
+<div class="bg-background-dark w-full h-full"></div><div class="bg-background-dark w-full h-full"></div><div class="bg-background-dark w-full h-full"></div>
+<div class="bg-background-dark w-full h-full"></div><div class="bg-obsidian-black w-full h-full"></div><div class="bg-background-dark w-full h-full"></div>
+<div class="bg-background-dark w-full h-full"></div><div class="bg-background-dark w-full h-full"></div><div class="bg-obsidian-black w-full h-full"></div>
+<div class="bg-background-dark w-full h-full"></div><div class="bg-background-dark w-full h-full"></div><div class="bg-background-dark w-full h-full"></div>
+<div class="bg-obsidian-black w-full h-full"></div><div class="bg-background-dark w-full h-full"></div><div class="bg-background-dark w-full h-full"></div>
+<div class="bg-background-dark w-full h-full"></div><div class="bg-background-dark w-full h-full"></div><div class="bg-obsidian-black w-full h-full"></div>
+<div class="bg-background-dark w-full h-full"></div><div class="bg-background-dark w-full h-full"></div><div class="bg-background-dark w-full h-full"></div>
+<!-- Rows 6-12 (More Filler) -->
+<div class="bg-obsidian-black w-full h-full col-span-12 row-span-7 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjE5IiBoZWlnaHQ9IjE5IiB4PSIwLjUiIHk9IjAuNSIgZmlsbD0iIzFhMTgxNCIgc3Ryb2tlPSIjM2MzYzNjIiBzdHJva2Utd2lkdGg9IjAuMiIvPjwvc3ZnPg==')] opacity-30"></div>
+</div>
+</div>
+</main>
+<!-- Clues & Actions Container -->
+<div class="flex-shrink-0 w-full max-w-md mx-auto z-30 flex flex-col bg-background-dark border-t border-white/10 shadow-[0_-5px_20px_rgba(0,0,0,0.5)]">
+<!-- Floating/Sticky Clue Bar -->
+<div class="bg-[#2a2721] p-4 mx-3 -mt-6 mb-2 rounded-xl border border-primary/20 shadow-lg relative flex items-center justify-between gap-3 group cursor-pointer hover:bg-[#332f28] transition-colors">
+<div class="flex-1">
+<div class="flex items-center gap-2 mb-1">
+<span class="text-primary font-bold text-sm tracking-wide">7 ACROSS</span>
+<span class="bg-primary/20 text-primary text-[10px] px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">Hint Available</span>
+</div>
+<p class="text-white font-medium text-lg leading-snug">"Inventor of the World Wide Web"</p>
+</div>
+<button class="size-10 shrink-0 flex items-center justify-center rounded-lg bg-primary/10 text-primary hover:bg-primary hover:text-background-dark transition-all">
+<span class="material-symbols-outlined text-[20px] fill-1">lightbulb</span>
+</button>
+</div>
+<!-- Tabs -->
+<div class="flex items-center px-4 border-b border-white/5">
+<button class="flex-1 py-3 text-center border-b-2 border-primary text-white font-bold text-sm tracking-wider">ACROSS</button>
+<button class="flex-1 py-3 text-center border-b-2 border-transparent text-white/40 font-bold text-sm tracking-wider hover:text-white/70">DOWN</button>
+</div>
+<!-- Clue List Scroll Area -->
+<div class="h-32 overflow-y-auto clue-scroll px-4 py-2 space-y-1">
+<div class="flex items-start gap-3 p-2 rounded hover:bg-white/5 cursor-pointer">
+<span class="text-white/40 font-bold text-sm min-w-[1.5rem] mt-0.5">1</span>
+<p class="text-white/60 text-sm leading-relaxed">The physical parts of a computer system.</p>
+</div>
+<div class="flex items-start gap-3 p-2 rounded hover:bg-white/5 cursor-pointer">
+<span class="text-white/40 font-bold text-sm min-w-[1.5rem] mt-0.5">4</span>
+<p class="text-white/60 text-sm leading-relaxed">Small data file stored on browser.</p>
+</div>
+<div class="flex items-start gap-3 p-2 rounded bg-primary/5 border border-primary/10 cursor-pointer">
+<span class="text-primary font-bold text-sm min-w-[1.5rem] mt-0.5">7</span>
+<p class="text-white text-sm leading-relaxed font-medium">Inventor of the World Wide Web.</p>
+</div>
+<div class="flex items-start gap-3 p-2 rounded hover:bg-white/5 cursor-pointer">
+<span class="text-white/40 font-bold text-sm min-w-[1.5rem] mt-0.5">9</span>
+<p class="text-white/60 text-sm leading-relaxed">Binary digit, 0 or 1.</p>
+</div>
+</div>
+<!-- Bottom Action Bar -->
+<div class="p-3 pb-5 grid grid-cols-3 gap-3 bg-background-dark border-t border-white/5">
+<button class="flex flex-col items-center justify-center gap-1 p-2 rounded-lg hover:bg-white/5 transition-colors group">
+<span class="material-symbols-outlined text-white/50 group-hover:text-white text-[24px]">check_circle</span>
+<span class="text-[10px] font-bold text-white/50 group-hover:text-white uppercase tracking-wider">Check</span>
+</button>
+<button class="flex flex-col items-center justify-center gap-1 p-2 rounded-lg bg-primary/10 border border-primary/20 hover:bg-primary/20 transition-colors">
+<span class="material-symbols-outlined text-primary text-[24px]">key</span>
+<span class="text-[10px] font-bold text-primary uppercase tracking-wider">Hint (50)</span>
+</button>
+<button class="flex flex-col items-center justify-center gap-1 p-2 rounded-lg hover:bg-white/5 transition-colors group">
+<span class="material-symbols-outlined text-white/50 group-hover:text-red-400 text-[24px]">backspace</span>
+<span class="text-[10px] font-bold text-white/50 group-hover:text-red-400 uppercase tracking-wider">Clear</span>
+</button>
+</div>
+</div>
+<!-- Background Image / Texture (Subtle) -->
+<!-- Abstract texture to give depth to the background-dark -->
+<div class="fixed inset-0 pointer-events-none opacity-5 mix-blend-overlay z-0" data-alt="Abstract noise texture pattern" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCSI4CConTBliPOIkkRPb5jvQCyWY941HMTM2ncI4Ux1ykJSvmxvstqLzlTrpJwMVc3veuOzIV4ao4d7dxHrw5YZI3rSNmgBboBLvwgH7ThbxZ-bwklug-moqBqlWnPx0gr3hXm7VexA647_7XFZgZPanXThn5YpXCMKMAFl09govvUB5K9t96SDzPHblGN55hlF2tab2h2Qlfc8cQQQmk033GH4-Pa6ugquE-YnAga1tEsNf66F7TpuVbfh0BThbA3c_BTOs4Y6vmE'); background-size: 200px;"></div>
+</body></html>

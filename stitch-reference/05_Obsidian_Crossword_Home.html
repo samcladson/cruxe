@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Obsidian Crossword Home</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#eecd2b",
+                        "background-light": "#f8f8f6",
+                        "background-dark": "#0a0a0a", // Deep obsidian black
+                        "surface-dark": "#1a1a1a", // Slightly lighter for cards
+                        "surface-highlight": "#262626", // Highlight state
+                        "text-primary": "#eecd2b", // Gold text
+                        "text-secondary": "#a3a3a3", // Muted grey
+                    },
+                    fontFamily: {
+                        "display": ["Manrope", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "2xl": "1rem",
+                        "full": "9999px"
+                    },
+                    backgroundImage: {
+                        'gold-gradient': 'linear-gradient(135deg, rgba(238, 205, 43, 0.15) 0%, rgba(238, 205, 43, 0) 100%)',
+                        'card-shimmer': 'linear-gradient(45deg, transparent 25%, rgba(255,255,255,0.03) 50%, transparent 75%)',
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        /* Custom scrollbar for webkit */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0a0a0a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #444;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 antialiased selection:bg-primary selection:text-black">
+<div class="relative flex h-full min-h-screen w-full max-w-md mx-auto flex-col overflow-hidden bg-background-light dark:bg-background-dark shadow-2xl border-x border-white/5">
+<!-- Header Section -->
+<header class="sticky top-0 z-20 flex flex-col gap-4 px-6 pt-6 pb-4 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-white/5">
+<!-- Stats Row -->
+<div class="flex items-center justify-between w-full">
+<!-- Date/Brand -->
+<div class="flex items-center gap-2">
+<span class="h-2 w-2 rounded-full bg-primary animate-pulse"></span>
+<span class="text-xs font-bold tracking-widest text-text-secondary uppercase">Obsidian Editorial</span>
+</div>
+<!-- Currency/Streak -->
+<div class="flex items-center gap-4 bg-surface-dark px-3 py-1.5 rounded-full border border-white/5">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-[18px]">local_fire_department</span>
+<span class="text-sm font-bold text-slate-200">3</span>
+</div>
+<div class="h-3 w-px bg-white/10"></div>
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-[18px]">monetization_on</span>
+<span class="text-sm font-bold text-slate-200">842</span>
+</div>
+</div>
+</div>
+<!-- Greeting -->
+<div>
+<h1 class="text-3xl font-bold tracking-tight text-slate-900 dark:text-white leading-tight">
+                    Good Evening,<br/>
+<span class="text-slate-500">Julian</span>
+</h1>
+</div>
+</header>
+<!-- Main Scrollable Content -->
+<main class="flex-1 overflow-y-auto px-6 py-4 space-y-8 scroll-smooth pb-24">
+<!-- Hero Card: Daily Challenge -->
+<section class="relative group cursor-pointer">
+<div class="absolute -inset-0.5 bg-gradient-to-r from-primary/30 to-primary/0 rounded-2xl blur opacity-30 transition duration-500 group-hover:opacity-60"></div>
+<div class="relative flex flex-col justify-end min-h-[320px] w-full rounded-2xl overflow-hidden bg-surface-dark border border-white/10 shadow-xl">
+<!-- Background Image -->
+<div class="absolute inset-0 z-0">
+<img alt="Abstract dark geometric pattern representing a crossword grid" class="h-full w-full object-cover opacity-40 mix-blend-overlay transition-transform duration-700 group-hover:scale-105" data-alt="Abstract dark geometric pattern representing a crossword grid" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCyg7ZQICzK1GodcvdxJySSDhyeSuM-YQbkjtbjclW4E8JGJYSha_MW5-25M6d2XLnZe1IXrmfWpsemNRXm_F82cozhnIr-8NykJBjUsgvw5zNPBnf180rwK-xrjKdHbVT_Wa2BqG_-mm4RqA1AbcEAqHgl1CRuSU5JpybqHKDqUJMfZtRvnkBxWXnQhRn-NxJrnK2r0yOfClNOSVZ5FUIbX9j9N_S3WHd_npryn-FUXc4QWWu03AiaWaD9GPdlLuV__Pre2TY53c9r"/>
+<!-- Gradient Overlay -->
+<div class="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent"></div>
+<!-- Gold Accent Gradient -->
+<div class="absolute inset-0 bg-gradient-to-tr from-primary/10 via-transparent to-transparent opacity-60"></div>
+</div>
+<!-- Content -->
+<div class="relative z-10 p-6 flex flex-col gap-4">
+<div class="flex items-center justify-between">
+<span class="inline-flex items-center justify-center px-2.5 py-1 rounded bg-primary/20 text-primary text-[10px] font-bold tracking-wider uppercase backdrop-blur-sm border border-primary/20">
+                                Daily Challenge
+                            </span>
+<span class="text-xs font-medium text-slate-300 tracking-wide">SAT, FEB 21</span>
+</div>
+<div>
+<h2 class="text-3xl font-bold text-white mb-1">General Knowledge</h2>
+<div class="flex items-center gap-2 text-sm text-slate-400 font-medium">
+<span class="material-symbols-outlined text-[16px]">grid_on</span>
+<span>8x8 Grid</span>
+<span class="text-white/20">•</span>
+<span>Medium Difficulty</span>
+</div>
+</div>
+<button class="mt-2 w-full flex items-center justify-between bg-primary hover:bg-yellow-400 text-black font-bold py-3.5 px-5 rounded-xl transition-all active:scale-[0.98]">
+<span class="tracking-wide text-sm">PLAY TODAY</span>
+<span class="material-symbols-outlined text-[20px]">arrow_forward</span>
+</button>
+</div>
+</div>
+</section>
+<!-- Categories Section -->
+<section>
+<div class="flex items-center justify-between mb-4">
+<h3 class="text-lg font-bold text-white tracking-tight">Your Categories</h3>
+<button class="text-xs font-bold text-primary hover:text-white transition-colors uppercase tracking-wider">View All</button>
+</div>
+<div class="grid grid-cols-2 gap-3">
+<!-- Category 1 -->
+<div class="group flex flex-col justify-between h-32 p-4 rounded-xl bg-surface-dark hover:bg-surface-highlight border border-white/5 hover:border-primary/30 transition-all cursor-pointer">
+<div class="flex justify-between items-start">
+<div class="p-2 rounded-lg bg-blue-500/10 text-blue-400 group-hover:text-blue-300 transition-colors">
+<span class="material-symbols-outlined text-[24px]">public</span>
+</div>
+<span class="text-[10px] font-bold text-slate-500 group-hover:text-slate-400">12 NEW</span>
+</div>
+<div>
+<h4 class="text-white font-bold">General</h4>
+<p class="text-xs text-slate-500 group-hover:text-slate-400">Wordplay &amp; Trivia</p>
+</div>
+</div>
+<!-- Category 2 -->
+<div class="group flex flex-col justify-between h-32 p-4 rounded-xl bg-surface-dark hover:bg-surface-highlight border border-white/5 hover:border-primary/30 transition-all cursor-pointer">
+<div class="flex justify-between items-start">
+<div class="p-2 rounded-lg bg-purple-500/10 text-purple-400 group-hover:text-purple-300 transition-colors">
+<span class="material-symbols-outlined text-[24px]">history_edu</span>
+</div>
+<span class="text-[10px] font-bold text-slate-500 group-hover:text-slate-400">5 NEW</span>
+</div>
+<div>
+<h4 class="text-white font-bold">History</h4>
+<p class="text-xs text-slate-500 group-hover:text-slate-400">Past &amp; Present</p>
+</div>
+</div>
+<!-- Category 3 -->
+<div class="group flex flex-col justify-between h-32 p-4 rounded-xl bg-surface-dark hover:bg-surface-highlight border border-white/5 hover:border-primary/30 transition-all cursor-pointer">
+<div class="flex justify-between items-start">
+<div class="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 group-hover:text-emerald-300 transition-colors">
+<span class="material-symbols-outlined text-[24px]">memory</span>
+</div>
+<span class="text-[10px] font-bold text-slate-500 group-hover:text-slate-400">8 NEW</span>
+</div>
+<div>
+<h4 class="text-white font-bold">Tech</h4>
+<p class="text-xs text-slate-500 group-hover:text-slate-400">Modern Era</p>
+</div>
+</div>
+<!-- Category 4 -->
+<div class="group flex flex-col justify-between h-32 p-4 rounded-xl bg-surface-dark hover:bg-surface-highlight border border-white/5 hover:border-primary/30 transition-all cursor-pointer">
+<div class="flex justify-between items-start">
+<div class="p-2 rounded-lg bg-rose-500/10 text-rose-400 group-hover:text-rose-300 transition-colors">
+<span class="material-symbols-outlined text-[24px]">theaters</span>
+</div>
+<span class="text-[10px] font-bold text-slate-500 group-hover:text-slate-400">20 NEW</span>
+</div>
+<div>
+<h4 class="text-white font-bold">Entertainment</h4>
+<p class="text-xs text-slate-500 group-hover:text-slate-400">Pop Culture</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Recent Activity Section -->
+<section>
+<div class="flex items-center justify-between mb-4">
+<h3 class="text-lg font-bold text-white tracking-tight">Recent Activity</h3>
+</div>
+<div class="flex flex-col gap-3">
+<!-- Activity Item 1 -->
+<div class="flex items-center p-3 rounded-xl bg-surface-dark border border-white/5">
+<div class="flex items-center justify-center w-12 h-12 rounded-lg bg-primary/10 text-primary mr-4 shrink-0">
+<span class="material-symbols-outlined text-[24px] fill-1">check_circle</span>
+</div>
+<div class="flex-1">
+<h4 class="text-sm font-bold text-white">Friday Mini</h4>
+<div class="flex items-center gap-2 mt-0.5">
+<span class="text-xs font-bold text-primary">100% Complete</span>
+<span class="h-1 w-1 rounded-full bg-white/20"></span>
+<span class="text-xs text-slate-500">3:12</span>
+</div>
+</div>
+<button class="p-2 text-slate-500 hover:text-white transition-colors">
+<span class="material-symbols-outlined text-[20px]">chevron_right</span>
+</button>
+</div>
+<!-- Activity Item 2 -->
+<div class="flex items-center p-3 rounded-xl bg-surface-dark border border-white/5 opacity-75">
+<div class="flex items-center justify-center w-12 h-12 rounded-lg bg-white/5 text-slate-400 mr-4 shrink-0">
+<span class="material-symbols-outlined text-[24px]">pause_circle</span>
+</div>
+<div class="flex-1">
+<h4 class="text-sm font-bold text-white">The Thursday Medium</h4>
+<div class="flex items-center gap-2 mt-0.5">
+<span class="text-xs font-bold text-slate-400">42% Complete</span>
+<span class="h-1 w-1 rounded-full bg-white/20"></span>
+<span class="text-xs text-slate-500">12:05</span>
+</div>
+</div>
+<button class="p-2 text-slate-500 hover:text-white transition-colors">
+<span class="material-symbols-outlined text-[20px]">play_arrow</span>
+</button>
+</div>
+</div>
+</section>
+</main>
+<!-- Bottom Navigation -->
+<nav class="absolute bottom-0 w-full z-30 bg-background-dark/95 border-t border-white/5 backdrop-blur-xl px-4 pb-6 pt-3">
+<div class="flex justify-between items-end">
+<a class="flex flex-1 flex-col items-center gap-1 text-primary group" href="#">
+<div class="relative flex items-center justify-center h-8 px-4 rounded-full bg-primary/10 transition-colors">
+<span class="material-symbols-outlined text-[24px]">home</span>
+</div>
+<span class="text-[10px] font-bold tracking-wide mt-1">Home</span>
+</a>
+<a class="flex flex-1 flex-col items-center gap-1 text-slate-500 hover:text-slate-300 transition-colors group" href="#">
+<div class="relative flex items-center justify-center h-8 px-4 rounded-full group-hover:bg-white/5 transition-colors">
+<span class="material-symbols-outlined text-[24px]">inventory_2</span>
+</div>
+<span class="text-[10px] font-medium tracking-wide mt-1">Archives</span>
+</a>
+<a class="flex flex-1 flex-col items-center gap-1 text-slate-500 hover:text-slate-300 transition-colors group" href="#">
+<div class="relative flex items-center justify-center h-8 px-4 rounded-full group-hover:bg-white/5 transition-colors">
+<span class="material-symbols-outlined text-[24px]">storefront</span>
+</div>
+<span class="text-[10px] font-medium tracking-wide mt-1">Store</span>
+</a>
+<a class="flex flex-1 flex-col items-center gap-1 text-slate-500 hover:text-slate-300 transition-colors group" href="#">
+<div class="relative flex items-center justify-center h-8 px-4 rounded-full group-hover:bg-white/5 transition-colors">
+<span class="material-symbols-outlined text-[24px]">account_circle</span>
+</div>
+<span class="text-[10px] font-medium tracking-wide mt-1">Profile</span>
+</a>
+</div>
+</nav>
+</div>
+<!-- Background texture/noise for "paper" feel -->
+<div class="fixed inset-0 pointer-events-none opacity-[0.03] z-50 mix-blend-overlay" style="background-image: url('data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.65%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22/%3E%3C/svg%3E');"></div>
+</body></html>

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Obsidian Coin Store</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&amp;family=Noto+Sans:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#eecd2b",
+              "primary-dark": "#bfa315",
+              "background-light": "#f8f8f6",
+              "background-dark": "#0f0e0a", /* Deepened for obsidian feel */
+              "surface-dark": "#1a1812",
+              "surface-highlight": "#26231a",
+            },
+            fontFamily: {
+              "display": ["Newsreader", "serif"],
+              "sans": ["Noto Sans", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+            boxShadow: {
+                'glow': '0 0 20px -5px rgba(238, 205, 43, 0.3)',
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .gold-gradient-text {
+            background: linear-gradient(135deg, #eecd2b 0%, #fff8cc 50%, #eecd2b 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .gold-border-gradient {
+            background: linear-gradient(135deg, rgba(238, 205, 43, 0.1), rgba(238, 205, 43, 0.02));
+            border: 1px solid rgba(238, 205, 43, 0.3);
+        }
+        /* Custom scrollbar for webkit */
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f0e0a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 2px;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 font-display antialiased min-h-screen flex flex-col items-center">
+<div class="w-full max-w-md bg-background-light dark:bg-background-dark min-h-screen flex flex-col relative overflow-hidden shadow-2xl">
+<!-- Abstract Background Pattern -->
+<div class="absolute inset-0 z-0 pointer-events-none opacity-20" style="background-image: radial-gradient(circle at 10% 20%, rgba(238, 205, 43, 0.08) 0%, transparent 40%), radial-gradient(circle at 90% 80%, rgba(238, 205, 43, 0.05) 0%, transparent 40%);">
+</div>
+<!-- Sticky Header -->
+<header class="sticky top-0 z-50 backdrop-blur-md bg-background-light/80 dark:bg-background-dark/80 border-b border-primary/10 px-6 py-4 flex items-center justify-between">
+<button class="text-slate-400 hover:text-primary transition-colors duration-300">
+<span class="material-symbols-outlined text-3xl">arrow_back</span>
+</button>
+<h1 class="text-sm font-bold tracking-[0.2em] uppercase text-primary/80">The Vault</h1>
+<button class="text-slate-400 hover:text-white transition-colors duration-300">
+<span class="material-symbols-outlined text-2xl">help</span>
+</button>
+</header>
+<!-- Balance Display -->
+<div class="relative z-10 px-6 pt-8 pb-6 flex flex-col items-center justify-center text-center">
+<div class="text-primary/60 text-xs font-sans font-bold tracking-widest uppercase mb-2">Current Balance</div>
+<div class="flex items-center gap-3">
+<span class="text-6xl font-display font-medium gold-gradient-text tracking-tight">842</span>
+<span class="material-symbols-outlined text-5xl text-primary animate-pulse" style="font-variation-settings: 'FILL' 1;">monetization_on</span>
+</div>
+<div class="h-px w-24 bg-gradient-to-r from-transparent via-primary/40 to-transparent mt-6"></div>
+</div>
+<!-- Scrollable Content -->
+<div class="flex-1 overflow-y-auto px-6 pb-24 z-10">
+<!-- Section Header -->
+<div class="flex items-baseline justify-between mb-6 mt-2">
+<h2 class="text-2xl font-display italic text-white">Acquire Currency</h2>
+<span class="text-xs text-slate-500 font-sans">Secure transaction</span>
+</div>
+<!-- Packages Grid -->
+<div class="grid grid-cols-2 gap-4">
+<!-- Starter Pack -->
+<div class="group relative flex flex-col justify-between p-5 rounded-lg bg-surface-dark border border-white/5 hover:border-primary/30 transition-all duration-300">
+<div>
+<div class="text-slate-400 text-xs font-sans tracking-wider uppercase mb-1">Starter Pack</div>
+<div class="text-white text-3xl font-display mb-1">100</div>
+<div class="text-primary/60 text-sm font-display italic mb-6">Coins</div>
+</div>
+<button class="w-full py-2 bg-white/5 group-hover:bg-primary group-hover:text-black border border-white/10 group-hover:border-primary text-white text-xs font-bold tracking-widest uppercase rounded transition-all duration-300">
+                        $0.99
+                    </button>
+</div>
+<!-- Explorer Pack -->
+<div class="group relative flex flex-col justify-between p-5 rounded-lg bg-surface-dark border border-white/5 hover:border-primary/30 transition-all duration-300">
+<div>
+<div class="text-slate-400 text-xs font-sans tracking-wider uppercase mb-1">Explorer Pack</div>
+<div class="text-white text-3xl font-display mb-1">500</div>
+<div class="text-primary/60 text-sm font-display italic mb-6">Coins</div>
+</div>
+<button class="w-full py-2 bg-white/5 group-hover:bg-primary group-hover:text-black border border-white/10 group-hover:border-primary text-white text-xs font-bold tracking-widest uppercase rounded transition-all duration-300">
+                        $4.99
+                    </button>
+</div>
+<!-- Enthusiast Pack -->
+<div class="group relative flex flex-col justify-between p-5 rounded-lg bg-surface-dark border border-white/5 hover:border-primary/30 transition-all duration-300">
+<div>
+<div class="text-slate-400 text-xs font-sans tracking-wider uppercase mb-1">Enthusiast Pack</div>
+<div class="text-white text-3xl font-display mb-1">1,200</div>
+<div class="text-primary/60 text-sm font-display italic mb-6">Coins</div>
+</div>
+<button class="w-full py-2 bg-white/5 group-hover:bg-primary group-hover:text-black border border-white/10 group-hover:border-primary text-white text-xs font-bold tracking-widest uppercase rounded transition-all duration-300">
+                        $9.99
+                    </button>
+</div>
+<!-- Best Value / Grandmaster -->
+<div class="col-span-1 row-span-2 group relative flex flex-col justify-between p-5 rounded-lg gold-border-gradient shadow-glow overflow-hidden">
+<!-- Glow effect bg -->
+<div class="absolute inset-0 bg-primary/5"></div>
+<div class="relative z-10">
+<div class="inline-block bg-primary text-background-dark text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide mb-3">Best Value</div>
+<div class="text-primary-dark text-xs font-sans tracking-wider uppercase mb-1">Grandmaster</div>
+<div class="text-white text-4xl font-display mb-1">2,500</div>
+<div class="text-primary/80 text-sm font-display italic">Coins</div>
+<div class="mt-4 flex items-center gap-1">
+<span class="text-slate-400 line-through text-xs">$24.99</span>
+<span class="text-primary text-xs font-bold">20% OFF</span>
+</div>
+</div>
+<button class="relative z-10 w-full mt-6 py-3 bg-primary hover:bg-white text-background-dark text-xs font-bold tracking-widest uppercase rounded transition-all duration-300 shadow-lg shadow-primary/20">
+                        $19.99
+                    </button>
+</div>
+</div>
+<div class="h-px w-full bg-gradient-to-r from-transparent via-white/10 to-transparent my-10"></div>
+<!-- Earn Free Section -->
+<div class="space-y-4">
+<div class="flex items-center gap-2 mb-2">
+<span class="material-symbols-outlined text-primary text-xl">diamond</span>
+<h3 class="text-lg font-display italic text-white">Earn Complimentary Coins</h3>
+</div>
+<!-- Task Item 1 -->
+<div class="flex items-center justify-between p-4 bg-surface-dark border border-white/5 rounded-lg group hover:bg-surface-highlight transition-colors cursor-pointer">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-background-dark flex items-center justify-center border border-white/10 text-primary">
+<span class="material-symbols-outlined text-xl">extension</span>
+</div>
+<div>
+<p class="text-sm text-slate-200 font-medium">Daily Puzzle</p>
+<p class="text-xs text-slate-500 mt-0.5">Complete today's challenge</p>
+</div>
+</div>
+<div class="flex flex-col items-end">
+<span class="text-primary font-bold text-sm">+10</span>
+<span class="text-[10px] text-slate-500 uppercase tracking-wide mt-1 group-hover:text-white transition-colors">Claim</span>
+</div>
+</div>
+<!-- Task Item 2 -->
+<div class="flex items-center justify-between p-4 bg-surface-dark border border-white/5 rounded-lg group hover:bg-surface-highlight transition-colors cursor-pointer">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-background-dark flex items-center justify-center border border-white/10 text-primary">
+<span class="material-symbols-outlined text-xl">local_fire_department</span>
+</div>
+<div>
+<p class="text-sm text-slate-200 font-medium">7-Day Streak</p>
+<p class="text-xs text-slate-500 mt-0.5">Maintain your consistency</p>
+</div>
+</div>
+<div class="flex flex-col items-end">
+<span class="text-primary font-bold text-sm">+50</span>
+<div class="w-16 h-1 bg-white/10 rounded-full mt-2 overflow-hidden">
+<div class="w-4/5 h-full bg-primary rounded-full"></div>
+</div>
+</div>
+</div>
+<!-- Task Item 3 -->
+<div class="flex items-center justify-between p-4 bg-surface-dark border border-white/5 rounded-lg group hover:bg-surface-highlight transition-colors cursor-pointer">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-background-dark flex items-center justify-center border border-white/10 text-primary">
+<span class="material-symbols-outlined text-xl">verified</span>
+</div>
+<div>
+<p class="text-sm text-slate-200 font-medium">Perfect Solve</p>
+<p class="text-xs text-slate-500 mt-0.5">Finish without errors</p>
+</div>
+</div>
+<div class="flex flex-col items-end">
+<span class="text-primary font-bold text-sm">+25</span>
+<span class="text-[10px] text-slate-500 uppercase tracking-wide mt-1 group-hover:text-white transition-colors">Go</span>
+</div>
+</div>
+<!-- Footer note -->
+<p class="text-center text-[10px] text-slate-600 mt-8 pb-4">
+                    Purchases are subject to App Store terms and conditions. <br/> Restore Purchases
+                </p>
+</div>
+</div>
+<!-- Bottom Fade for scrolling indication -->
+<div class="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-background-dark to-transparent pointer-events-none z-20"></div>
+</div>
+</body></html>

@@ -1,0 +1,46 @@
+name: Generate Daily Puzzles
+
+# Runs at 00:05 UTC every day to generate all 101 puzzles
+# Also available as a manual trigger via workflow_dispatch
+on:
+  schedule:
+    - cron: "5 0 * * *"
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Target date (YYYY-MM-DD). Defaults to today UTC."
+        required: false
+        type: string
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Generate Daily Puzzles
+        run: |
+          DATE="${{ github.event.inputs.date || '' }}"
+          if [ -z "$DATE" ]; then
+            DATE=$(date -u +%Y-%m-%d)
+          fi
+
+          echo "🎲 Generating puzzles for: $DATE"
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ secrets.SUPABASE_URL }}/functions/v1/generate-daily-puzzles" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"date\": \"$DATE\"}")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          echo "📊 Response ($HTTP_CODE):"
+          echo "$BODY" | python3 -m json.tool 2>/dev/null || echo "$BODY"
+
+          if [ "$HTTP_CODE" -ge 500 ]; then
+            echo "❌ Generation failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
+
+          echo "✅ Generation complete"

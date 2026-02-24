@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Obsidian Editorial - Hint Modal</title>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&amp;family=Playfair+Display:ital,wght@0,400;0,700;1,400&amp;family=Space+Mono:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Config -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#eecd2b",
+                        "background-light": "#f8f8f6",
+                        "background-dark": "#221f10",
+                    },
+                    fontFamily: {
+                        "display": ["Manrope", "sans-serif"],
+                        "serif": ["Playfair Display", "serif"],
+                        "mono": ["Space Mono", "monospace"],
+                    },
+                    borderRadius: {"DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display min-h-screen flex flex-col items-center justify-center relative overflow-hidden">
+<!-- Background Game Grid Simulation -->
+<div class="absolute inset-0 z-0 opacity-20 pointer-events-none flex flex-col items-center justify-start pt-12">
+<div class="grid grid-cols-7 gap-1 w-full max-w-sm px-4">
+<!-- Simulated crossword grid pattern -->
+<div class="aspect-square bg-slate-800 rounded-sm"></div>
+<div class="aspect-square bg-slate-800 rounded-sm"></div>
+<div class="aspect-square bg-slate-900 rounded-sm"></div>
+<div class="aspect-square bg-slate-800 rounded-sm"></div>
+<div class="aspect-square bg-slate-800 rounded-sm"></div>
+<div class="aspect-square bg-slate-900 rounded-sm"></div>
+<div class="aspect-square bg-slate-800 rounded-sm"></div>
+<div class="aspect-square bg-slate-800 rounded-sm"></div>
+<div class="aspect-square bg-slate-900 rounded-sm"></div>
+<div class="aspect-square bg-slate-800 rounded-sm"></div>
+<div class="aspect-square bg-slate-800 rounded-sm"></div>
+<div class="aspect-square bg-slate-800 rounded-sm"></div>
+<div class="aspect-square bg-slate-800 rounded-sm"></div>
+<div class="aspect-square bg-slate-900 rounded-sm"></div>
+<div class="aspect-square bg-primary/20 rounded-sm border-2 border-primary"></div>
+<div class="aspect-square bg-primary/20 rounded-sm border-2 border-primary"></div>
+<div class="aspect-square bg-slate-900 rounded-sm"></div>
+<div class="aspect-square bg-primary/20 rounded-sm border-2 border-primary"></div>
+<div class="aspect-square bg-primary/20 rounded-sm border-2 border-primary"></div>
+<div class="aspect-square bg-primary/20 rounded-sm border-2 border-primary"></div>
+<div class="aspect-square bg-primary/20 rounded-sm border-2 border-primary"></div>
+</div>
+</div>
+<!-- Modal Backdrop -->
+<div class="absolute inset-0 z-40 bg-[#141414]/80 backdrop-blur-sm flex flex-col justify-end">
+<!-- Bottom Sheet Container -->
+<div class="w-full bg-[#1c1a15] rounded-t-xl border-t border-[#333025] shadow-2xl flex flex-col relative overflow-hidden animate-slide-up">
+<!-- Handle -->
+<div class="w-full flex items-center justify-center pt-3 pb-1">
+<div class="h-1 w-12 rounded-full bg-[#484223]"></div>
+</div>
+<!-- Header Section -->
+<div class="flex flex-col items-center px-6 pt-4 pb-6">
+<h2 class="text-white font-serif text-3xl font-medium tracking-wide text-center mb-6">Need a Nudge?</h2>
+<!-- Puzzle Word Context -->
+<div class="bg-[#14120b] border border-[#333025] rounded-lg py-4 px-8 w-full max-w-xs flex justify-center mb-5 shadow-inner">
+<h1 class="text-primary font-mono text-2xl tracking-[0.2em] font-bold text-center">_E_____</h1>
+</div>
+<!-- Coin Balance Pill -->
+<div class="flex items-center gap-2 bg-[#2a261a] border border-[#3d3725] rounded-full px-4 py-1.5 shadow-sm">
+<span class="material-symbols-outlined text-primary text-lg">monetization_on</span>
+<span class="text-white font-display text-sm font-semibold tracking-wide">842</span>
+</div>
+</div>
+<!-- Options List -->
+<div class="flex flex-col gap-3 px-4 pb-8 max-w-md mx-auto w-full">
+<!-- Option 1: Reveal Letter -->
+<button class="group w-full relative flex items-center gap-4 bg-[#262319] hover:bg-[#2d291d] active:bg-[#221f15] active:scale-[0.98] transition-all duration-200 border border-[#333025] rounded-lg p-4 text-left">
+<div class="flex items-center justify-center shrink-0 w-12 h-12 rounded-full bg-primary/10 group-hover:bg-primary/20 transition-colors">
+<span class="material-symbols-outlined text-primary text-2xl">search</span>
+</div>
+<div class="flex-1 min-w-0">
+<h3 class="text-slate-100 font-display font-semibold text-lg leading-tight mb-1">Reveal Letter</h3>
+<p class="text-[#8c8568] font-display text-xs leading-normal">Fills in the currently selected square.</p>
+</div>
+<div class="shrink-0 flex items-center gap-1 bg-[#1a1812] px-3 py-1.5 rounded-md border border-[#333025]">
+<span class="text-primary font-bold text-sm">30</span>
+<span class="material-symbols-outlined text-primary text-sm">monetization_on</span>
+</div>
+</button>
+<!-- Option 2: Reveal Word -->
+<button class="group w-full relative flex items-center gap-4 bg-[#262319] hover:bg-[#2d291d] active:bg-[#221f15] active:scale-[0.98] transition-all duration-200 border border-[#333025] rounded-lg p-4 text-left">
+<div class="flex items-center justify-center shrink-0 w-12 h-12 rounded-full bg-primary/10 group-hover:bg-primary/20 transition-colors">
+<span class="material-symbols-outlined text-primary text-2xl">auto_fix_high</span>
+</div>
+<div class="flex-1 min-w-0">
+<h3 class="text-slate-100 font-display font-semibold text-lg leading-tight mb-1">Reveal Word</h3>
+<p class="text-[#8c8568] font-display text-xs leading-normal">Solves the entire active word instantly.</p>
+</div>
+<div class="shrink-0 flex items-center gap-1 bg-[#1a1812] px-3 py-1.5 rounded-md border border-[#333025]">
+<span class="text-primary font-bold text-sm">80</span>
+<span class="material-symbols-outlined text-primary text-sm">monetization_on</span>
+</div>
+</button>
+<!-- Option 3: Check Errors -->
+<button class="group w-full relative flex items-center gap-4 bg-[#262319] hover:bg-[#2d291d] active:bg-[#221f15] active:scale-[0.98] transition-all duration-200 border border-[#333025] rounded-lg p-4 text-left">
+<div class="flex items-center justify-center shrink-0 w-12 h-12 rounded-full bg-primary/10 group-hover:bg-primary/20 transition-colors">
+<span class="material-symbols-outlined text-primary text-2xl">fact_check</span>
+</div>
+<div class="flex-1 min-w-0">
+<h3 class="text-slate-100 font-display font-semibold text-lg leading-tight mb-1">Check Errors</h3>
+<p class="text-[#8c8568] font-display text-xs leading-normal">Highlights incorrect letters in red.</p>
+</div>
+<div class="shrink-0 flex items-center gap-1 bg-[#1a1812] px-3 py-1.5 rounded-md border border-[#333025]">
+<span class="text-primary font-bold text-sm">20</span>
+<span class="material-symbols-outlined text-primary text-sm">monetization_on</span>
+</div>
+</button>
+</div>
+<!-- Cancel Action -->
+<div class="w-full pb-8 pt-2 text-center">
+<button class="text-[#8c8568] hover:text-primary font-display font-medium text-sm tracking-wide transition-colors uppercase">
+                    No Thanks, I'll Keep Trying
+                </button>
+</div>
+<!-- Bottom safe area spacing for mobile -->
+<div class="h-6 w-full"></div>
+</div>
+</div>
+</body></html>
