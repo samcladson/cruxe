@@ -55,8 +55,17 @@ const DIRECTION_TABS: { key: Direction; label: string; icon: string }[] = [
  * Across, Down, Backwards, and Up.
  */
 export function CluePanel() {
-  const { activePuzzle, selectedCell, selectedDirection, selectCell } =
-    usePuzzleStore();
+  const {
+    activePuzzle,
+    selectedCell,
+    selectedDirection,
+    selectCell,
+    checkAnswers,
+    checksRemaining,
+    decrementCheck,
+    isGridCompletelyFilled,
+    checkCompletion,
+  } = usePuzzleStore();
   const scrollViewRef = useRef<ScrollView>(null);
 
   if (!activePuzzle) return null;
@@ -168,18 +177,45 @@ export function CluePanel() {
 
       {/* Bottom Action Bar */}
       <View style={styles.actionBar}>
-        <TouchableOpacity style={styles.actionBtn}>
+        <TouchableOpacity
+          style={[styles.actionBtn, checksRemaining === 0 && { opacity: 0.5 }]}
+          disabled={checksRemaining === 0}
+          onPress={() => {
+            if (checksRemaining > 0) {
+              checkAnswers();
+              decrementCheck();
+            }
+          }}
+        >
           <MaterialIcons
             name="check-circle"
             size={24}
             color="rgba(255,255,255,0.5)"
           />
-          <Text style={styles.actionBtnText}>CHECK</Text>
+          <Text style={styles.actionBtnText}>CHECK ({checksRemaining})</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionBtnPrimary}>
-          <MaterialIcons name="key" size={24} color={theme.colors.accentGold} />
-          <Text style={styles.actionBtnTextPrimary}>HINT (50)</Text>
+        <TouchableOpacity
+          style={[
+            styles.actionBtnPrimary,
+            !isGridCompletelyFilled() && { opacity: 0.5 },
+          ]}
+          disabled={!isGridCompletelyFilled()}
+          onPress={() => {
+            const isFinished = checkCompletion();
+            // If they are wrong, punish them by using a check attempt and showing where they failed
+            if (!isFinished && checksRemaining > 0) {
+              checkAnswers();
+              decrementCheck();
+            }
+          }}
+        >
+          <MaterialIcons
+            name="flag"
+            size={24}
+            color={theme.colors.accentGold}
+          />
+          <Text style={styles.actionBtnTextPrimary}>FINISH</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.actionBtn}>

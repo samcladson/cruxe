@@ -7,6 +7,7 @@ interface PuzzleState {
   selectedDirection: Direction;
   timer: number;
   isPaused: boolean;
+  checksRemaining: number;
 
   setActivePuzzle: (puzzle: Puzzle) => void;
   selectCell: (row: number, col: number) => void;
@@ -17,6 +18,9 @@ interface PuzzleState {
   incrementTimer: () => void;
   setPause: (paused: boolean) => void;
   checkCompletion: () => boolean;
+  checkAnswers: () => void;
+  decrementCheck: () => void;
+  isGridCompletelyFilled: () => boolean;
   getAccuracy: () => number;
 }
 
@@ -26,6 +30,7 @@ export const usePuzzleStore = create<PuzzleState>((set, get) => ({
   selectedDirection: "across",
   timer: 0,
   isPaused: false,
+  checksRemaining: 5,
 
   setActivePuzzle: (puzzle) =>
     set({
@@ -33,6 +38,7 @@ export const usePuzzleStore = create<PuzzleState>((set, get) => ({
       timer: 0,
       isPaused: false,
       selectedCell: null,
+      checksRemaining: 5,
     }),
 
   selectCell: (row, col) => {
@@ -164,6 +170,46 @@ export const usePuzzleStore = create<PuzzleState>((set, get) => ({
     }
 
     return isComplete;
+  },
+
+  checkAnswers: () => {
+    set((state) => {
+      if (!state.activePuzzle) return state;
+
+      const newGrid = state.activePuzzle.grid.map((row) =>
+        row.map((cell) => {
+          if (cell.isBlocked || !cell.userInput) return cell;
+
+          const newState: "correct" | "incorrect" =
+            cell.userInput === cell.letter ? "correct" : "incorrect";
+
+          return {
+            ...cell,
+            state: newState,
+          };
+        }),
+      );
+
+      return {
+        activePuzzle: { ...state.activePuzzle, grid: newGrid },
+      };
+    });
+  },
+
+  decrementCheck: () => {
+    set((state) => ({
+      checksRemaining: Math.max(0, state.checksRemaining - 1),
+    }));
+  },
+
+  isGridCompletelyFilled: () => {
+    const { activePuzzle } = get();
+    if (!activePuzzle) return false;
+
+    // Return true if EVERY unblocked cell has a userInput
+    return activePuzzle.grid.every((row) =>
+      row.every((cell) => cell.isBlocked || !!cell.userInput),
+    );
   },
 
   /**

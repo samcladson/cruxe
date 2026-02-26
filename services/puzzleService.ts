@@ -41,11 +41,22 @@ export interface CompletionData {
   gridSize: number;
 }
 
-// ─── Date helpers ────────────────────────────────────────────────────
-
-/** Returns today's date in UTC as YYYY-MM-DD */
-function getTodayUTC(): string {
-  return new Date().toISOString().split("T")[0];
+/**
+ * Returns today's local date as YYYY-MM-DD.
+ * Uses the device's local timezone intentionally — the generate-ahead buffer
+ * on the server ensures puzzles exist for every user's local date.
+ */
+function getTodayLocal(): string {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const localDate = `${year}-${month}-${day}`;
+  const utcDate = d.toISOString().split("T")[0];
+  console.log(
+    `[puzzleService] Query date — local: ${localDate}, UTC: ${utcDate}`,
+  );
+  return localDate;
 }
 
 // ─── Puzzle fetching ─────────────────────────────────────────────────
@@ -55,7 +66,7 @@ function getTodayUTC(): string {
  * Returns null if no Daily Challenge exists for today (e.g., cron hasn't run yet).
  */
 export async function fetchDailyChallenge(): Promise<PuzzleMeta | null> {
-  const today = getTodayUTC();
+  const today = getTodayLocal();
 
   const { data, error } = await supabase
     .from("daily_puzzles")
@@ -64,7 +75,7 @@ export async function fetchDailyChallenge(): Promise<PuzzleMeta | null> {
     )
     .eq("puzzle_date", today)
     .eq("is_daily_challenge", true)
-    .single();
+    .maybeSingle();
 
   if (error || !data) {
     console.warn(
@@ -98,7 +109,7 @@ export async function fetchCategoryPuzzles(
   category: Category,
   userId: string = "guest",
 ): Promise<PuzzleMeta[]> {
-  const today = getTodayUTC();
+  const today = getTodayLocal();
 
   // Fetch today's puzzles for this category (metadata only, no puzzle_data)
   const { data: puzzles, error: puzzleError } = await supabase
@@ -167,7 +178,7 @@ export async function fetchPuzzleById(
     .from("daily_puzzles")
     .select("puzzle_data")
     .eq("id", puzzleId)
-    .single();
+    .maybeSingle();
 
   if (error || !data) {
     console.error("[puzzleService] Failed to fetch puzzle:", error?.message);
@@ -198,7 +209,7 @@ export async function fetchDailyPuzzle(
   variant: number = 1,
   date?: string,
 ): Promise<Puzzle | null> {
-  const targetDate = date || getTodayUTC();
+  const targetDate = date || getTodayLocal();
 
   const { data, error } = await supabase
     .from("daily_puzzles")
@@ -208,7 +219,7 @@ export async function fetchDailyPuzzle(
     .eq("difficulty", difficulty)
     .eq("grid_size", gridSize)
     .eq("variant", variant)
-    .single();
+    .maybeSingle();
 
   if (error || !data) {
     console.warn(

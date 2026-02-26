@@ -1,7 +1,8 @@
 import { MaterialIcons } from "@expo/vector-icons";
-import { Stack, router, useLocalSearchParams } from "expo-router";
-import React, { useState } from "react";
+import { router, Stack, useLocalSearchParams } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,17 +11,45 @@ import {
 } from "react-native";
 import { CATEGORIES } from "../../constants/categories";
 import { theme } from "../../constants/theme";
+import { fetchCategoryPuzzles, PuzzleMeta } from "../../services/puzzleService";
+import { useUserStore } from "../../stores/userStore";
+import { Difficulty } from "../../types/puzzle.types";
 
 export default function CategoryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  // Match category
   const category = id ? CATEGORIES[id as keyof typeof CATEGORIES] : null;
 
+  const [puzzles, setPuzzles] = useState<PuzzleMeta[]>([]);
+  const [loading, setLoading] = useState(true);
+
   // Filter state
-  const [selectedDifficulty, setSelectedDifficulty] = useState<string | null>(
-    null,
-  );
-  const [selectedSize, setSelectedSize] = useState<string | null>(null);
+  const [selectedDifficulty, setSelectedDifficulty] =
+    useState<Difficulty>("easy");
+  const [selectedSize, setSelectedSize] = useState<string>("6x6");
+
+  const userProfile = useUserStore((state) => state.profile);
+
+  useEffect(() => {
+    if (!category || !id) return;
+    async function loadCategoryPuzzles() {
+      setLoading(true);
+      const data = await fetchCategoryPuzzles(id as any, userProfile.id);
+      setPuzzles(data);
+      setLoading(false);
+    }
+    loadCategoryPuzzles();
+  }, [category, id, userProfile.id]);
+
+  const filteredPuzzles = puzzles.filter((p) => {
+    if (
+      selectedDifficulty &&
+      p.difficulty.toLowerCase() !== selectedDifficulty.toLowerCase()
+    )
+      return false;
+    if (selectedSize && p.gridSize !== parseInt(selectedSize.split("x")[0]))
+      return false;
+    return true;
+  });
 
   if (!category) {
     return (
@@ -90,7 +119,7 @@ export default function CategoryScreen() {
                     styles.difficultyPill,
                     isActive && styles.difficultyPillActive,
                   ]}
-                  onPress={() => setSelectedDifficulty(diff)}
+                  onPress={() => setSelectedDifficulty(diff as Difficulty)}
                 >
                   <Text
                     style={[
@@ -146,131 +175,141 @@ export default function CategoryScreen() {
               });
             }}
           >
-            <Text
-              style={[
-                styles.globalPlayBtnText,
-                (!selectedDifficulty || !selectedSize) &&
-                  styles.globalPlayBtnTextDisabled,
-              ]}
-            >
-              GENERATE & PLAY
-            </Text>
+            <Text style={[styles.globalPlayBtnText]}>GENERATE & PLAY</Text>
           </TouchableOpacity>
         </View>
 
         {/* Puzzle List */}
         <View style={styles.puzzleList}>
-          {/* Mocked Item 1 - Active/Resume state */}
-          <View style={styles.card}>
-            <View style={styles.cardTopRow}>
-              <View>
-                <Text style={styles.cardDateActive}>OCT 14, 1923</Text>
-                <Text style={styles.cardTitle}>The Industrial Age</Text>
-              </View>
-              {/* Progress Ring Mock */}
-              <View style={styles.progressRingBox}>
-                <Text style={styles.progressText}>45%</Text>
-                <View style={[StyleSheet.absoluteFill, styles.mockRing]} />
-              </View>
+          {loading ? (
+            <ActivityIndicator
+              size="large"
+              color={theme.colors.accentGold}
+              style={{ marginTop: 40 }}
+            />
+          ) : filteredPuzzles.length === 0 ? (
+            <View style={{ alignItems: "center", marginTop: 40 }}>
+              <MaterialIcons
+                name="grid-off"
+                size={48}
+                color="rgba(255,255,255,0.1)"
+              />
+              <Text style={{ color: theme.colors.textMuted, marginTop: 16 }}>
+                No puzzles match these filters
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setSelectedDifficulty("easy");
+                  setSelectedSize("6x6");
+                }}
+              >
+                <Text style={{ color: theme.colors.accentGold, marginTop: 12 }}>
+                  Return to Defaults
+                </Text>
+              </TouchableOpacity>
             </View>
-            <View style={styles.cardMetaRow}>
-              <View style={styles.metaBadge}>
-                <MaterialIcons
-                  name="grid-on"
-                  size={14}
-                  color={theme.colors.textSecondary}
-                />
-                <Text style={styles.metaBadgeText}>16x16</Text>
+          ) : (
+            filteredPuzzles.map((puzzle) => (
+              <View key={puzzle.id} style={styles.card}>
+                <View style={styles.cardTopRow}>
+                  <View>
+                    <Text
+                      style={
+                        puzzle.isCompleted
+                          ? styles.cardDateActive
+                          : styles.cardDate
+                      }
+                    >
+                      {category.title.toUpperCase()}
+                    </Text>
+                    <Text style={styles.cardTitle}>
+                      {puzzle.difficulty.charAt(0).toUpperCase() +
+                        puzzle.difficulty.slice(1)}{" "}
+                      Puzzle
+                    </Text>
+                  </View>
+                  {puzzle.isCompleted ? (
+                    <View style={styles.progressRingBox}>
+                      <MaterialIcons
+                        name="check"
+                        size={24}
+                        color={theme.colors.accentGold}
+                      />
+                    </View>
+                  ) : (
+                    <View style={styles.progressRingEmpty}>
+                      <MaterialIcons
+                        name="lock-open"
+                        size={16}
+                        color="rgba(255,255,255,0.4)"
+                      />
+                    </View>
+                  )}
+                </View>
+                <View style={styles.cardMetaRow}>
+                  <View style={styles.metaBadge}>
+                    <MaterialIcons
+                      name="grid-on"
+                      size={14}
+                      color={theme.colors.textSecondary}
+                    />
+                    <Text style={styles.metaBadgeText}>
+                      {puzzle.gridSize}x{puzzle.gridSize}
+                    </Text>
+                  </View>
+                  <View style={styles.metaBadge}>
+                    <MaterialIcons
+                      name="timer"
+                      size={14}
+                      color={theme.colors.textSecondary}
+                    />
+                    <Text style={styles.metaBadgeText}>
+                      ~{Math.round(puzzle.estimatedTime / 60)} min
+                    </Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.metaBadge,
+                      puzzle.difficulty === "hard" ||
+                      puzzle.difficulty === "expert"
+                        ? styles.metaHard
+                        : styles.metaMedium,
+                    ]}
+                  >
+                    <Text
+                      style={
+                        puzzle.difficulty === "hard" ||
+                        puzzle.difficulty === "expert"
+                          ? styles.metaHardText
+                          : styles.metaMediumText
+                      }
+                    >
+                      {puzzle.difficulty.charAt(0).toUpperCase() +
+                        puzzle.difficulty.slice(1)}
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={styles.cardActionBtn}
+                  onPress={() => {
+                    router.push({
+                      pathname: "/game/generate",
+                      params: { id: puzzle.id },
+                    });
+                  }}
+                >
+                  <MaterialIcons
+                    name={puzzle.isCompleted ? "replay" : "play-arrow"}
+                    size={18}
+                    color="#fff"
+                  />
+                  <Text style={styles.cardActionText}>
+                    {puzzle.isCompleted ? "PLAY AGAIN" : "PLAY"}
+                  </Text>
+                </TouchableOpacity>
               </View>
-              <View style={styles.metaBadge}>
-                <MaterialIcons
-                  name="timer"
-                  size={14}
-                  color={theme.colors.textSecondary}
-                />
-                <Text style={styles.metaBadgeText}>~15 min</Text>
-              </View>
-              <View style={[styles.metaBadge, styles.metaHard]}>
-                <Text style={styles.metaHardText}>Hard</Text>
-              </View>
-            </View>
-            <TouchableOpacity
-              style={styles.cardActionBtn}
-              onPress={() => {
-                // To keep it simple, we just generate a puzzle with the selected params
-                router.push({
-                  pathname: "/game/generate",
-                  params: {
-                    category: id,
-                    difficulty: selectedDifficulty?.toLowerCase() || "easy",
-                    size: selectedSize
-                      ? parseInt(selectedSize.split("x")[0])
-                      : 8,
-                  },
-                });
-              }}
-            >
-              <MaterialIcons name="play-arrow" size={18} color="#fff" />
-              <Text style={styles.cardActionText}>RESUME</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Mocked Item 2 - New */}
-          <View style={styles.card}>
-            <View style={styles.cardTopRow}>
-              <View>
-                <Text style={styles.cardDate}>NOV 02, 1945</Text>
-                <Text style={styles.cardTitle}>Post-War Economics</Text>
-              </View>
-              <View style={styles.progressRingEmpty}>
-                <MaterialIcons
-                  name="lock-open"
-                  size={16}
-                  color="rgba(255,255,255,0.4)"
-                />
-              </View>
-            </View>
-            <View style={styles.cardMetaRow}>
-              <View style={styles.metaBadge}>
-                <MaterialIcons
-                  name="grid-on"
-                  size={14}
-                  color={theme.colors.textSecondary}
-                />
-                <Text style={styles.metaBadgeText}>12x12</Text>
-              </View>
-              <View style={styles.metaBadge}>
-                <MaterialIcons
-                  name="timer"
-                  size={14}
-                  color={theme.colors.textSecondary}
-                />
-                <Text style={styles.metaBadgeText}>~10 min</Text>
-              </View>
-              <View style={[styles.metaBadge, styles.metaMedium]}>
-                <Text style={styles.metaMediumText}>Medium</Text>
-              </View>
-            </View>
-            <TouchableOpacity
-              style={styles.cardActionBtn}
-              onPress={() => {
-                router.push({
-                  pathname: "/game/generate",
-                  params: {
-                    category: id,
-                    difficulty: selectedDifficulty?.toLowerCase() || "easy",
-                    size: selectedSize
-                      ? parseInt(selectedSize.split("x")[0])
-                      : 8,
-                  },
-                });
-              }}
-            >
-              <MaterialIcons name="play-arrow" size={18} color="#fff" />
-              <Text style={styles.cardActionText}>PLAY</Text>
-            </TouchableOpacity>
-          </View>
-
+            ))
+          )}
           <View style={{ height: 40 }} />
         </View>
       </ScrollView>

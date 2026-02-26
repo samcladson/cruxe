@@ -304,11 +304,16 @@ function buildDailyManifest(): PuzzleSpec[] {
 async function main() {
   const startTime = Date.now();
 
-  // Parse target date from CLI argument or default to today UTC
-  const targetDate = process.argv[2] || new Date().toISOString().split("T")[0];
+  // Parse target date from CLI argument, or default to TODAY (UTC).
+  // When run manually, generates immediately-available puzzles.
+  // The GitHub Actions cron handles the 3-day buffer by calling this script
+  // with explicit dates for today, tomorrow, and day-after-tomorrow.
+  const today = new Date();
+  const targetDate = process.argv[2] || today.toISOString().split("T")[0];
 
   console.log(`\n🎲 Cruxe Daily Puzzle Generator`);
-  console.log(`📅 Date: ${targetDate}`);
+  console.log(`📅 Target Date: ${targetDate}`);
+  console.log(`🕐 Current UTC: ${today.toISOString()}`);
   console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
 
   // Validate environment variables

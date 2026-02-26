@@ -1,7 +1,7 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Modal,
   ScrollView,
@@ -19,6 +19,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { CATEGORIES } from "../../constants/categories";
 import { theme } from "../../constants/theme";
+import { fetchDailyChallenge, PuzzleMeta } from "../../services/puzzleService";
 import { useUserStore } from "../../stores/userStore";
 
 function PulseDot() {
@@ -45,10 +46,29 @@ function PulseDot() {
 export default function HomeScreen() {
   const profile = useUserStore((state) => state.profile);
   const [isCategoriesModalVisible, setIsCategoriesModalVisible] =
-    React.useState(false);
+    useState(false);
+
+  const [dailyPuzzle, setDailyPuzzle] = useState<PuzzleMeta | null>(null);
+
+  useEffect(() => {
+    async function loadDaily() {
+      const challenge = await fetchDailyChallenge();
+      if (challenge) {
+        setDailyPuzzle(challenge);
+      }
+    }
+    loadDaily();
+  }, []);
 
   const startDailyPuzzle = () => {
-    router.push("/game/daily-generation");
+    if (dailyPuzzle) {
+      router.push({
+        pathname: "/game/generate",
+        params: { id: dailyPuzzle.id },
+      });
+    } else {
+      router.push("/game/generate");
+    }
   };
 
   // Helper date formatter
@@ -124,21 +144,34 @@ export default function HomeScreen() {
             </View>
 
             <View style={styles.heroTextGroup}>
-              <Text style={styles.heroTitle}>General Knowledge</Text>
+              <Text style={styles.heroTitle}>
+                {dailyPuzzle ? "General Knowledge" : "Retrieving Challenge..."}
+              </Text>
               <View style={styles.heroDetailsRow}>
                 <MaterialIcons
                   name="grid-on"
                   size={16}
                   color={theme.colors.textSecondary}
                 />
-                <Text style={styles.heroDetailsText}>8x8 Grid</Text>
+                <Text style={styles.heroDetailsText}>
+                  {dailyPuzzle
+                    ? `${dailyPuzzle.gridSize}x${dailyPuzzle.gridSize} Grid`
+                    : "Loading"}
+                </Text>
                 <Text style={styles.heroDetailsDot}>•</Text>
-                <Text style={styles.heroDetailsText}>Medium Difficulty</Text>
+                <Text style={styles.heroDetailsText}>
+                  {dailyPuzzle
+                    ? dailyPuzzle.difficulty.charAt(0).toUpperCase() +
+                      dailyPuzzle.difficulty.slice(1)
+                    : "Loading"}
+                </Text>
               </View>
             </View>
 
             <View style={styles.heroButton}>
-              <Text style={styles.heroButtonText}>PLAY TODAY</Text>
+              <Text style={styles.heroButtonText}>
+                {dailyPuzzle?.isCompleted ? "PLAY AGAIN" : "PLAY TODAY"}
+              </Text>
               <MaterialIcons name="arrow-forward" size={20} color="#000" />
             </View>
           </View>

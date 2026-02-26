@@ -1,7 +1,8 @@
 name: Generate Daily Puzzles
 
-# Runs at 00:05 UTC every day to generate all 101 puzzles.
-# Also available as a manual trigger via workflow_dispatch.
+# Runs at 00:05 UTC every day to generate puzzles with a 3-day buffer.
+# Generates for today, tomorrow, and day-after-tomorrow (UTC) to cover all timezones.
+# Also available as a manual trigger via workflow_dispatch for specific dates.
 # Runs the script directly in Node.js — no Edge Functions, no timeouts.
 on:
   schedule:
@@ -30,14 +31,24 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Generate puzzles
+      - name: Generate puzzles (3-day buffer for timezone coverage)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          DATE="${{ github.event.inputs.date || '' }}"
-          if [ -z "$DATE" ]; then
-            DATE=$(date -u +%Y-%m-%d)
+          # Generate puzzles for today, tomorrow, and day-after-tomorrow (UTC).
+          # This creates a rolling buffer that ensures every timezone (up to UTC+14)
+          # always has puzzles for their local date.
+          # The script is idempotent — existing dates are skipped (0 Gemini API calls).
+          if [ -n "${{ github.event.inputs.date }}" ]; then
+            echo "Manual run for specific date: ${{ github.event.inputs.date }}"
+            npx tsx scripts/generate-daily-puzzles.ts "${{ github.event.inputs.date }}"
+          else
+            for OFFSET in 0 1 2; do
+              DATE=$(date -u -d "+${OFFSET} days" +%Y-%m-%d)
+              echo ""
+              echo "━━━ Generating for ${DATE} (UTC+${OFFSET}d) ━━━"
+              npx tsx scripts/generate-daily-puzzles.ts "${DATE}"
+            done
           fi
-          npx tsx scripts/generate-daily-puzzles.ts "$DATE"

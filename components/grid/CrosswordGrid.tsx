@@ -144,7 +144,14 @@ export function CrosswordGrid() {
                   isSelected={isSelected}
                   isActiveWord={isActiveWord}
                   cellSize={cellSize}
-                  onPress={selectCell}
+                  onPress={(r, c) => {
+                    selectCell(r, c);
+                    // Force the keyboard to appear even if manually dismissed
+                    if (inputRef.current) {
+                      inputRef.current.blur();
+                      setTimeout(() => inputRef.current?.focus(), 10);
+                    }
+                  }}
                 />
               );
             })}

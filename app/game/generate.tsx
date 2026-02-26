@@ -10,7 +10,10 @@ import {
 import { theme } from "../../constants/theme";
 import { buildPuzzle } from "../../services/crosswordEngine";
 import { generatePuzzleWords } from "../../services/geminiService";
-import { fetchDailyPuzzle } from "../../services/puzzleService";
+import {
+  fetchDailyPuzzle,
+  fetchPuzzleById,
+} from "../../services/puzzleService";
 import { usePuzzleStore } from "../../stores/puzzleStore";
 import { Category, Difficulty, GridSize } from "../../types/puzzle.types";
 
@@ -29,6 +32,7 @@ export default function GenerateScreen() {
   const difficulty = (params.difficulty as Difficulty) || "medium";
   const gridSize = (params.size ? Number(params.size) : 8) as GridSize;
   const variant = params.variant ? Number(params.variant) : 1;
+  const explicitId = params.id as string | undefined;
 
   const [status, setStatus] = useState<"loading" | "error">("loading");
   const [errorMsg, setErrorMsg] = useState("");
@@ -38,10 +42,28 @@ export default function GenerateScreen() {
 
     async function loadPuzzle() {
       try {
-        // Primary: fetch pre-built puzzle from Supabase
-        setStatus("loading");
+        // Flow 1: Explicit ID requested
+        if (explicitId) {
+          console.log(
+            `[GenerateScreen] Fetching explicit puzzle ID: ${explicitId}`,
+          );
+          const explicitPuzzle = await fetchPuzzleById(explicitId);
+
+          if (explicitPuzzle && mounted) {
+            console.log("[GenerateScreen] ✅ Loaded requested ID from server");
+            setActivePuzzle(explicitPuzzle);
+            router.replace({ pathname: `/game/${explicitPuzzle.id}` } as any);
+            return;
+          } else {
+            console.log(
+              "[GenerateScreen] ⚠️ Requested ID not found, proceeding to generation",
+            );
+          }
+        }
+
+        // Flow 2: General match fetching / generation
         console.log(
-          `[GenerateScreen] Fetching puzzle: ${category}/${difficulty}/${gridSize}x${gridSize}/v${variant}`,
+          `[GenerateScreen] Fetching puzzle fallback: ${category}/${difficulty}/${gridSize}x${gridSize}/v${variant}`,
         );
 
         const puzzle = await fetchDailyPuzzle(
@@ -58,7 +80,7 @@ export default function GenerateScreen() {
           return;
         }
 
-        // Fallback: client-side generation if server puzzle not available
+        // Flow 3: Client-side generation if server puzzle not available
         console.log(
           "[GenerateScreen] ⚠️ No server puzzle found, falling back to client generation",
         );

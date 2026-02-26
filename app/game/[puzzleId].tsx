@@ -14,6 +14,8 @@ import { ConfettiBlast } from "../../components/animations/ConfettiBlast";
 import { ActiveClueBar } from "../../components/clues/ActiveClueBar";
 import { CluePanel } from "../../components/clues/CluePanel";
 import { CrosswordGrid } from "../../components/grid/CrosswordGrid";
+import { HintOptionsModal } from "../../components/modals/HintOptionsModal";
+import { SuccessModal } from "../../components/modals/SuccessModal";
 import { theme } from "../../constants/theme";
 import { usePuzzleStore } from "../../stores/puzzleStore";
 
@@ -26,23 +28,19 @@ import { usePuzzleStore } from "../../stores/puzzleStore";
 export default function GameScreen() {
   const { puzzleId } = useLocalSearchParams();
   const { activePuzzle, checkCompletion } = usePuzzleStore();
-  const [showConfetti, setShowConfetti] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showHintModal, setShowHintModal] = useState(false);
 
-  // Periodic completion check
+  // Expose these controllers to the window/context so the CluePanel can trigger them,
+  // or we can pass them via a generic store/context later. For now, since CluePanel
+  // is a child, we can just rely on the puzzleStore's activePuzzle.isComplete
+  // to trigger the success modal when building it.
+
   useEffect(() => {
-    if (!activePuzzle || activePuzzle.isComplete) return;
-
-    const interval = setInterval(() => {
-      if (checkCompletion()) {
-        setShowConfetti(true);
-        setTimeout(() => {
-          router.back();
-        }, 4000);
-      }
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [activePuzzle, checkCompletion]);
+    if (activePuzzle?.isComplete) {
+      setShowSuccessModal(true);
+    }
+  }, [activePuzzle?.isComplete]);
 
   if (!activePuzzle) {
     return <View style={styles.container} />;
@@ -100,6 +98,16 @@ export default function GameScreen() {
                 color={theme.colors.accentGold}
               />
             </View>
+            <TouchableOpacity
+              onPress={() => setShowHintModal(true)}
+              style={styles.hintBtn}
+            >
+              <MaterialIcons
+                name="emoji-objects"
+                size={22}
+                color={theme.colors.textSecondary}
+              />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -115,7 +123,15 @@ export default function GameScreen() {
           <CluePanel />
         </View>
 
-        <ConfettiBlast active={showConfetti} />
+        <ConfettiBlast active={activePuzzle.isComplete || false} />
+        <SuccessModal
+          visible={showSuccessModal}
+          onClose={() => setShowSuccessModal(false)}
+        />
+        <HintOptionsModal
+          visible={showHintModal}
+          onClose={() => setShowHintModal(false)}
+        />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -189,23 +205,31 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-end",
+    gap: 12,
     flex: 1,
   },
   coinBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    backgroundColor: "rgba(238, 205, 43, 0.1)",
+    backgroundColor: "rgba(255,255,255,0.05)",
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 100,
-    borderWidth: 1,
-    borderColor: "rgba(238, 205, 43, 0.2)",
+    borderRadius: 12,
+    gap: 4,
   },
   coinText: {
+    fontFamily: theme.typography.body.fontFamily,
+    fontSize: 12,
     color: theme.colors.accentGold,
-    fontSize: 13,
     fontWeight: "bold",
+  },
+  hintBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   bottomSection: {
     flex: 1,

@@ -82,6 +82,8 @@ export const GridCell = React.memo(
     }
     if (cell.state === "correct") {
       backgroundColor = "#1a2e1a";
+    } else if (cell.state === "incorrect") {
+      backgroundColor = "#3a1a1a";
     }
     if (cell.isPreFilled && !isSelected && !isActiveWord) {
       backgroundColor = "#2a2518";
@@ -127,6 +129,7 @@ export const GridCell = React.memo(
                 { fontSize: cellSize * 0.48 },
                 cell.isPreFilled && styles.letterHint,
                 cell.state === "correct" && styles.letterCorrect,
+                cell.state === "incorrect" && styles.letterIncorrect,
               ]}
             >
               {cell.userInput}
@@ -186,5 +189,8 @@ const styles = StyleSheet.create({
   },
   letterCorrect: {
     color: theme.colors.accentGreen,
+  },
+  letterIncorrect: {
+    color: "#ff4b4b",
   },
 });
