@@ -15,7 +15,13 @@ import {
   fetchPuzzleById,
 } from "../../services/puzzleService";
 import { usePuzzleStore } from "../../stores/puzzleStore";
-import { Category, Difficulty, GridSize } from "../../types/puzzle.types";
+import { useUserStore } from "../../stores/userStore";
+import {
+  Category,
+  Difficulty,
+  ENTRY_FEES,
+  GridSize,
+} from "../../types/puzzle.types";
 
 /**
  * GenerateScreen — Transitional loading screen between category selection and gameplay.
@@ -27,6 +33,8 @@ import { Category, Difficulty, GridSize } from "../../types/puzzle.types";
 export default function GenerateScreen() {
   const params = useLocalSearchParams();
   const setActivePuzzle = usePuzzleStore((state) => state.setActivePuzzle);
+  const profile = useUserStore((state) => state.profile);
+  const spendCoins = useUserStore((state) => state.spendCoins);
 
   const category = (params.category as Category) || "general";
   const difficulty = (params.difficulty as Difficulty) || "medium";
@@ -61,6 +69,22 @@ export default function GenerateScreen() {
           }
         }
 
+        // Before generating or fetching a new active puzzle, check the ENTRY FEE
+        const fee = ENTRY_FEES[difficulty];
+        // Ensure they have enough coins
+        if (profile.coins < fee) {
+          if (mounted) {
+            setErrorMsg(
+              `Not enough coins! You need ${fee} coins to play this puzzle.`,
+            );
+            setStatus("error");
+          }
+          return;
+        }
+
+        // Deduct the coins now that we are committed to generating/playing
+        spendCoins(fee);
+
         // Flow 2: General match fetching / generation
         console.log(
           `[GenerateScreen] Fetching puzzle fallback: ${category}/${difficulty}/${gridSize}x${gridSize}/v${variant}`,
@@ -94,10 +118,15 @@ export default function GenerateScreen() {
         );
 
         if (mounted) {
-          setActivePuzzle(generatedPuzzle);
-          router.replace({
-            pathname: `/game/${generatedPuzzle.id}`,
-          } as any);
+          if (generatedPuzzle) {
+            setActivePuzzle(generatedPuzzle);
+            router.replace({
+              pathname: `/game/${generatedPuzzle.id}`,
+            } as any);
+          } else {
+            setErrorMsg("Failed to build puzzle geometry");
+            setStatus("error");
+          }
         }
       } catch (err) {
         console.error("[GenerateScreen] Failed:", err);

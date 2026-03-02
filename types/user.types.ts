@@ -19,6 +19,7 @@ export interface UserProfile {
   displayName: string;
   avatarUrl: string;
   coins: number;
+  totalScore: number;
   totalPuzzlesSolved: number;
   currentStreak: number;
   longestStreak: number;

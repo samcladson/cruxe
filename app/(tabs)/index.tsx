@@ -3,8 +3,10 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Modal,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -17,9 +19,18 @@ import Animated, {
   withSequence,
   withTiming,
 } from "react-native-reanimated";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { AnimatedNumber } from "../../components/ui/AnimatedNumber";
 import { CATEGORIES } from "../../constants/categories";
 import { theme } from "../../constants/theme";
-import { fetchDailyChallenge, PuzzleMeta } from "../../services/puzzleService";
+import {
+  ActivityItem,
+  fetchDailyChallenge,
+  fetchRecentActivity,
+  getDailyPlayerCount,
+  PuzzleMeta,
+} from "../../services/puzzleService";
+import { supabase } from "../../services/supabaseClient";
 import { useUserStore } from "../../stores/userStore";
 
 function PulseDot() {
@@ -47,18 +58,60 @@ export default function HomeScreen() {
   const profile = useUserStore((state) => state.profile);
   const [isCategoriesModalVisible, setIsCategoriesModalVisible] =
     useState(false);
+  const [isActivityModalVisible, setIsActivityModalVisible] = useState(false);
 
   const [dailyPuzzle, setDailyPuzzle] = useState<PuzzleMeta | null>(null);
+  const [dailyPlayerCount, setDailyPlayerCount] = useState<number>(0);
+  const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([]);
+  const [loadingActivity, setLoadingActivity] = useState(true);
 
   useEffect(() => {
     async function loadDaily() {
-      const challenge = await fetchDailyChallenge();
+      const challenge = await fetchDailyChallenge(profile.id);
       if (challenge) {
         setDailyPuzzle(challenge);
       }
     }
     loadDaily();
-  }, []);
+  }, [profile.id]);
+
+  useEffect(() => {
+    if (!dailyPuzzle) return;
+
+    // Load initial count
+    getDailyPlayerCount(dailyPuzzle.id).then(setDailyPlayerCount);
+
+    // Subscribe to new completions to increment live!
+    const subscription = supabase
+      .channel("daily_completions")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "puzzle_completions",
+          filter: `puzzle_id=eq.${dailyPuzzle.id}`,
+        },
+        () => {
+          setDailyPlayerCount((prev) => prev + 1);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(subscription);
+    };
+  }, [dailyPuzzle?.id]);
+
+  useEffect(() => {
+    async function loadActivity() {
+      setLoadingActivity(true);
+      const activity = await fetchRecentActivity(profile.id, 50);
+      setRecentActivity(activity);
+      setLoadingActivity(false);
+    }
+    loadActivity();
+  }, [profile.id]);
 
   const startDailyPuzzle = () => {
     if (dailyPuzzle) {
@@ -81,7 +134,8 @@ export default function HomeScreen() {
     .toUpperCase();
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" />
       <View style={styles.header}>
         {/* Top bar with branding and stats */}
         <View style={styles.topBar}>
@@ -111,7 +165,9 @@ export default function HomeScreen() {
                 size={18}
                 color={theme.colors.accentGold}
               />
-              <Text style={styles.statText}>{profile.coins}</Text>
+              <Text style={styles.statText}>
+                {formatCompactNumber(profile.coins)}
+              </Text>
             </View>
           </View>
         </View>
@@ -123,8 +179,8 @@ export default function HomeScreen() {
       >
         {/* Hero Card: Daily Challenge */}
         <TouchableOpacity
-          activeOpacity={0.9}
-          onPress={startDailyPuzzle}
+          activeOpacity={dailyPuzzle?.isCompleted ? 1 : 0.9}
+          onPress={dailyPuzzle?.isCompleted ? undefined : startDailyPuzzle}
           style={{ marginBottom: 32 }}
         >
           <View style={styles.heroGlow} />
@@ -137,11 +193,55 @@ export default function HomeScreen() {
             />
 
             <View style={styles.heroHeader}>
-              <View style={styles.dailyBadge}>
-                <Text style={styles.dailyBadgeText}>DAILY CHALLENGE</Text>
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
+              >
+                <View style={styles.dailyBadge}>
+                  <Text style={styles.dailyBadgeText}>DAILY CHALLENGE</Text>
+                </View>
+                {dailyPuzzle?.isCompleted && (
+                  <MaterialIcons
+                    name="check-circle"
+                    size={20}
+                    color={theme.colors.accentGold}
+                  />
+                )}
               </View>
               <Text style={styles.heroDate}>{formattedDate}</Text>
             </View>
+
+            {dailyPuzzle && dailyPlayerCount > 0 && (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                  marginTop: 24,
+                }}
+              >
+                <PulseDot />
+                <AnimatedNumber
+                  value={dailyPlayerCount}
+                  style={{
+                    fontFamily: theme.typography.cellLetter.fontFamily,
+                    fontSize: 12,
+                    fontWeight: "bold",
+                    color: theme.colors.accentGold,
+                  }}
+                />
+                <Text
+                  style={{
+                    fontFamily: theme.typography.cellLetter.fontFamily,
+                    fontSize: 8,
+                    fontWeight: "bold",
+                    color: theme.colors.textSecondary,
+                    letterSpacing: 1,
+                  }}
+                >
+                  PLAYED TODAY'S CHALLENGE
+                </Text>
+              </View>
+            )}
 
             <View style={styles.heroTextGroup}>
               <Text style={styles.heroTitle}>
@@ -168,12 +268,85 @@ export default function HomeScreen() {
               </View>
             </View>
 
-            <View style={styles.heroButton}>
-              <Text style={styles.heroButtonText}>
-                {dailyPuzzle?.isCompleted ? "PLAY AGAIN" : "PLAY TODAY"}
-              </Text>
-              <MaterialIcons name="arrow-forward" size={20} color="#000" />
-            </View>
+            {dailyPuzzle?.isCompleted ? (
+              <View
+                style={[
+                  styles.heroButton,
+                  {
+                    backgroundColor: "rgba(255,255,255,0.05)",
+                    justifyContent: "space-between",
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.heroButtonText,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
+                  COMPLETED
+                </Text>
+
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 16,
+                  }}
+                >
+                  {/* Timer */}
+                  {dailyPuzzle.timeTaken != null && (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 4,
+                      }}
+                    >
+                      <MaterialIcons
+                        name="timer"
+                        size={16}
+                        color={theme.colors.textSecondary}
+                      />
+                      <Text
+                        style={{
+                          fontFamily: theme.typography.cellLetter.fontFamily,
+                          fontSize: 14,
+                          color: theme.colors.textSecondary,
+                          fontWeight: "bold",
+                        }}
+                      >
+                        {Math.floor(dailyPuzzle.timeTaken / 60)}:
+                        {(dailyPuzzle.timeTaken % 60)
+                          .toString()
+                          .padStart(2, "0")}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Accuracy Badge */}
+                  {dailyPuzzle.accuracy != null && (
+                    <View>
+                      <Text
+                        style={{
+                          fontFamily: theme.typography.cellLetter.fontFamily,
+                          fontSize: 14,
+                          color: theme.colors.textSecondary,
+                          fontWeight: "bold",
+                        }}
+                      >
+                        {Math.round(dailyPuzzle.accuracy * 100)}%
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            ) : (
+              <View style={styles.heroButton}>
+                <Text style={styles.heroButtonText}>PLAY TODAY</Text>
+                <MaterialIcons name="arrow-forward" size={20} color="#000" />
+              </View>
+            )}
           </View>
         </TouchableOpacity>
 
@@ -220,78 +393,85 @@ export default function HomeScreen() {
         {/* Recent Activity Section */}
         <View style={[styles.sectionHeader, { marginTop: 32 }]}>
           <Text style={styles.sectionTitle}>Recent Activity</Text>
+          <TouchableOpacity onPress={() => setIsActivityModalVisible(true)}>
+            <Text style={styles.sectionLink}>VIEW ALL</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.activityList}>
-          <TouchableOpacity style={styles.activityRow}>
-            <View
-              style={[
-                styles.activityIcon,
-                { backgroundColor: "rgba(238, 205, 43, 0.1)" },
-              ]}
-            >
-              <MaterialIcons
-                name="check-circle"
-                size={24}
-                color={theme.colors.accentGold}
-              />
-            </View>
-            <View style={styles.activityContent}>
-              <Text style={styles.activityTitle}>Friday Mini</Text>
-              <View style={styles.activityMeta}>
-                <Text
-                  style={[
-                    styles.metaStrong,
-                    { color: theme.colors.accentGold },
-                  ]}
-                >
-                  100% Complete
-                </Text>
-                <Text style={styles.metaDot}>•</Text>
-                <Text style={styles.metaTime}>3:12</Text>
-              </View>
-            </View>
-            <MaterialIcons
-              name="chevron-right"
-              size={20}
-              color={theme.colors.textMuted}
+          {loadingActivity ? (
+            <ActivityIndicator
+              color={theme.colors.accentGold}
+              style={{ marginTop: 20 }}
             />
-          </TouchableOpacity>
+          ) : recentActivity.length === 0 ? (
+            <Text
+              style={{
+                color: theme.colors.textMuted,
+                textAlign: "center",
+                marginTop: 20,
+              }}
+            >
+              No recent puzzles completed.
+            </Text>
+          ) : (
+            recentActivity.slice(0, 2).map((activity) => {
+              const categoryTitle =
+                CATEGORIES[activity.category]?.title || "General";
+              const difficultyTitle =
+                activity.difficulty.charAt(0).toUpperCase() +
+                activity.difficulty.slice(1);
 
-          <TouchableOpacity style={[styles.activityRow, { opacity: 0.75 }]}>
-            <View
-              style={[
-                styles.activityIcon,
-                { backgroundColor: "rgba(255, 255, 255, 0.05)" },
-              ]}
-            >
-              <MaterialIcons
-                name="pause-circle"
-                size={24}
-                color={theme.colors.textSecondary}
-              />
-            </View>
-            <View style={styles.activityContent}>
-              <Text style={styles.activityTitle}>The Thursday Medium</Text>
-              <View style={styles.activityMeta}>
-                <Text
-                  style={[
-                    styles.metaStrong,
-                    { color: theme.colors.textSecondary },
-                  ]}
+              const mins = Math.floor(activity.timeTaken / 60);
+              const secs = activity.timeTaken % 60;
+              const timeFormatted = `${mins}:${secs.toString().padStart(2, "0")}`;
+
+              return (
+                <TouchableOpacity
+                  key={activity.id}
+                  style={styles.activityRow}
+                  onPress={() =>
+                    router.push(`/activity/${activity.puzzleId}` as any)
+                  }
                 >
-                  42% Complete
-                </Text>
-                <Text style={styles.metaDot}>•</Text>
-                <Text style={styles.metaTime}>12:05</Text>
-              </View>
-            </View>
-            <MaterialIcons
-              name="chevron-right"
-              size={20}
-              color={theme.colors.textMuted}
-            />
-          </TouchableOpacity>
+                  <View
+                    style={[
+                      styles.activityIcon,
+                      { backgroundColor: "rgba(238, 205, 43, 0.1)" },
+                    ]}
+                  >
+                    <MaterialIcons
+                      name="check-circle"
+                      size={24}
+                      color={theme.colors.accentGold}
+                    />
+                  </View>
+                  <View style={styles.activityContent}>
+                    <Text style={styles.activityTitle}>
+                      {categoryTitle} • {difficultyTitle}
+                    </Text>
+                    <View style={styles.activityMeta}>
+                      <Text
+                        style={[
+                          styles.metaStrong,
+                          { color: theme.colors.accentGold },
+                        ]}
+                      >
+                        {Math.round(activity.accuracy * 100)}% Accuracy
+                      </Text>
+                      <Text style={styles.metaDot}>•</Text>
+                      <Text style={styles.metaTime}>{timeFormatted}</Text>
+                    </View>
+                  </View>
+                  <MaterialIcons
+                    name="chevron-right"
+                    size={20}
+                    color={theme.colors.textMuted}
+                  />
+                </TouchableOpacity>
+              );
+            })
+          )}
         </View>
       </ScrollView>
 
@@ -358,7 +538,129 @@ export default function HomeScreen() {
           </ScrollView>
         </View>
       </Modal>
-    </View>
+
+      {/* Activity View All Modal */}
+      <Modal
+        visible={isActivityModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setIsActivityModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Activity History</Text>
+            <TouchableOpacity onPress={() => setIsActivityModalVisible(false)}>
+              <MaterialIcons
+                name="close"
+                size={24}
+                color={theme.colors.textPrimary}
+              />
+            </TouchableOpacity>
+          </View>
+          <ScrollView
+            contentContainerStyle={styles.modalContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {Object.entries(
+              recentActivity.reduce(
+                (acc, curr) => {
+                  const dateStr = new Date(curr.completedAt).toLocaleDateString(
+                    "en-US",
+                    {
+                      month: "long",
+                      day: "numeric",
+                      year: "numeric",
+                    },
+                  );
+                  if (!acc[dateStr]) acc[dateStr] = [];
+                  acc[dateStr].push(curr);
+                  return acc;
+                },
+                {} as Record<string, typeof recentActivity>,
+              ),
+            ).map(([date, activities]) => (
+              <View key={date} style={{ marginBottom: 24 }}>
+                <Text
+                  style={{
+                    fontFamily: theme.typography.heading.fontFamily,
+                    fontSize: 14,
+                    color: theme.colors.textSecondary,
+                    marginBottom: 12,
+                    letterSpacing: 1,
+                  }}
+                >
+                  {date.toUpperCase()}
+                </Text>
+                <View style={styles.activityList}>
+                  {activities.map((activity) => {
+                    const categoryTitle =
+                      CATEGORIES[activity.category]?.title || "General";
+                    const difficultyTitle =
+                      activity.difficulty.charAt(0).toUpperCase() +
+                      activity.difficulty.slice(1);
+
+                    const mins = Math.floor(activity.timeTaken / 60);
+                    const secs = activity.timeTaken % 60;
+                    const timeFormatted = `${mins}:${secs.toString().padStart(2, "0")}`;
+
+                    return (
+                      <TouchableOpacity
+                        key={activity.id}
+                        style={styles.activityRow}
+                        onPress={() => {
+                          setIsActivityModalVisible(false);
+                          setTimeout(() => {
+                            router.push(
+                              `/activity/${activity.puzzleId}` as any,
+                            );
+                          }, 150);
+                        }}
+                      >
+                        <View
+                          style={[
+                            styles.activityIcon,
+                            { backgroundColor: "rgba(238, 205, 43, 0.1)" },
+                          ]}
+                        >
+                          <MaterialIcons
+                            name="check-circle"
+                            size={24}
+                            color={theme.colors.accentGold}
+                          />
+                        </View>
+                        <View style={styles.activityContent}>
+                          <Text style={styles.activityTitle}>
+                            {categoryTitle} • {difficultyTitle}
+                          </Text>
+                          <View style={styles.activityMeta}>
+                            <Text
+                              style={[
+                                styles.metaStrong,
+                                { color: theme.colors.accentGold },
+                              ]}
+                            >
+                              {Math.round(activity.accuracy * 100)}% Accuracy
+                            </Text>
+                            <Text style={styles.metaDot}>•</Text>
+                            <Text style={styles.metaTime}>{timeFormatted}</Text>
+                          </View>
+                        </View>
+                        <MaterialIcons
+                          name="chevron-right"
+                          size={20}
+                          color={theme.colors.textMuted}
+                        />
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            ))}
+            <View style={{ height: 40 }} />
+          </ScrollView>
+        </View>
+      </Modal>
+    </SafeAreaView>
   );
 }
 
@@ -369,7 +671,7 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 24,
-    paddingTop: 60,
+    paddingTop: 8,
     paddingBottom: 16,
     backgroundColor: "rgba(10, 10, 10, 0.95)",
     zIndex: 20,
@@ -477,7 +779,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   heroTextGroup: {
-    marginTop: 60,
+    marginTop: 24,
   },
   heroTitle: {
     fontFamily: theme.typography.display.fontFamily,

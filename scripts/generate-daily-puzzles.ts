@@ -455,6 +455,30 @@ async function main() {
     await Promise.all(promises);
   }
 
+  // Step 4: Cleanup old puzzles (older than 30 days)
+  console.log(`\n🧹 Starting cleanup of old puzzles...`);
+  try {
+    const retentionDays = 30;
+    const thresholdDate = new Date();
+    thresholdDate.setUTCDate(thresholdDate.getUTCDate() - retentionDays);
+    const thresholdStr = thresholdDate.toISOString().split("T")[0];
+
+    console.log(`   Threshold: puzzles older than ${thresholdStr}`);
+
+    const { count, error: cleanupError } = await supabase
+      .from("daily_puzzles")
+      .delete({ count: "exact" })
+      .lt("puzzle_date", thresholdStr);
+
+    if (cleanupError) {
+      console.error(` ❌ Cleanup failed: ${cleanupError.message}`);
+    } else {
+      console.log(` ✅ Cleanup complete. Deleted ${count || 0} old puzzles.`);
+    }
+  } catch (err) {
+    console.error(` ❌ Error during cleanup:`, err);
+  }
+
   // Summary
   const duration = ((Date.now() - startTime) / 1000).toFixed(1);
   console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);

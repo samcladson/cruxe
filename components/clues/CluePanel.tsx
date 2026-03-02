@@ -1,6 +1,7 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import React, { useRef } from "react";
 import {
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -65,6 +66,7 @@ export function CluePanel() {
     decrementCheck,
     isGridCompletelyFilled,
     checkCompletion,
+    clearWord,
   } = usePuzzleStore();
   const scrollViewRef = useRef<ScrollView>(null);
 
@@ -81,11 +83,14 @@ export function CluePanel() {
     return targetId;
   };
 
+  // Tabs should operate independently of the board's selected direction.
   const [activeTab, setActiveTab] = React.useState<Direction>("across");
+
   const activeClueId = getActiveClueId();
 
   const handleCluePress = (clue: CrosswordClue) => {
     selectCell(clue.startRow, clue.startCol);
+    usePuzzleStore.setState({ selectedDirection: clue.direction });
   };
 
   // Get clues for the active tab
@@ -106,52 +111,52 @@ export function CluePanel() {
 
   const currentClues = getCluesForDirection(activeTab);
 
-  // Only show tabs that have clues
-  const availableTabs = DIRECTION_TABS.filter(
-    (tab) => getCluesForDirection(tab.key).length > 0,
-  );
+  // Render all tabs. If a tab has no clues, we will disable it.
+  const availableTabs = DIRECTION_TABS;
 
   return (
     <View style={styles.container}>
-      {/* Direction Tabs */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.tabsHeader}
-      >
-        {availableTabs.map((tab) => (
-          <TouchableOpacity
-            key={tab.key}
-            style={[
-              styles.tabBtn,
-              activeTab === tab.key && styles.tabBtnActive,
-            ]}
-            onPress={() => setActiveTab(tab.key)}
-          >
-            <MaterialIcons
-              name={tab.icon as any}
-              size={14}
-              color={
-                activeTab === tab.key
-                  ? theme.colors.accentGold
-                  : "rgba(255,255,255,0.4)"
-              }
-            />
-            <Text
+      {/* Direction Tabs (Fixed, evenly spaced) */}
+      <View style={styles.tabsHeader}>
+        {availableTabs.map((tab) => {
+          const isEmpty = getCluesForDirection(tab.key).length === 0;
+          return (
+            <TouchableOpacity
+              key={tab.key}
               style={[
-                styles.tabText,
-                activeTab === tab.key && styles.tabTextActive,
+                styles.tabBtn,
+                activeTab === tab.key && styles.tabBtnActive,
+                isEmpty && { opacity: 0.3 },
               ]}
+              disabled={isEmpty}
+              onPress={() => {
+                setActiveTab(tab.key);
+                usePuzzleStore.setState({ selectedDirection: tab.key });
+              }}
             >
-              {tab.label}
-              <Text style={styles.tabCount}>
-                {" "}
-                ({getCluesForDirection(tab.key).length})
+              <MaterialIcons
+                name={tab.icon as any}
+                size={14}
+                color={
+                  activeTab === tab.key
+                    ? theme.colors.accentGold
+                    : "rgba(255,255,255,0.4)"
+                }
+              />
+              <Text
+                style={[
+                  styles.tabText,
+                  activeTab === tab.key && styles.tabTextActive,
+                ]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+              >
+                {tab.label}
               </Text>
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
 
       <ScrollView
         ref={scrollViewRef}
@@ -202,12 +207,8 @@ export function CluePanel() {
           ]}
           disabled={!isGridCompletelyFilled()}
           onPress={() => {
-            const isFinished = checkCompletion();
-            // If they are wrong, punish them by using a check attempt and showing where they failed
-            if (!isFinished && checksRemaining > 0) {
-              checkAnswers();
-              decrementCheck();
-            }
+            // Always pop the completion modal (calculate accuracy regardless of errors)
+            usePuzzleStore.getState().forceCompletePuzzle();
           }}
         >
           <MaterialIcons
@@ -218,13 +219,42 @@ export function CluePanel() {
           <Text style={styles.actionBtnTextPrimary}>FINISH</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionBtn}>
+        <TouchableOpacity
+          style={[styles.actionBtn, !selectedCell && { opacity: 0.5 }]}
+          disabled={!selectedCell}
+          onPress={() => {
+            Alert.alert(
+              "Clear Word",
+              "Are you sure you want to clear this word? Prefilled hints will be kept.",
+              [
+                {
+                  text: "Cancel",
+                  style: "cancel",
+                },
+                {
+                  text: "Clear",
+                  style: "destructive",
+                  onPress: () => clearWord(),
+                },
+              ],
+            );
+          }}
+        >
           <MaterialIcons
             name="backspace"
             size={24}
-            color="rgba(255,255,255,0.5)"
+            color={
+              !selectedCell ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.5)"
+            }
           />
-          <Text style={styles.actionBtnText}>CLEAR</Text>
+          <Text
+            style={[
+              styles.actionBtnText,
+              !selectedCell && { color: "rgba(255,255,255,0.2)" },
+            ]}
+          >
+            CLEAR
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -237,15 +267,19 @@ const styles = StyleSheet.create({
   },
   tabsHeader: {
     flexDirection: "row",
-    paddingHorizontal: 8,
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 4,
     borderBottomWidth: 1,
     borderBottomColor: "rgba(255,255,255,0.05)",
+    height: 44,
   },
   tabBtn: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 8,
-    paddingVertical: 8,
+    justifyContent: "center",
+    height: "100%",
     borderBottomWidth: 2,
     borderBottomColor: "transparent",
     gap: 3,

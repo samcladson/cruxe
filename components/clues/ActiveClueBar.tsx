@@ -7,6 +7,11 @@ import { theme } from "../../constants/theme";
 import { usePuzzleStore } from "../../stores/puzzleStore";
 import { Direction } from "../../types/puzzle.types";
 
+interface ActiveClueBarProps {
+  /** Callback fired when the lightbulb hint button is pressed */
+  onHintPress?: () => void;
+}
+
 /**
  * Human-readable labels for each direction type.
  */
@@ -21,7 +26,7 @@ const DIRECTION_LABELS: Record<Direction, string> = {
  * ActiveClueBar shows the currently selected clue floating above the clue panel.
  * Tapping it toggles through available directions for the selected cell.
  */
-export function ActiveClueBar() {
+export function ActiveClueBar({ onHintPress }: ActiveClueBarProps) {
   const { activePuzzle, selectedCell, selectedDirection, toggleDirection } =
     usePuzzleStore();
 
@@ -74,7 +79,10 @@ export function ActiveClueBar() {
 
         <TouchableOpacity
           style={styles.bulbBtn}
-          onPress={() => console.log("Lightbulb hint pressed")}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            onHintPress?.();
+          }}
         >
           <MaterialIcons
             name="lightbulb"

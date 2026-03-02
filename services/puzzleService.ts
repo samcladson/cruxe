@@ -10,6 +10,38 @@
 import { Category, Difficulty, GridSize, Puzzle } from "../types/puzzle.types";
 import { supabase } from "./supabaseClient";
 
+// ─── API Cache ───────────────────────────────────────────────────────
+
+/**
+ * Lightweight in-memory cache for API requests to minimize duplicate Supabase reads.
+ * Configured for a 5-minute Time-To-Live (TTL).
+ * Automatically clears when a puzzle is successfully completed.
+ */
+class ApiCache {
+  private cache = new Map<string, { data: any; timestamp: number }>();
+  private CACHE_TTL = 1000 * 60 * 5; // 5 minutes
+
+  get<T>(key: string): T | null {
+    const item = this.cache.get(key);
+    if (!item) return null;
+    if (Date.now() - item.timestamp > this.CACHE_TTL) {
+      this.cache.delete(key);
+      return null;
+    }
+    return item.data as T;
+  }
+
+  set(key: string, data: any): void {
+    this.cache.set(key, { data, timestamp: Date.now() });
+  }
+
+  clear(): void {
+    this.cache.clear();
+  }
+}
+
+export const puzzleCache = new ApiCache();
+
 // ─── Types ───────────────────────────────────────────────────────────
 
 /** Lightweight puzzle metadata for listing screens (no full grid data) */
@@ -24,6 +56,7 @@ export interface PuzzleMeta {
   isCompleted: boolean;
   score: number | null;
   accuracy: number | null;
+  timeTaken: number | null;
 }
 
 /** Data required to record a puzzle completion */
@@ -53,9 +86,6 @@ function getTodayLocal(): string {
   const day = String(d.getDate()).padStart(2, "0");
   const localDate = `${year}-${month}-${day}`;
   const utcDate = d.toISOString().split("T")[0];
-  console.log(
-    `[puzzleService] Query date — local: ${localDate}, UTC: ${utcDate}`,
-  );
   return localDate;
 }
 
@@ -65,7 +95,13 @@ function getTodayLocal(): string {
  * Fetches today's Daily Challenge puzzle metadata for the home screen.
  * Returns null if no Daily Challenge exists for today (e.g., cron hasn't run yet).
  */
-export async function fetchDailyChallenge(): Promise<PuzzleMeta | null> {
+export async function fetchDailyChallenge(
+  userId: string = "guest",
+): Promise<PuzzleMeta | null> {
+  const cacheKey = `daily_challenge_${userId}`;
+  const cached = puzzleCache.get<PuzzleMeta>(cacheKey);
+  if (cached) return cached;
+
   const today = getTodayLocal();
 
   const { data, error } = await supabase
@@ -85,7 +121,15 @@ export async function fetchDailyChallenge(): Promise<PuzzleMeta | null> {
     return null;
   }
 
-  return {
+  // Check if this specific user has completed it
+  const { data: completion } = await supabase
+    .from("puzzle_completions")
+    .select("score, accuracy, time_taken")
+    .eq("user_id", userId)
+    .eq("puzzle_id", data.id)
+    .maybeSingle();
+
+  const result: PuzzleMeta = {
     id: data.id,
     category: data.category as Category,
     difficulty: data.difficulty as Difficulty,
@@ -93,10 +137,34 @@ export async function fetchDailyChallenge(): Promise<PuzzleMeta | null> {
     variant: data.variant,
     totalWords: data.total_words,
     estimatedTime: data.estimated_time,
-    isCompleted: false,
-    score: null,
-    accuracy: null,
+    isCompleted: !!completion,
+    score: completion?.score ?? null,
+    accuracy: completion?.accuracy ?? null,
+    timeTaken: completion?.time_taken ?? null,
   };
+
+  puzzleCache.set(cacheKey, result);
+  return result;
+}
+
+/**
+ * Fetches the live count of unique players who have completed a specific daily challenge.
+ */
+export async function getDailyPlayerCount(puzzleId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from("puzzle_completions")
+    .select("*", { count: "exact", head: true })
+    .eq("puzzle_id", puzzleId);
+
+  if (error) {
+    console.warn(
+      "[puzzleService] Failed to fetch daily player count:",
+      error.message,
+    );
+    return 0;
+  }
+
+  return count || 0;
 }
 
 /**
@@ -109,6 +177,10 @@ export async function fetchCategoryPuzzles(
   category: Category,
   userId: string = "guest",
 ): Promise<PuzzleMeta[]> {
+  const cacheKey = `category_puzzles_${category}_${userId}`;
+  const cached = puzzleCache.get<PuzzleMeta[]>(cacheKey);
+  if (cached) return cached;
+
   const today = getTodayLocal();
 
   // Fetch today's puzzles for this category (metadata only, no puzzle_data)
@@ -136,18 +208,18 @@ export async function fetchCategoryPuzzles(
   const puzzleIds = puzzles.map((p) => p.id);
   const { data: completions } = await supabase
     .from("puzzle_completions")
-    .select("puzzle_id, score, accuracy")
+    .select("puzzle_id, score, accuracy, time_taken")
     .eq("user_id", userId)
     .in("puzzle_id", puzzleIds);
 
   const completionMap = new Map(
     (completions || []).map((c) => [
       c.puzzle_id,
-      { score: c.score, accuracy: c.accuracy },
+      { score: c.score, accuracy: c.accuracy, timeTaken: c.time_taken },
     ]),
   );
 
-  return puzzles.map((p) => {
+  const result = puzzles.map((p) => {
     const completion = completionMap.get(p.id);
     return {
       id: p.id,
@@ -160,8 +232,75 @@ export async function fetchCategoryPuzzles(
       isCompleted: !!completion,
       score: completion?.score ?? null,
       accuracy: completion?.accuracy ?? null,
+      timeTaken: completion?.timeTaken ?? null,
     };
   });
+
+  puzzleCache.set(cacheKey, result);
+  return result;
+}
+
+export interface ActivityItem {
+  id: string; // completion ID or puzzle ID
+  puzzleId: string;
+  category: Category;
+  difficulty: Difficulty;
+  gridSize: GridSize;
+  timeTaken: number;
+  accuracy: number;
+  completedAt: string;
+}
+
+/**
+ * Fetches the user's most recent completed puzzles.
+ */
+export async function fetchRecentActivity(
+  userId: string = "guest",
+  limit: number = 3,
+): Promise<ActivityItem[]> {
+  const cacheKey = `recent_activity_${userId}_${limit}`;
+  const cached = puzzleCache.get<ActivityItem[]>(cacheKey);
+  if (cached) return cached;
+
+  const { data, error } = await supabase
+    .from("puzzle_completions")
+    .select(
+      `
+      id,
+      puzzle_id,
+      time_taken,
+      accuracy,
+      completed_at,
+      category,
+      difficulty,
+      grid_size
+    `,
+    )
+    .eq("user_id", userId)
+    .order("completed_at", { ascending: false })
+    .limit(limit);
+
+  if (error || !data) {
+    console.warn(
+      "[puzzleService] Failed to fetch recent activity:",
+      error?.message,
+    );
+    return [];
+  }
+
+  const result = data.map((row: any) => ({
+    id: row.id,
+    puzzleId: row.puzzle_id || "deleted", // Provide a fallback if puzzle was cleaned up
+    category: row.category as Category,
+    difficulty: row.difficulty as Difficulty,
+    gridSize: row.grid_size as GridSize,
+    timeTaken: row.time_taken,
+    accuracy: row.accuracy,
+    completedAt: row.completed_at,
+  }));
+
+  puzzleCache.set(cacheKey, result);
+  return result;
 }
 
 import { buildPuzzle } from "./crosswordEngine";
@@ -174,9 +313,13 @@ import { buildPuzzle } from "./crosswordEngine";
 export async function fetchPuzzleById(
   puzzleId: string,
 ): Promise<Puzzle | null> {
+  const cacheKey = `puzzle_${puzzleId}`;
+  const cached = puzzleCache.get<Puzzle>(cacheKey);
+  if (cached) return cached;
+
   const { data, error } = await supabase
     .from("daily_puzzles")
-    .select("puzzle_data")
+    .select("id, puzzle_data, category, difficulty, grid_size")
     .eq("id", puzzleId)
     .maybeSingle();
 
@@ -190,12 +333,16 @@ export async function fetchPuzzleById(
   if (!puzzleData || !puzzleData.words) return null;
 
   // Build the puzzle grid dynamically on the client
-  return buildPuzzle(
+  const puzzle = buildPuzzle(
     puzzleData.words,
-    puzzleData.metadata.category || "general",
-    puzzleData.metadata.difficulty || "medium",
-    puzzleData.metadata.gridSize || 10,
+    data.category || puzzleData.metadata?.category || "general",
+    data.difficulty || puzzleData.metadata?.difficulty || "medium",
+    data.grid_size || puzzleData.metadata?.gridSize || 10,
+    data.id,
   );
+
+  puzzleCache.set(cacheKey, puzzle);
+  return puzzle;
 }
 
 /**
@@ -213,7 +360,7 @@ export async function fetchDailyPuzzle(
 
   const { data, error } = await supabase
     .from("daily_puzzles")
-    .select("puzzle_data")
+    .select("id, puzzle_data")
     .eq("puzzle_date", targetDate)
     .eq("category", category)
     .eq("difficulty", difficulty)
@@ -231,7 +378,7 @@ export async function fetchDailyPuzzle(
   const puzzleData = data.puzzle_data;
   if (!puzzleData || !puzzleData.words) return null;
 
-  return buildPuzzle(puzzleData.words, category, difficulty, gridSize);
+  return buildPuzzle(puzzleData.words, category, difficulty, gridSize, data.id);
 }
 
 // ─── Completion recording ────────────────────────────────────────────
@@ -270,6 +417,9 @@ export async function recordCompletion(data: CompletionData): Promise<boolean> {
     return false;
   }
 
+  // Clear cache globally so the next screen fetch pulls fresh completion statuses
+  puzzleCache.clear();
+
   return true;
 }
 
@@ -306,4 +456,42 @@ export async function fetchCompletionHistory(
     difficulty: row.difficulty,
     gridSize: row.grid_size,
   }));
+}
+
+/**
+ * Fetches a specific completion record by puzzle ID and user ID.
+ * Useful for the Activity review screen.
+ */
+export async function fetchCompletionById(
+  puzzleId: string,
+  userId: string = "guest",
+): Promise<CompletionData | null> {
+  const { data, error } = await supabase
+    .from("puzzle_completions")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("puzzle_id", puzzleId)
+    .maybeSingle();
+
+  if (error || !data) {
+    console.warn(
+      "[puzzleService] Failed to fetch completion by ID:",
+      error?.message,
+    );
+    return null;
+  }
+
+  return {
+    puzzleId: data.puzzle_id,
+    userId: data.user_id,
+    score: data.score,
+    timeTaken: data.time_taken,
+    accuracy: data.accuracy,
+    hintsUsed: data.hints_used,
+    coinsEarned: data.coins_earned,
+    puzzleDate: data.puzzle_date,
+    category: data.category,
+    difficulty: data.difficulty,
+    gridSize: data.grid_size,
+  };
 }

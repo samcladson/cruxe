@@ -1,7 +1,8 @@
 import { router } from "expo-router";
 import React, { useState } from "react";
-import { Dimensions, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import { Dimensions, StyleSheet, Text, View } from "react-native";
 import Animated, { SlideInRight, SlideOutLeft } from "react-native-reanimated";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Button } from "../../components/ui/Button";
 import { theme } from "../../constants/theme";
 

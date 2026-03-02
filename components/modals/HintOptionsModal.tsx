@@ -1,9 +1,36 @@
 import { MaterialIcons } from "@expo/vector-icons";
-import { BlurView } from "expo-blur";
-import React from "react";
-import { Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useMemo } from "react";
+import {
+  Modal,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { theme } from "../../constants/theme";
+import {
+  buildWordPreview,
+  canAffordHint,
+  canRevealLetter,
+  canRevealWord,
+  CHECK_ERRORS_COST,
+  getCheckErrorsCost,
+  getRevealWordCost,
+  REVEAL_LETTER_COST,
+} from "../../services/hintEngine";
 import { usePuzzleStore } from "../../stores/puzzleStore";
+import { useUserStore } from "../../stores/userStore";
+
+/**
+ * HintOptionsModal — Full-screen "Need a Nudge?" hint page.
+ *
+ * Replaces the old modal overlay with a full-screen dark view that gives
+ * each element generous spacing. Shows word preview, coin balance,
+ * three hint options with dynamic pricing, and a dismiss button.
+ */
 
 interface HintOptionsModalProps {
   visible: boolean;
@@ -11,163 +38,531 @@ interface HintOptionsModalProps {
 }
 
 export function HintOptionsModal({ visible, onClose }: HintOptionsModalProps) {
-  const { useHint } = usePuzzleStore();
+  const {
+    activePuzzle,
+    selectedCell,
+    getActiveClue,
+    revealLetter,
+    revealWord,
+    checkErrors,
+    checksRemaining,
+    decrementCheck,
+  } = usePuzzleStore();
 
-  const handleRevealCell = () => {
-    // Reveal cell logic in puzzle store
-    useHint();
+  const { profile, spendCoins } = useUserStore();
+  const coins = profile.coins;
+
+  const activeClue = getActiveClue();
+
+  /** Word preview — correct entries at exact positions, underscores elsewhere */
+  const wordPreview = useMemo(() => {
+    if (!activePuzzle || !activeClue) return [];
+    return buildWordPreview(activePuzzle.grid, activeClue);
+  }, [activePuzzle, activeClue]);
+
+  /** Dynamic cost for reveal word = 30 × unrevealed letters */
+  const revealWordCost = useMemo(() => {
+    if (!activePuzzle || !activeClue) return 0;
+    return getRevealWordCost(activePuzzle.grid, activeClue);
+  }, [activePuzzle, activeClue]);
+
+  /** Check errors: free if checks remain, 20 coins otherwise */
+  const checkErrorsCost = getCheckErrorsCost(checksRemaining);
+
+  // Availability
+  const letterAvailable = activePuzzle
+    ? canRevealLetter(activePuzzle, selectedCell)
+    : false;
+  const wordAvailable = activePuzzle
+    ? canRevealWord(activePuzzle, activeClue)
+    : false;
+
+  // Affordability
+  const canAffordLetter = canAffordHint(REVEAL_LETTER_COST, coins);
+  const canAffordWord = canAffordHint(revealWordCost, coins);
+  const canAffordCheck =
+    checkErrorsCost === 0 || canAffordHint(checkErrorsCost, coins);
+
+  // Combined flags
+  const letterEnabled = letterAvailable && canAffordLetter;
+  const wordEnabled = wordAvailable && canAffordWord && revealWordCost > 0;
+  const checkEnabled = canAffordCheck;
+
+  // ─── Handlers ─────────────────────────────────────────────────
+
+  const handleRevealLetter = () => {
+    if (!letterEnabled) return;
+    const revealed = revealLetter();
+    if (revealed) spendCoins(REVEAL_LETTER_COST);
     onClose();
   };
 
   const handleRevealWord = () => {
-    // In the future this should loop through the selected word
+    if (!wordEnabled) return;
+    const cost = revealWordCost;
+    const revealed = revealWord();
+    if (revealed > 0) spendCoins(cost);
+    onClose();
+  };
+
+  const handleCheckErrors = () => {
+    if (!checkEnabled) return;
+    checkErrors();
+    if (checksRemaining > 0) {
+      decrementCheck();
+    } else {
+      spendCoins(CHECK_ERRORS_COST);
+    }
     onClose();
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade">
-      <BlurView intensity={80} tint="dark" style={styles.overlay}>
-        <View style={styles.card}>
-          <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-            <MaterialIcons
-              name="close"
-              size={24}
-              color="rgba(255,255,255,0.5)"
-            />
-          </TouchableOpacity>
-
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="fullScreen"
+    >
+      <SafeAreaView style={styles.screen}>
+        <StatusBar barStyle="light-content" />
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header with back arrow */}
           <View style={styles.header}>
-            <View style={styles.iconContainer}>
+            <TouchableOpacity onPress={onClose} style={styles.backBtn}>
+              <MaterialIcons
+                name="arrow-back"
+                size={22}
+                color={theme.colors.textSecondary}
+              />
+            </TouchableOpacity>
+          </View>
+
+          {/* Title section */}
+          <View style={styles.titleSection}>
+            <View style={styles.iconCircle}>
               <MaterialIcons
                 name="emoji-objects"
-                size={32}
+                size={36}
                 color={theme.colors.accentGold}
               />
             </View>
-            <Text style={styles.title}>Need a Hint?</Text>
+            <Text style={styles.title}>Need a Nudge?</Text>
             <Text style={styles.subtitle}>
               Spend your earned coins to reveal letters or words.
             </Text>
           </View>
 
+          {/* Word Preview */}
+          {activeClue && wordPreview.length > 0 && (
+            <View style={styles.previewSection}>
+              <View style={styles.previewRow}>
+                {wordPreview.map((char, i) => (
+                  <View
+                    key={i}
+                    style={[
+                      styles.previewCell,
+                      char !== "_" && styles.previewCellFilled,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.previewLetter,
+                        char !== "_" && styles.previewLetterFilled,
+                      ]}
+                    >
+                      {char}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {!activeClue && (
+            <View style={styles.previewSection}>
+              <Text style={styles.noWordText}>
+                Select a cell to see hint options
+              </Text>
+            </View>
+          )}
+
+          {/* Coin Balance */}
+          <View style={styles.coinRow}>
+            <MaterialIcons
+              name="monetization-on"
+              size={22}
+              color={theme.colors.accentGold}
+            />
+            <Text style={styles.coinText}>{coins}</Text>
+          </View>
+
+          {/* Hint Options */}
           <View style={styles.optionsList}>
+            {/* Reveal Letter */}
             <TouchableOpacity
-              style={styles.optionBtn}
-              onPress={handleRevealCell}
+              style={[
+                styles.optionCard,
+                !letterEnabled && styles.optionDisabled,
+              ]}
+              disabled={!letterEnabled}
+              onPress={handleRevealLetter}
+              activeOpacity={0.7}
             >
               <View style={styles.optionLeft}>
-                <MaterialIcons name="font-download" size={24} color="#fff" />
-                <View>
-                  <Text style={styles.optionTitle}>Reveal Letter</Text>
+                <View
+                  style={[
+                    styles.optionIcon,
+                    !letterEnabled && styles.optionIconDisabled,
+                  ]}
+                >
+                  <MaterialIcons
+                    name="search"
+                    size={24}
+                    color={
+                      letterEnabled
+                        ? theme.colors.accentGold
+                        : "rgba(255,255,255,0.15)"
+                    }
+                  />
+                </View>
+                <View style={styles.optionInfo}>
+                  <Text
+                    style={[
+                      styles.optionTitle,
+                      !letterEnabled && styles.optionTitleDisabled,
+                    ]}
+                  >
+                    Reveal Letter
+                  </Text>
                   <Text style={styles.optionDesc}>
-                    Fills in the currently selected cell.
+                    {letterAvailable
+                      ? "Fills in the currently selected square."
+                      : !selectedCell
+                        ? "Select a cell first."
+                        : "Cell already correct."}
                   </Text>
                 </View>
               </View>
-              <View style={styles.priceTag}>
-                <Text style={styles.priceText}>50</Text>
+              <View
+                style={[
+                  styles.priceBadge,
+                  !letterEnabled && styles.priceBadgeDisabled,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.priceText,
+                    !letterEnabled && styles.priceTextDisabled,
+                  ]}
+                >
+                  {REVEAL_LETTER_COST}
+                </Text>
                 <MaterialIcons
                   name="monetization-on"
                   size={14}
-                  color={theme.colors.accentGold}
+                  color={
+                    letterEnabled
+                      ? theme.colors.accentGold
+                      : "rgba(255,255,255,0.15)"
+                  }
                 />
               </View>
             </TouchableOpacity>
 
+            {/* Reveal Word */}
             <TouchableOpacity
-              style={styles.optionBtn}
+              style={[styles.optionCard, !wordEnabled && styles.optionDisabled]}
+              disabled={!wordEnabled}
               onPress={handleRevealWord}
+              activeOpacity={0.7}
             >
               <View style={styles.optionLeft}>
-                <MaterialIcons name="text-format" size={24} color="#fff" />
-                <View>
-                  <Text style={styles.optionTitle}>Reveal Word</Text>
+                <View
+                  style={[
+                    styles.optionIcon,
+                    !wordEnabled && styles.optionIconDisabled,
+                  ]}
+                >
+                  <MaterialIcons
+                    name="text-format"
+                    size={24}
+                    color={
+                      wordEnabled
+                        ? theme.colors.accentGold
+                        : "rgba(255,255,255,0.15)"
+                    }
+                  />
+                </View>
+                <View style={styles.optionInfo}>
+                  <Text
+                    style={[
+                      styles.optionTitle,
+                      !wordEnabled && styles.optionTitleDisabled,
+                    ]}
+                  >
+                    Reveal Word
+                  </Text>
                   <Text style={styles.optionDesc}>
-                    Fills in the entire selected word.
+                    {wordAvailable
+                      ? "Solves the entire active word instantly."
+                      : !activeClue
+                        ? "Select a word first."
+                        : "Word already complete."}
                   </Text>
                 </View>
               </View>
-              <View style={styles.priceTag}>
-                <Text style={styles.priceText}>150</Text>
+              <View
+                style={[
+                  styles.priceBadge,
+                  !wordEnabled && styles.priceBadgeDisabled,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.priceText,
+                    !wordEnabled && styles.priceTextDisabled,
+                  ]}
+                >
+                  {revealWordCost}
+                </Text>
                 <MaterialIcons
                   name="monetization-on"
                   size={14}
-                  color={theme.colors.accentGold}
+                  color={
+                    wordEnabled
+                      ? theme.colors.accentGold
+                      : "rgba(255,255,255,0.15)"
+                  }
                 />
               </View>
             </TouchableOpacity>
+
+            {/* Check Errors */}
+            <TouchableOpacity
+              style={[
+                styles.optionCard,
+                !checkEnabled && styles.optionDisabled,
+              ]}
+              disabled={!checkEnabled}
+              onPress={handleCheckErrors}
+              activeOpacity={0.7}
+            >
+              <View style={styles.optionLeft}>
+                <View
+                  style={[
+                    styles.optionIcon,
+                    !checkEnabled && styles.optionIconDisabled,
+                  ]}
+                >
+                  <MaterialIcons
+                    name="fact-check"
+                    size={24}
+                    color={
+                      checkEnabled
+                        ? theme.colors.accentGold
+                        : "rgba(255,255,255,0.15)"
+                    }
+                  />
+                </View>
+                <View style={styles.optionInfo}>
+                  <Text
+                    style={[
+                      styles.optionTitle,
+                      !checkEnabled && styles.optionTitleDisabled,
+                    ]}
+                  >
+                    Check Errors
+                  </Text>
+                  <Text style={styles.optionDesc}>
+                    Highlights incorrect letters in red.
+                  </Text>
+                </View>
+              </View>
+              <View
+                style={[
+                  styles.priceBadge,
+                  checkErrorsCost === 0
+                    ? styles.priceBadgeFree
+                    : !checkEnabled
+                      ? styles.priceBadgeDisabled
+                      : undefined,
+                ]}
+              >
+                {checkErrorsCost === 0 ? (
+                  <Text style={styles.priceTextFree}>
+                    FREE ({checksRemaining})
+                  </Text>
+                ) : (
+                  <>
+                    <Text
+                      style={[
+                        styles.priceText,
+                        !checkEnabled && styles.priceTextDisabled,
+                      ]}
+                    >
+                      {CHECK_ERRORS_COST}
+                    </Text>
+                    <MaterialIcons
+                      name="monetization-on"
+                      size={14}
+                      color={
+                        checkEnabled
+                          ? theme.colors.accentGold
+                          : "rgba(255,255,255,0.15)"
+                      }
+                    />
+                  </>
+                )}
+              </View>
+            </TouchableOpacity>
           </View>
-        </View>
-      </BlurView>
+        </ScrollView>
+
+        {/* Dismiss — fixed at bottom */}
+        <TouchableOpacity style={styles.dismissBtn} onPress={onClose}>
+          <Text style={styles.dismissText}>NO THANKS, I'LL KEEP TRYING</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
     </Modal>
   );
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// STYLES
+// ═══════════════════════════════════════════════════════════════════
+
 const styles = StyleSheet.create({
-  overlay: {
+  screen: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.6)",
+    backgroundColor: theme.colors.bgPrimary,
   },
-  card: {
-    width: "90%",
-    backgroundColor: "#1a1a1a",
-    borderRadius: 24,
-    padding: 24,
-    paddingTop: 32,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    position: "relative",
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 24,
   },
-  closeBtn: {
-    position: "absolute",
-    top: 16,
-    right: 16,
-    zIndex: 10,
-    padding: 4,
-  },
+
+  // Header
   header: {
+    flexDirection: "row",
     alignItems: "center",
-    marginBottom: 32,
+    paddingTop: 8,
+    paddingBottom: 16,
   },
-  iconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: "rgba(238, 205, 43, 0.1)",
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.05)",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 16,
+  },
+
+  // Title
+  titleSection: {
+    alignItems: "center",
+    marginBottom: 40,
+    marginTop: 16,
+  },
+  iconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: "rgba(238, 205, 43, 0.08)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 20,
     borderWidth: 1,
-    borderColor: "rgba(238, 205, 43, 0.2)",
+    borderColor: "rgba(238, 205, 43, 0.15)",
   },
   title: {
     fontFamily: theme.typography.heading.fontFamily,
-    fontSize: 24,
+    fontSize: 28,
     color: "#fff",
-    marginBottom: 8,
+    marginBottom: 10,
   },
   subtitle: {
     fontFamily: theme.typography.body.fontFamily,
-    fontSize: 14,
-    color: "rgba(255,255,255,0.5)",
+    fontSize: 15,
+    color: "rgba(255,255,255,0.4)",
     textAlign: "center",
-    paddingHorizontal: 16,
-    lineHeight: 20,
+    lineHeight: 22,
   },
+
+  // Word Preview
+  previewSection: {
+    alignItems: "center",
+    marginBottom: 32,
+  },
+  previewRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+  previewCell: {
+    width: 36,
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  previewCellFilled: {
+    backgroundColor: "rgba(238, 205, 43, 0.1)",
+    borderColor: "rgba(238, 205, 43, 0.25)",
+  },
+  previewLetter: {
+    fontFamily: theme.typography.cellLetter.fontFamily,
+    fontSize: 18,
+    color: "rgba(255,255,255,0.25)",
+    fontWeight: "bold",
+  },
+  previewLetterFilled: {
+    color: theme.colors.accentGold,
+  },
+  noWordText: {
+    fontFamily: theme.typography.body.fontFamily,
+    fontSize: 15,
+    color: "rgba(255,255,255,0.3)",
+    textAlign: "center",
+    paddingVertical: 12,
+  },
+
+  // Coin Balance
+  coinRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginBottom: 36,
+  },
+  coinText: {
+    fontFamily: theme.typography.cellLetter.fontFamily,
+    fontSize: 20,
+    color: "#fff",
+    fontWeight: "bold",
+  },
+
+  // Hint Options
   optionsList: {
-    gap: 12,
+    gap: 14,
   },
-  optionBtn: {
+  optionCard: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "rgba(255,255,255,0.05)",
+    backgroundColor: "rgba(255,255,255,0.03)",
     borderRadius: 16,
-    padding: 16,
+    padding: 18,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.05)",
+  },
+  optionDisabled: {
+    opacity: 0.35,
   },
   optionLeft: {
     flexDirection: "row",
@@ -175,33 +570,85 @@ const styles = StyleSheet.create({
     gap: 16,
     flex: 1,
   },
+  optionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: "rgba(238, 205, 43, 0.08)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  optionIconDisabled: {
+    backgroundColor: "rgba(255,255,255,0.02)",
+  },
+  optionInfo: {
+    flex: 1,
+  },
   optionTitle: {
     fontFamily: theme.typography.body.fontFamily,
     fontSize: 16,
     color: "#fff",
     fontWeight: "bold",
-    marginBottom: 2,
+    marginBottom: 4,
+  },
+  optionTitleDisabled: {
+    color: "rgba(255,255,255,0.25)",
   },
   optionDesc: {
     fontFamily: theme.typography.body.fontFamily,
     fontSize: 12,
-    color: "rgba(255,255,255,0.4)",
+    color: "rgba(255,255,255,0.3)",
+    lineHeight: 16,
   },
-  priceTag: {
+
+  // Price Badges
+  priceBadge: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "rgba(238, 205, 43, 0.1)",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 20,
     gap: 4,
     borderWidth: 1,
     borderColor: "rgba(238, 205, 43, 0.2)",
   },
+  priceBadgeDisabled: {
+    backgroundColor: "rgba(255,255,255,0.02)",
+    borderColor: "rgba(255,255,255,0.04)",
+  },
+  priceBadgeFree: {
+    backgroundColor: "rgba(34, 197, 94, 0.1)",
+    borderColor: "rgba(34, 197, 94, 0.15)",
+  },
   priceText: {
     fontFamily: theme.typography.cellLetter.fontFamily,
-    fontSize: 14,
+    fontSize: 15,
     color: theme.colors.accentGold,
     fontWeight: "bold",
+  },
+  priceTextDisabled: {
+    color: "rgba(255,255,255,0.15)",
+  },
+  priceTextFree: {
+    fontFamily: theme.typography.cellLetter.fontFamily,
+    fontSize: 13,
+    color: "#22c55e",
+    fontWeight: "bold",
+  },
+
+  // Dismiss
+  dismissBtn: {
+    paddingVertical: 20,
+    alignItems: "center",
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.04)",
+  },
+  dismissText: {
+    fontFamily: theme.typography.cellLetter.fontFamily,
+    fontSize: 13,
+    color: "rgba(255,255,255,0.35)",
+    fontWeight: "bold",
+    letterSpacing: 1.5,
   },
 });

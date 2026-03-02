@@ -8,6 +8,7 @@ import Animated, {
   withDelay,
   withSpring,
 } from "react-native-reanimated";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { theme } from "../../constants/theme";
 
 // MOCK DATA
@@ -94,7 +95,7 @@ export default function LeaderboardScreen() {
   const restList = LEADERBOARD.slice(3);
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Leaderboard</Text>
         <Text style={styles.subtitle}>Top players this week</Text>
@@ -151,7 +152,7 @@ export default function LeaderboardScreen() {
           <View style={{ height: 100 }} /> {/* Padding for Floating Tab Bar */}
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -162,7 +163,7 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 24,
-    paddingTop: 60,
+    paddingTop: 8,
     paddingBottom: 24,
     backgroundColor: theme.colors.bgPrimary,
   },

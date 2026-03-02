@@ -1,50 +1,148 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { router, Stack, useLocalSearchParams } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import { ConfettiBlast } from "../../components/animations/ConfettiBlast";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { ActiveClueBar } from "../../components/clues/ActiveClueBar";
 import { CluePanel } from "../../components/clues/CluePanel";
 import { CrosswordGrid } from "../../components/grid/CrosswordGrid";
 import { HintOptionsModal } from "../../components/modals/HintOptionsModal";
 import { SuccessModal } from "../../components/modals/SuccessModal";
 import { theme } from "../../constants/theme";
+import { recordCompletion } from "../../services/puzzleService";
 import { usePuzzleStore } from "../../stores/puzzleStore";
+import { useUserStore } from "../../stores/userStore";
+import { Difficulty } from "../../types/puzzle.types";
+
+/** Coin rewards by difficulty level */
+const COIN_REWARDS: Record<Difficulty, number> = {
+  [Difficulty.EASY]: 10,
+  [Difficulty.MEDIUM]: 25,
+  [Difficulty.HARD]: 50,
+  [Difficulty.EXPERT]: 100,
+};
 
 /**
- * GameScreen is the main gameplay interface.
- * Renders the crossword grid, active clue bar, and clue panel.
- * Navigation arrows have been removed per user preference — the player selects
- * cells by tapping them, and toggles direction via the active clue bar.
+ * GameScreen — Main gameplay interface.
+ *
+ * Renders crossword grid, active clue bar, and clue panel.
+ * On puzzle completion: records to Supabase, awards coins, updates stats/streak.
  */
 export default function GameScreen() {
   const { puzzleId } = useLocalSearchParams();
-  const { activePuzzle, checkCompletion } = usePuzzleStore();
+  const { activePuzzle, timer, checkCompletion, getAccuracy } =
+    usePuzzleStore();
+  const { profile, addCoins, completePuzzle, incrementStreak } = useUserStore();
+
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showHintModal, setShowHintModal] = useState(false);
+  const [coinsEarned, setCoinsEarned] = useState(0);
+  const [scoreEarned, setScoreEarned] = useState(0);
+  const [isNewStreak, setIsNewStreak] = useState(false);
 
-  // Expose these controllers to the window/context so the CluePanel can trigger them,
-  // or we can pass them via a generic store/context later. For now, since CluePanel
-  // is a child, we can just rely on the puzzleStore's activePuzzle.isComplete
-  // to trigger the success modal when building it.
+  // Prevent duplicate completion recording on re-renders
+  const hasRecorded = useRef(false);
 
+  /**
+   * Full completion pipeline:
+   * 1. Calculate coin reward by difficulty
+   * 2. Award coins + update category stats + increment streak (optimistic)
+   * 3. Record completion to Supabase (fire-and-forget)
+   * 4. Show success modal
+   */
+  const handleCompletion = useCallback(async () => {
+    if (!activePuzzle || hasRecorded.current) return;
+    hasRecorded.current = true;
+
+    const reward = COIN_REWARDS[activePuzzle.difficulty as Difficulty] || 150;
+    const accuracy = getAccuracy();
+
+    // Scale score by difficulty to make points more competitive (lower)
+    const BASE_SCORES: Record<string, number> = {
+      easy: 50,
+      medium: 100,
+      hard: 150,
+      expert: 250,
+    };
+    const difficultyKey = activePuzzle.difficulty || "medium";
+    const baseScore = BASE_SCORES[difficultyKey] || 100;
+
+    const calculateScore = Math.round(accuracy * baseScore);
+
+    setCoinsEarned(reward);
+    setScoreEarned(calculateScore);
+
+    const todayStr = new Date().toISOString().split("T")[0];
+    const lastPlayedStr = new Date(profile.lastPlayedDate)
+      .toISOString()
+      .split("T")[0];
+    const isNew = todayStr !== lastPlayedStr;
+    setIsNewStreak(isNew);
+
+    // Optimistic local updates
+    addCoins(reward);
+    completePuzzle(
+      activePuzzle.category as any,
+      timer,
+      Math.round(accuracy * activePuzzle.totalWords),
+      activePuzzle.totalWords,
+      calculateScore,
+    );
+    incrementStreak();
+
+    // Record to Supabase (fire-and-forget; failures logged)
+    recordCompletion({
+      puzzleId: activePuzzle.id || "",
+      userId: profile.id,
+      score: calculateScore,
+      timeTaken: timer,
+      accuracy,
+      hintsUsed: activePuzzle.hintsUsed || 0,
+      coinsEarned: reward,
+      puzzleDate: activePuzzle.date || new Date().toISOString().split("T")[0],
+      category: activePuzzle.category,
+      difficulty: activePuzzle.difficulty,
+      gridSize: activePuzzle.gridSize,
+    }).catch((err) => {
+      console.warn("[GameScreen] Failed to record completion:", err);
+    });
+
+    setShowSuccessModal(true);
+  }, [activePuzzle, timer, profile.id]);
+
+  // Trigger completion when puzzle is solved
   useEffect(() => {
-    if (activePuzzle?.isComplete) {
-      setShowSuccessModal(true);
+    if (activePuzzle?.isComplete && !hasRecorded.current) {
+      handleCompletion();
     }
+  }, [activePuzzle?.isComplete, handleCompletion]);
+
+  // Start timer interval
+  useEffect(() => {
+    if (!activePuzzle || activePuzzle.isComplete) return;
+    const interval = setInterval(() => {
+      usePuzzleStore.setState((state) => ({ timer: state.timer + 1 }));
+    }, 1000);
+    return () => clearInterval(interval);
   }, [activePuzzle?.isComplete]);
 
   if (!activePuzzle) {
     return <View style={styles.container} />;
   }
+
+  /** Format seconds → MM:SS */
+  const formatTime = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${m.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`;
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -66,6 +164,8 @@ export default function GameScreen() {
                 color={theme.colors.textSecondary}
               />
             </TouchableOpacity>
+          </View>
+          <View style={styles.headerCenter}>
             <View style={styles.timerIconWrap}>
               <MaterialIcons
                 name="timer"
@@ -73,10 +173,10 @@ export default function GameScreen() {
                 color={theme.colors.accentGold}
               />
             </View>
-            <Text style={styles.timerText}>04:32</Text>
+            <Text style={styles.timerText}>{formatTime(timer)}</Text>
           </View>
 
-          <View style={styles.headerCenter}>
+          {/* <View style={styles.headerCenter}>
             <Text style={styles.headerTitle}>
               {activePuzzle.category?.toUpperCase()} •{" "}
               {activePuzzle.difficulty?.toUpperCase()}
@@ -85,48 +185,37 @@ export default function GameScreen() {
               {activePuzzle.gridSize}×{activePuzzle.gridSize} •{" "}
               {activePuzzle.totalWords} words
             </Text>
-          </View>
+          </View> */}
 
           <View style={styles.headerRight}>
             <View style={styles.coinBadge}>
-              <Text style={styles.coinText}>
-                {activePuzzle?.difficulty === "easy" ? "150" : "540"}
-              </Text>
               <MaterialIcons
                 name="monetization-on"
                 size={14}
                 color={theme.colors.accentGold}
               />
+              <Text style={styles.coinText}>{profile.coins}</Text>
             </View>
-            <TouchableOpacity
-              onPress={() => setShowHintModal(true)}
-              style={styles.hintBtn}
-            >
-              <MaterialIcons
-                name="emoji-objects"
-                size={22}
-                color={theme.colors.textSecondary}
-              />
-            </TouchableOpacity>
           </View>
         </View>
+
+        {/* Top Active Clue Section */}
+        <ActiveClueBar onHintPress={() => setShowHintModal(true)} />
 
         {/* Crossword Grid */}
         <CrosswordGrid />
 
-        {/* Bottom section: Active Clue + Direction Tabs + Question List + Actions */}
+        {/* Bottom Clue Panel Section */}
         <View style={styles.bottomSection}>
-          {/* Active Clue Bar — shows selected clue */}
-          <ActiveClueBar />
-
-          {/* Scrollable Clue Panel with tabs and action bar */}
           <CluePanel />
         </View>
 
-        <ConfettiBlast active={activePuzzle.isComplete || false} />
         <SuccessModal
           visible={showSuccessModal}
           onClose={() => setShowSuccessModal(false)}
+          coinsEarned={coinsEarned}
+          scoreEarned={scoreEarned}
+          isNewStreak={isNewStreak}
         />
         <HintOptionsModal
           visible={showHintModal}
@@ -184,8 +273,9 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   headerCenter: {
+    flexDirection: "row",
     alignItems: "center",
-    flex: 1,
+    gap: 4,
   },
   headerTitle: {
     fontFamily: theme.typography.cellLetter.fontFamily,
@@ -223,14 +313,7 @@ const styles = StyleSheet.create({
     color: theme.colors.accentGold,
     fontWeight: "bold",
   },
-  hintBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
+
   bottomSection: {
     flex: 1,
     minHeight: 180,

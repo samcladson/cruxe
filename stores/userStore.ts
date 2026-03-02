@@ -14,6 +14,7 @@ interface UserState {
     timeTaken: number,
     correctWords: number,
     totalWords: number,
+    score: number,
   ) => void;
 }
 
@@ -30,6 +31,7 @@ const initialProfile: UserProfile = {
   displayName: "Player",
   avatarUrl: "",
   coins: 50, // Starting coins
+  totalScore: 0,
   totalPuzzlesSolved: 0,
   currentStreak: 0,
   longestStreak: 0,
@@ -91,9 +93,20 @@ export const useUserStore = create<UserState>()(
         });
       },
 
-      completePuzzle: (category, timeTaken, correctWords, totalWords) => {
+      completePuzzle: (
+        category,
+        timeTaken,
+        correctWords,
+        totalWords,
+        score,
+      ) => {
         set((state) => {
-          const stats = state.profile.categoryStats[category];
+          const stats = state.profile.categoryStats?.[category] || {
+            solved: 0,
+            averageTime: 0,
+            bestTime: Infinity,
+            accuracy: 0,
+          };
           const newSolved = stats.solved + 1;
           const newAverageTime =
             (stats.averageTime * stats.solved + timeTaken) / newSolved;
@@ -105,6 +118,7 @@ export const useUserStore = create<UserState>()(
           return {
             profile: {
               ...state.profile,
+              totalScore: (state.profile.totalScore || 0) + score,
               totalPuzzlesSolved: state.profile.totalPuzzlesSolved + 1,
               categoryStats: {
                 ...state.profile.categoryStats,

@@ -7,12 +7,11 @@ import {
   GridSize,
   Puzzle,
 } from "../types/puzzle.types";
-import { GeneratedClue } from "./geminiService";
 
 interface PlacedWord {
   word: string;
   clue: string;
-  isHint: boolean;
+  isHint?: boolean;
   row: number;
   col: number;
   direction: Direction;
@@ -226,12 +225,13 @@ function findCandidatePlacements(
  * grid density and interlocking.
  */
 export function buildPuzzle(
-  rawClues: GeneratedClue[],
-  category: Category,
-  difficulty: Difficulty,
-  gridSize: GridSize,
-): Puzzle {
-  const words = [...rawClues].sort((a, b) => b.word.length - a.word.length);
+  words: { word: string; clue: string; isHint?: boolean }[],
+  category: Category = "general",
+  difficulty: Difficulty = "medium",
+  gridSize: GridSize = 10,
+  puzzleId?: string,
+): Puzzle | null {
+  const sortedWords = [...words].sort((a, b) => b.word.length - a.word.length);
 
   let bestPlaced: PlacedWord[] = [];
   let bestGrid: GridCell[][] = buildEmptyGrid(gridSize);
@@ -352,7 +352,7 @@ export function buildPuzzle(
             startRow: r,
             startCol: c,
             length: wordAttr.word.length,
-            isPreFilled: wordAttr.isHint,
+            isPreFilled: !!wordAttr.isHint,
             preFilledIndices: wordAttr.isHint
               ? [0, Math.floor(wordAttr.word.length / 2)]
               : [],
@@ -377,7 +377,7 @@ export function buildPuzzle(
   }
 
   return {
-    id: `puzzle-${Date.now()}`,
+    id: puzzleId || `puzzle-${Date.now()}`,
     category,
     difficulty,
     gridSize,

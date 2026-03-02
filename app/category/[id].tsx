@@ -3,6 +3,7 @@ import { router, Stack, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,7 +14,7 @@ import { CATEGORIES } from "../../constants/categories";
 import { theme } from "../../constants/theme";
 import { fetchCategoryPuzzles, PuzzleMeta } from "../../services/puzzleService";
 import { useUserStore } from "../../stores/userStore";
-import { Difficulty } from "../../types/puzzle.types";
+import { Difficulty, ENTRY_FEES } from "../../types/puzzle.types";
 
 export default function CategoryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -23,22 +24,31 @@ export default function CategoryScreen() {
   const [loading, setLoading] = useState(true);
 
   // Filter state
-  const [selectedDifficulty, setSelectedDifficulty] =
-    useState<Difficulty>("easy");
+  const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty>(
+    Difficulty.EASY,
+  );
   const [selectedSize, setSelectedSize] = useState<string>("6x6");
 
   const userProfile = useUserStore((state) => state.profile);
+  const spendCoins = useUserStore((state) => state.spendCoins);
 
   useEffect(() => {
     if (!category || !id) return;
     async function loadCategoryPuzzles() {
       setLoading(true);
-      const data = await fetchCategoryPuzzles(id as any, userProfile.id);
-      setPuzzles(data);
-      setLoading(false);
+      try {
+        const data = await fetchCategoryPuzzles(id as any, userProfile.id);
+        setPuzzles(data);
+      } catch (err) {
+        console.warn("[CategoryScreen] Failed to fetch puzzles:", err);
+        setPuzzles([]);
+      } finally {
+        setLoading(false);
+      }
     }
     loadCategoryPuzzles();
-  }, [category, id, userProfile.id]);
+    // Only fetch once when the category or user ID actually changes
+  }, [id, userProfile.id]);
 
   const filteredPuzzles = puzzles.filter((p) => {
     if (
@@ -111,7 +121,8 @@ export default function CategoryScreen() {
             contentContainerStyle={styles.difficultyScroll}
           >
             {difficulties.map((diff) => {
-              const isActive = selectedDifficulty === diff;
+              const isActive =
+                selectedDifficulty.toLowerCase() === diff.toLowerCase();
               return (
                 <TouchableOpacity
                   key={diff}
@@ -119,7 +130,9 @@ export default function CategoryScreen() {
                     styles.difficultyPill,
                     isActive && styles.difficultyPillActive,
                   ]}
-                  onPress={() => setSelectedDifficulty(diff as Difficulty)}
+                  onPress={() =>
+                    setSelectedDifficulty(diff.toLowerCase() as Difficulty)
+                  }
                 >
                   <Text
                     style={[
@@ -199,7 +212,7 @@ export default function CategoryScreen() {
               </Text>
               <TouchableOpacity
                 onPress={() => {
-                  setSelectedDifficulty("easy");
+                  setSelectedDifficulty(Difficulty.EASY);
                   setSelectedSize("6x6");
                 }}
               >
@@ -232,7 +245,7 @@ export default function CategoryScreen() {
                     <View style={styles.progressRingBox}>
                       <MaterialIcons
                         name="check"
-                        size={24}
+                        size={20}
                         color={theme.colors.accentGold}
                       />
                     </View>
@@ -292,10 +305,31 @@ export default function CategoryScreen() {
                 <TouchableOpacity
                   style={styles.cardActionBtn}
                   onPress={() => {
-                    router.push({
-                      pathname: "/game/generate",
-                      params: { id: puzzle.id },
-                    });
+                    if (puzzle.isCompleted) {
+                      router.push({
+                        pathname: "/game/generate",
+                        params: { id: puzzle.id },
+                      });
+                      return;
+                    }
+
+                    const fee = ENTRY_FEES[puzzle.difficulty as Difficulty];
+                    if (userProfile.coins < fee) {
+                      Alert.alert(
+                        "Not enough coins!",
+                        `You need ${fee} coins to play a ${puzzle.difficulty} puzzle.`,
+                        [{ text: "OK", style: "default" }],
+                      );
+                      return;
+                    }
+
+                    const success = spendCoins(fee);
+                    if (success) {
+                      router.push({
+                        pathname: "/game/generate",
+                        params: { id: puzzle.id },
+                      });
+                    }
                   }}
                 >
                   <MaterialIcons
@@ -304,8 +338,38 @@ export default function CategoryScreen() {
                     color="#fff"
                   />
                   <Text style={styles.cardActionText}>
-                    {puzzle.isCompleted ? "PLAY AGAIN" : "PLAY"}
+                    {puzzle.isCompleted ? "REVIEW" : "PLAY"}
                   </Text>
+                  {!puzzle.isCompleted && (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 3,
+                        backgroundColor: "rgba(238, 205, 43, 0.15)",
+                        paddingHorizontal: 6,
+                        paddingVertical: 2,
+                        borderRadius: 6,
+                        marginLeft: 4,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontFamily: theme.typography.cellLetter.fontFamily,
+                          fontSize: 10,
+                          fontWeight: "bold",
+                          color: theme.colors.accentGold,
+                        }}
+                      >
+                        {ENTRY_FEES[puzzle.difficulty as Difficulty]}
+                      </Text>
+                      <MaterialIcons
+                        name="monetization-on"
+                        size={10}
+                        color={theme.colors.accentGold}
+                      />
+                    </View>
+                  )}
                 </TouchableOpacity>
               </View>
             ))
@@ -465,8 +529,12 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
   progressRingBox: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(238, 205, 43, 0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(238, 205, 43, 0.3)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -485,10 +553,10 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
   progressRingEmpty: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 3,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
     alignItems: "center",
     justifyContent: "center",

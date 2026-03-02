@@ -4,7 +4,19 @@ export type Category =
   | "technology"
   | "entertainment"
   | "sports";
-export type Difficulty = "easy" | "medium" | "hard" | "expert";
+export enum Difficulty {
+  EASY = "easy",
+  MEDIUM = "medium",
+  HARD = "hard",
+  EXPERT = "expert",
+}
+
+export const ENTRY_FEES: Record<Difficulty, number> = {
+  [Difficulty.EASY]: 5,
+  [Difficulty.MEDIUM]: 15,
+  [Difficulty.HARD]: 30,
+  [Difficulty.EXPERT]: 60,
+};
 export type GridSize = 6 | 8 | 10 | 12;
 export type Direction = "across" | "down" | "reverse_across" | "reverse_down";
 

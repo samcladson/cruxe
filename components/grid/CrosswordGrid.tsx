@@ -69,14 +69,26 @@ export function CrosswordGrid() {
    * Backspace clears or moves backward.
    */
   const handleKeyPress = ({ nativeEvent }: any) => {
-    if (!selectedCell || activePuzzle.isComplete) return;
+    // Get fresh state to avoid closure bugs when typing rapidly
+    const state = usePuzzleStore.getState();
+    const currentActivePuzzle = state.activePuzzle;
+    const currentSelectedCell = state.selectedCell;
+
+    if (
+      !currentSelectedCell ||
+      !currentActivePuzzle ||
+      currentActivePuzzle.isComplete
+    )
+      return;
+
+    const currentCellObj =
+      currentActivePuzzle.grid[currentSelectedCell.row][
+        currentSelectedCell.col
+      ];
 
     if (nativeEvent.key === "Backspace") {
-      const currentCellObj =
-        activePuzzle.grid[selectedCell.row][selectedCell.col];
-
       if (currentCellObj.userInput && !currentCellObj.isPreFilled) {
-        clearCell(selectedCell.row, selectedCell.col);
+        state.clearCell(currentSelectedCell.row, currentSelectedCell.col);
       } else {
         moveSelection(-1);
       }
@@ -84,7 +96,13 @@ export function CrosswordGrid() {
       nativeEvent.key.length === 1 &&
       /[a-zA-Z]/.test(nativeEvent.key)
     ) {
-      setCellValue(selectedCell.row, selectedCell.col, nativeEvent.key);
+      if (!currentCellObj.isPreFilled) {
+        state.setCellValue(
+          currentSelectedCell.row,
+          currentSelectedCell.col,
+          nativeEvent.key,
+        );
+      }
       moveSelection(1);
     }
   };
@@ -93,19 +111,82 @@ export function CrosswordGrid() {
    * Moves the selection forward or backward within the current word.
    */
   const moveSelection = (step: number) => {
-    if (!selectedCell || activeWordCells.length === 0) return;
+    // Use fresh state to calculate active word cells and movement
+    const state = usePuzzleStore.getState();
+    const currentActivePuzzle = state.activePuzzle;
+    const currentSelectedCell = state.selectedCell;
+    const currentDirection = state.selectedDirection;
 
-    const currentIndex = activeWordCells.findIndex(
-      (c) => c.row === selectedCell.row && c.col === selectedCell.col,
+    if (!currentSelectedCell || !currentActivePuzzle) return;
+
+    const { row, col } = currentSelectedCell;
+    const currentCell = currentActivePuzzle.grid[row][col];
+    if (currentCell.isBlocked || currentCell.clueIds.length === 0) return;
+
+    let targetClueId = currentCell.clueIds.find((id) =>
+      id.includes(currentDirection),
+    );
+    if (!targetClueId) {
+      targetClueId = currentCell.clueIds[0];
+    }
+
+    const currentActiveWordCells: {
+      row: number;
+      col: number;
+      isPreFilled?: boolean;
+    }[] = [];
+    currentActivePuzzle.grid.forEach((r) =>
+      r.forEach((c) => {
+        if (c.clueIds.includes(targetClueId!)) {
+          currentActiveWordCells.push({
+            row: c.row,
+            col: c.col,
+            isPreFilled: c.isPreFilled,
+          });
+        }
+      }),
+    );
+
+    if (currentActiveWordCells.length === 0) return;
+
+    // Sort logically based on direction, so +1 step always moves to the "next" logical letter
+    currentActiveWordCells.sort((a, b) => {
+      switch (currentDirection) {
+        case "across":
+          return a.col - b.col;
+        case "reverse_across":
+          return b.col - a.col;
+        case "down":
+          return a.row - b.row;
+        case "reverse_down":
+          return b.row - a.row;
+        default:
+          return 0;
+      }
+    });
+
+    const currentIndex = currentActiveWordCells.findIndex(
+      (c) =>
+        c.row === currentSelectedCell.row && c.col === currentSelectedCell.col,
     );
 
     if (currentIndex === -1) return;
 
-    const nextIndex = currentIndex + step;
+    let nextIndex = currentIndex + step;
 
-    if (nextIndex >= 0 && nextIndex < activeWordCells.length) {
-      const nextCell = activeWordCells[nextIndex];
-      selectCell(nextCell.row, nextCell.col);
+    // Skip over pre-filled cells
+    while (
+      nextIndex >= 0 &&
+      nextIndex < currentActiveWordCells.length &&
+      currentActiveWordCells[nextIndex].isPreFilled &&
+      step !== 0
+    ) {
+      nextIndex += Math.sign(step);
+    }
+
+    if (nextIndex >= 0 && nextIndex < currentActiveWordCells.length) {
+      const nextCell = currentActiveWordCells[nextIndex];
+      state.selectCell(nextCell.row, nextCell.col);
     }
   };
 

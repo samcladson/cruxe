@@ -5,8 +5,10 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import "react-native-reanimated";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { useColorScheme } from "@/components/useColorScheme";
+import { usePuzzleStore } from "@/stores/puzzleStore";
 import {
   Manrope_400Regular,
   Manrope_500Medium,
@@ -56,34 +58,55 @@ export default function RootLayout() {
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
+  const { activePuzzle, clearActivePuzzle } = usePuzzleStore();
+
+  /**
+   * Retention Policy: Auto-discard stale in-progress puzzles.
+   * If a puzzle was started more than 7 days ago, clear it to keep storage lean.
+   */
+  useEffect(() => {
+    if (!activePuzzle) return;
+
+    const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+    const startTime =
+      activePuzzle.startedAt || new Date(activePuzzle.date).getTime();
+    const now = Date.now();
+
+    if (now - startTime > SEVEN_DAYS_MS) {
+      console.log("[Retention] Discarding stale active puzzle (>7 days old)");
+      clearActivePuzzle();
+    }
+  }, [activePuzzle, clearActivePuzzle]);
+
+  /** Custom dark theme that matches Cruxe's bgPrimary and accentGold */
+  const CruxeTheme = {
+    ...DarkTheme,
+    colors: {
+      ...DarkTheme.colors,
+      background: "#0a0a0a",
+      card: "#0d0d0d",
+      text: "#f8f8f6",
+      border: "rgba(255,255,255,0.06)",
+      primary: "#eecd2b",
+    },
+  };
 
   return (
-    <ThemeProvider value={DarkTheme}>
-      <Stack>
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen
-          name="game/generate"
-          options={{ headerShown: false, animation: "fade" }}
-        />
-        <Stack.Screen name="game/[puzzleId]" options={{ headerShown: false }} />
-        <Stack.Screen
-          name="hint-modal"
-          options={{
-            presentation: "transparentModal",
-            headerShown: false,
-            animation: "fade",
-          }}
-        />
-        <Stack.Screen
-          name="victory-modal"
-          options={{
-            presentation: "transparentModal",
-            headerShown: false,
-            animation: "fade",
-          }}
-        />
-      </Stack>
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <ThemeProvider value={CruxeTheme}>
+        <Stack>
+          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="game/generate"
+            options={{ headerShown: false, animation: "fade" }}
+          />
+          <Stack.Screen
+            name="game/[puzzleId]"
+            options={{ headerShown: false }}
+          />
+        </Stack>
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }
