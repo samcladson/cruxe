@@ -32,6 +32,7 @@ import {
 } from "../../services/puzzleService";
 import { supabase } from "../../services/supabaseClient";
 import { useUserStore } from "../../stores/userStore";
+import { formatCompactNumber } from "../../utils/formatNumber";
 
 function PulseDot() {
   const opacity = useSharedValue(0.4);
