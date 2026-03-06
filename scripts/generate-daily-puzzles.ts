@@ -80,31 +80,88 @@ const GRID_SIZES: Record<
 // GEMINI SERVICE
 // ═══════════════════════════════════════════════════════════════════
 
+/**
+ * Generates crossword words and clues via the Gemini 2.5 Flash REST API.
+ *
+ * Uses a date-aware, quality-enforced prompt identical in logic to the in-app
+ * geminiService.ts — ensuring daily pre-generated puzzles feel as fresh and
+ * culturally relevant as on-demand premium puzzles.
+ *
+ * No Google Search grounding is used — zero extra cost, free-tier safe.
+ *
+ * @param category  - Puzzle category (e.g. "technology", "sports")
+ * @param difficulty - Puzzle difficulty level
+ * @param gridSize  - Size of the crossword grid (6, 8, 10, or 12)
+ * @param apiKey    - Gemini API key
+ * @param today     - ISO date string (YYYY-MM-DD) injected into the prompt
+ * @returns Array of GeneratedClue objects ready for database storage
+ */
 async function generatePuzzleWords(
   category: string,
   difficulty: Difficulty,
   gridSize: GridSize,
   apiKey: string,
+  today: string,
 ): Promise<GeneratedClue[]> {
   const settings = GRID_SIZES[gridSize];
   const wordCount = settings.maxWords;
   const maxLength = settings.maxWordLength;
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
-  const prompt = `Generate exactly ${wordCount} unique words appropriate for a ${gridSize}x${gridSize} crossword puzzle grid.
-Rules:
-1. Category: ${category}
-2. Difficulty: ${difficulty} (Adjust word complexity/obscurity accordingly)
-3. Words must be between 3 and ${maxLength} letters long.
-4. Provide a clear, standard crossword clue for each word.
-5. Randomly set exactly 1 'isHint' to true, the rest false.
-6. YOU MUST OUTPUT STRICTLY VALID JSON. NO MARKDOWN. NO CONVERSATIONAL TEXT. NO \`\`\`json.
-7. DO NOT OUTPUT ANY TEXT OTHER THAN THE JSON ARRAY.
+  // Identical prompt logic to geminiService.ts — date-aware, quality-enforced
+  const prompt = `You are the puzzle editor of an award-winning crossword publication renowned for \
+puzzles that feel sharp, current, and culturally alive — the kind solvers share because a clue \
+made them groan and grin at the same time.
 
-Output Format:
-[
-  { "word": "ANSWER", "clue": "Question or hint here", "isHint": false }
-]`;
+Today's date: ${today}
+Category: ${category}
+Grid: ${gridSize}×${gridSize} | Words needed: ${wordCount} | Max word length: ${maxLength} letters
+
+━━━ FRESHNESS & RELEVANCE ━━━
+Draw on your knowledge of what is currently trending, talked-about, and culturally significant \
+in the "${category}" space as of ${today}.
+Think: recent events, people in the news, viral moments, award winners, record-breakers, product \
+launches, chart-toppers, ongoing storylines, notable headlines, breakthrough moments.
+At least 40% of words should connect to something that feels zeitgeist-relevant right now.
+
+━━━ WORD QUALITY — ZERO TOLERANCE POLICY ━━━
+PERMANENTLY BANNED crossword filler (never use these or anything of this character):
+ERA, ORE, OLE, ALE, SEA, ARIA, ETNA, ABET, ALOE, OLEO, EROS, ESNE, ANEW, ONES,
+INANE, ATONE, EIRE, ERNE, ALEE, NENE, ELSE, ALEC, YORE, IAMB, NARC, TSAR, OTIC.
+If a word feels stale, dusty, or "crossword-y" without real-world weight — replace it.
+
+Every word must be vivid, specific, and carry cultural or contextual weight.
+Prefer: proper nouns, sharp verbs, evocative concrete nouns, acronyms with currency.
+Avoid: vague abstractions, generic adjectives, purely archaic or obscure Latin.
+
+━━━ DIFFICULTY: ${difficulty} ━━━
+  Easy   → Widely known vocabulary. Direct definitions. The solver should feel smart
+            and rewarded — never stumped by the word itself, only delighted by the clue.
+  Medium → Mix of familiar and slightly niche terms. Clues use gentle misdirection,
+            double meanings, or light wordplay. One small "aha" moment per clue.
+  Hard   → Niche vocabulary requiring specific knowledge. Cryptic-adjacent clues that
+            mislead on first reading and reward on reflection. Surface and solution differ.
+  Expert → Deep cultural cuts and cross-domain wordplay that separates casual solvers
+            from enthusiasts. Clues are elegant traps — precise, layered, fair but fiendish.
+
+━━━ GRID CONSTRAINTS ━━━
+- Word lengths: 3 to ${maxLength} letters. Actively MIX lengths: short (3-4), medium (5-6), long (7+).
+- Maximise grid interlocking by favouring letters: E, A, R, S, T, N, O, I.
+- ALL WORDS: UPPERCASE, A-Z only, absolutely no spaces, hyphens, or punctuation.
+
+━━━ CLUE RULES ━━━
+- Maximum 65 characters per clue.
+- Never use the answer word or a direct synonym anywhere in the clue.
+- Exactly one unambiguous correct answer — no clue should allow two valid solutions.
+- Hard and Expert clues must have a surface reading that misleads before the aha lands.
+- Easy and Medium clues should feel satisfying, not frustrating.
+
+━━━ HINTS (isHint: true) ━━━
+Mark exactly 2-3 words as isHint true. These become pre-revealed letters to help players
+get a foothold in the grid. Choose short (3-5 letter), common-letter words strategically —
+never your most interesting or thematic words.
+
+Return a JSON array of exactly ${wordCount} objects. No markdown, no extra text.`;
 
   const response = await fetch(endpoint, {
     method: "POST",
@@ -112,7 +169,7 @@ Output Format:
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
-        temperature: 0.9,
+        temperature: 0.95,
         responseMimeType: "application/json",
       },
     }),
@@ -129,20 +186,23 @@ Output Format:
   const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!responseText) throw new Error("Gemini returned empty response");
 
-  // Robustly extract JSON objects from the response using regex
-  // Gemini sometimes returns malformed arrays (missing closing brackets, trailing commas)
-  // This approach finds every object that looks like our expected schema
+  // Robustly extract JSON objects from response using regex.
+  // Gemini REST (without responseSchema enforcement) can return malformed arrays.
+  // This picks out every well-formed object matching our expected schema.
   const extractedWords: GeneratedClue[] = [];
   const objectRegex =
     /\{[^{}]*"word"\s*:\s*"([^"]+)"[^{}]*"clue"\s*:\s*"([^"]+)"[^{}]*"isHint"\s*:\s*(true|false)[^{}]*\}/g;
 
   let match;
   while ((match = objectRegex.exec(responseText)) !== null) {
-    extractedWords.push({
-      word: match[1].toUpperCase().replace(/[^A-Z]/g, ""),
-      clue: match[2],
-      isHint: match[3] === "true",
-    });
+    const word = match[1].toUpperCase().replace(/[^A-Z]/g, "");
+    if (word.length >= 3 && word.length <= maxLength) {
+      extractedWords.push({
+        word,
+        clue: match[2],
+        isHint: match[3] === "true",
+      });
+    }
   }
 
   if (extractedWords.length === 0) {
@@ -154,9 +214,7 @@ Output Format:
     );
   }
 
-  return extractedWords
-    .filter((item) => item.word.length >= 3 && item.word.length <= maxLength)
-    .slice(0, wordCount);
+  return extractedWords.slice(0, wordCount);
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -398,12 +456,13 @@ async function main() {
           ? "mixed general knowledge spanning history, science, pop culture, geography, sports, and everyday life"
           : spec.category;
 
-        // Step 1: Generate words via Gemini
+        // Step 1: Generate words via Gemini (targetDate injected for freshness context)
         const words = await generatePuzzleWords(
           geminiCategory,
           spec.difficulty,
           spec.gridSize,
           geminiKey,
+          targetDate,
         );
         if (words.length < 3)
           throw new Error(`Only ${words.length} words returned`);
