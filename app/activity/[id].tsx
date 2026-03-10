@@ -29,12 +29,16 @@ export default function ActivityReviewScreen() {
       if (!id || typeof id !== "string") return;
       setLoading(true);
 
-      const completionData = await fetchCompletionById(id, profile.id);
-      if (completionData) {
-        setCompletion(completionData);
+      try {
+        const completionData = await fetchCompletionById(id, profile.id);
+        if (completionData) {
+          setCompletion(completionData);
+        }
+      } catch (err) {
+        console.warn("[ActivityScreen] Failed to load activity data:", err);
+      } finally {
+        setLoading(false);
       }
-
-      setLoading(false);
     }
     loadData();
   }, [id, profile.id]);

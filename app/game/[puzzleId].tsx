@@ -17,11 +17,15 @@ import { HintOptionsModal } from "../../components/modals/HintOptionsModal";
 import { SuccessModal } from "../../components/modals/SuccessModal";
 import { theme } from "../../constants/theme";
 import { recordCompletion } from "../../services/puzzleService";
+import { calculateScore, ScoreBreakdown } from "../../services/scoreEngine";
 import { usePuzzleStore } from "../../stores/puzzleStore";
 import { useUserStore } from "../../stores/userStore";
 import { Difficulty } from "../../types/puzzle.types";
 
-/** Coin rewards by difficulty level */
+/**
+ * Coin rewards by difficulty level — flat bonus for completing a puzzle.
+ * Kept separate from score so coins remain a soft currency, not the prestige metric.
+ */
 const COIN_REWARDS: Record<Difficulty, number> = {
   [Difficulty.EASY]: 10,
   [Difficulty.MEDIUM]: 25,
@@ -39,12 +43,22 @@ export default function GameScreen() {
   const { puzzleId } = useLocalSearchParams();
   const { activePuzzle, timer, checkCompletion, getAccuracy } =
     usePuzzleStore();
-  const { profile, addCoins, completePuzzle, incrementStreak } = useUserStore();
+  const {
+    profile,
+    addCoins,
+    completePuzzle,
+    incrementStreak,
+    syncToSupabase,
+    enqueuePendingCompletion,
+  } = useUserStore();
 
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showHintModal, setShowHintModal] = useState(false);
   const [coinsEarned, setCoinsEarned] = useState(0);
   const [scoreEarned, setScoreEarned] = useState(0);
+  const [scoreBreakdown, setScoreBreakdown] = useState<ScoreBreakdown | null>(
+    null,
+  );
   const [isNewStreak, setIsNewStreak] = useState(false);
 
   // Prevent duplicate completion recording on re-renders
@@ -61,23 +75,21 @@ export default function GameScreen() {
     if (!activePuzzle || hasRecorded.current) return;
     hasRecorded.current = true;
 
-    const reward = COIN_REWARDS[activePuzzle.difficulty as Difficulty] || 150;
+    const reward = COIN_REWARDS[activePuzzle.difficulty as Difficulty] || 25;
     const accuracy = getAccuracy();
 
-    // Scale score by difficulty to make points more competitive (lower)
-    const BASE_SCORES: Record<string, number> = {
-      easy: 50,
-      medium: 100,
-      hard: 150,
-      expert: 250,
-    };
-    const difficultyKey = activePuzzle.difficulty || "medium";
-    const baseScore = BASE_SCORES[difficultyKey] || 100;
-
-    const calculateScore = Math.round(accuracy * baseScore);
+    // Multi-factor score: difficulty × grid × accuracy × time − hint penalty
+    const breakdown = calculateScore({
+      difficulty: activePuzzle.difficulty as Difficulty,
+      gridSize: activePuzzle.gridSize,
+      accuracy,
+      timeTaken: timer,
+      hintsUsed: activePuzzle.hintsUsed || 0,
+    });
 
     setCoinsEarned(reward);
-    setScoreEarned(calculateScore);
+    setScoreEarned(breakdown.finalScore);
+    setScoreBreakdown(breakdown);
 
     const todayStr = new Date().toISOString().split("T")[0];
     const lastPlayedStr = new Date(profile.lastPlayedDate)
@@ -93,15 +105,16 @@ export default function GameScreen() {
       timer,
       Math.round(accuracy * activePuzzle.totalWords),
       activePuzzle.totalWords,
-      calculateScore,
+      breakdown.finalScore,
     );
     incrementStreak();
 
-    // Record to Supabase (fire-and-forget; failures logged)
-    recordCompletion({
+    // Record to Supabase (fire-and-forget; failures queued for retry)
+    const userId = profile.id && profile.id !== "guest" ? profile.id : "guest";
+    const completionData = {
       puzzleId: activePuzzle.id || "",
-      userId: profile.id,
-      score: calculateScore,
+      userId,
+      score: breakdown.finalScore,
       timeTaken: timer,
       accuracy,
       hintsUsed: activePuzzle.hintsUsed || 0,
@@ -110,9 +123,25 @@ export default function GameScreen() {
       category: activePuzzle.category,
       difficulty: activePuzzle.difficulty,
       gridSize: activePuzzle.gridSize,
-    }).catch((err) => {
+    };
+
+    const recorded = await recordCompletion(completionData).catch((err) => {
       console.warn("[GameScreen] Failed to record completion:", err);
+      return false;
     });
+
+    if (!recorded) {
+      // Offline or error — queue for retry when connectivity is restored
+      enqueuePendingCompletion({
+        ...completionData,
+        queuedAt: new Date().toISOString(),
+      });
+    }
+
+    // Sync updated profile (streak, coins, totalScore) to Supabase
+    await syncToSupabase().catch((err) =>
+      console.warn("[GameScreen] Profile sync failed:", err),
+    );
 
     setShowSuccessModal(true);
   }, [activePuzzle, timer, profile.id]);

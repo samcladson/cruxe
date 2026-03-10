@@ -4,6 +4,9 @@ name: Generate Daily Puzzles
 # Generates for today, tomorrow, and day-after-tomorrow (UTC) to cover all timezones.
 # Also available as a manual trigger via workflow_dispatch for specific dates.
 # Runs the script directly in Node.js — no Edge Functions, no timeouts.
+# 
+# NOTE: Currently running the `-free` variant to stay within Gemini 2.5 Flash Free Tier limits (20 RPD).
+# To upgrade to the full 101-puzzle daily suite, swap `generate-daily-puzzles-free.ts` with `generate-daily-puzzles.ts`.
 on:
   schedule:
     - cron: "5 0 * * *"
@@ -43,12 +46,20 @@ jobs:
           # The script is idempotent — existing dates are skipped (0 Gemini API calls).
           if [ -n "${{ github.event.inputs.date }}" ]; then
             echo "Manual run for specific date: ${{ github.event.inputs.date }}"
-            npx tsx scripts/generate-daily-puzzles.ts "${{ github.event.inputs.date }}"
+            npx tsx scripts/generate-daily-puzzles-free.ts "${{ github.event.inputs.date }}"
           else
-            for OFFSET in 0 1 2; do
+            # FOR FREE TIER: Only generate exactly 1 day (Today/OFFSET 0), 
+            # to prevent hitting the 20 RPD limit.
+            #
+            # 🔔 UPGRADE INSTRUCTIONS (When moving to Paid Gemini Tier):
+            # 1. Change `for OFFSET in 0; do` to `for OFFSET in 0 1 2; do`
+            # 2. Change `generate-daily-puzzles-free.ts` below to `generate-daily-puzzles.ts`
+            # 
+            # This will instantly restore the 3-day buffer of 101 puzzles per day!
+            for OFFSET in 0; do
               DATE=$(date -u -d "+${OFFSET} days" +%Y-%m-%d)
               echo ""
               echo "━━━ Generating for ${DATE} (UTC+${OFFSET}d) ━━━"
-              npx tsx scripts/generate-daily-puzzles.ts "${DATE}"
+              npx tsx scripts/generate-daily-puzzles-free.ts "${DATE}"
             done
           fi

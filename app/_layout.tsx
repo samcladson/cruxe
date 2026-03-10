@@ -15,6 +15,14 @@ import {
   Manrope_600SemiBold,
   Manrope_700Bold,
 } from "@expo-google-fonts/manrope";
+import { AppState, AppStateStatus } from "react-native";
+import {
+  ensureUserProfile,
+  initAuth,
+  onAuthStateChange,
+} from "../services/authService";
+import { drainPendingCompletions } from "../services/offlineSyncService";
+import { useUserStore } from "../stores/userStore";
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -38,7 +46,6 @@ export default function RootLayout() {
     ...FontAwesome.font,
   });
 
-  // Expo Router uses Error Boundaries to catch errors in the navigation tree.
   useEffect(() => {
     if (error) throw error;
   }, [error]);
@@ -59,6 +66,63 @@ export default function RootLayout() {
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
   const { activePuzzle, clearActivePuzzle } = usePuzzleStore();
+  const { setUserId, syncFromSupabase } = useUserStore();
+
+  /**
+   * Bootstrap authentication on app mount.
+   *
+   * 1. Restore existing session (AsyncStorage) or create new anonymous one.
+   * 2. Write the real UUID into the local userStore (replaces "guest").
+   * 3. Ensure the `users` row exists in the DB (no-op if already present).
+   * 4. Hydrate local stats, coins, streak from Supabase (remote wins on conflict).
+   *
+   * If Supabase is unreachable the app continues in degraded local-only mode.
+   */
+  useEffect(() => {
+    let unsubscribe: (() => void) | undefined;
+
+    const bootstrap = async () => {
+      const authState = await initAuth();
+      const userId = authState.user?.id;
+
+      if (userId) {
+        setUserId(userId);
+        await ensureUserProfile(userId);
+        await syncFromSupabase(userId);
+        console.log("[Layout] Auth bootstrap complete for user:", userId);
+      } else {
+        console.warn("[Layout] Auth unavailable — running in local-only mode");
+      }
+
+      // Stay subscribed to token refreshes and future sign-in upgrades
+      unsubscribe = onAuthStateChange(async (user) => {
+        if (user?.id && user.id !== useUserStore.getState().profile.id) {
+          setUserId(user.id);
+          await syncFromSupabase(user.id);
+        }
+      });
+    };
+
+    bootstrap();
+    return () => unsubscribe?.();
+  }, []);
+
+  /**
+   * Drain offline completion queue whenever the app returns to the foreground.
+   * Queued completions are retried silently — the user sees nothing unless
+   * there's a persistent failure after many retries.
+   */
+  useEffect(() => {
+    const handleAppStateChange = (nextState: AppStateStatus) => {
+      if (nextState === "active") {
+        drainPendingCompletions().catch((err) =>
+          console.warn("[Layout] Offline drain error:", err),
+        );
+      }
+    };
+    const sub = AppState.addEventListener("change", handleAppStateChange);
+    return () => sub.remove();
+  }, []);
 
   /**
    * Retention Policy: Auto-discard stale in-progress puzzles.
@@ -66,19 +130,15 @@ function RootLayoutNav() {
    */
   useEffect(() => {
     if (!activePuzzle) return;
-
     const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
     const startTime =
       activePuzzle.startedAt || new Date(activePuzzle.date).getTime();
-    const now = Date.now();
-
-    if (now - startTime > SEVEN_DAYS_MS) {
+    if (Date.now() - startTime > SEVEN_DAYS_MS) {
       console.log("[Retention] Discarding stale active puzzle (>7 days old)");
       clearActivePuzzle();
     }
   }, [activePuzzle, clearActivePuzzle]);
 
-  /** Custom dark theme that matches Cruxe's bgPrimary and accentGold */
   const CruxeTheme = {
     ...DarkTheme,
     colors: {

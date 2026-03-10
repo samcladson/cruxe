@@ -459,18 +459,18 @@ export async function fetchCompletionHistory(
 }
 
 /**
- * Fetches a specific completion record by puzzle ID and user ID.
+ * Fetches a specific completion record by its primary key ID and user ID.
  * Useful for the Activity review screen.
  */
 export async function fetchCompletionById(
-  puzzleId: string,
+  id: string,
   userId: string = "guest",
 ): Promise<CompletionData | null> {
   const { data, error } = await supabase
     .from("puzzle_completions")
     .select("*")
+    .eq("id", id)
     .eq("user_id", userId)
-    .eq("puzzle_id", puzzleId)
     .maybeSingle();
 
   if (error || !data) {
@@ -494,4 +494,57 @@ export async function fetchCompletionById(
     difficulty: data.difficulty,
     gridSize: data.grid_size,
   };
+}
+
+// ─── Leaderboard ─────────────────────────────────────────────────────
+
+/** A single row in the global leaderboard */
+export interface LeaderboardEntry {
+  userId: string;
+  displayName: string;
+  totalScore: number;
+  puzzlesSolved: number;
+  streak: number;
+  rank: number;
+}
+
+/**
+ * Fetches the global leaderboard from the `leaderboard_view` in Supabase.
+ * The view aggregates total score per user across all puzzle completions.
+ *
+ * @param limit - Number of top players to return (default 50)
+ * @returns Ordered list of leaderboard entries, rank 1 first
+ */
+export async function fetchLeaderboard(
+  limit: number = 50,
+): Promise<LeaderboardEntry[]> {
+  const cacheKey = `leaderboard_${limit}`;
+  const cached = puzzleCache.get<LeaderboardEntry[]>(cacheKey);
+  if (cached) return cached;
+
+  const { data, error } = await supabase
+    .from("leaderboard_view")
+    .select("user_id, display_name, total_score, puzzles_solved, streak, rank")
+    .order("rank", { ascending: true })
+    .limit(limit);
+
+  if (error || !data) {
+    console.warn(
+      "[puzzleService] Failed to fetch leaderboard:",
+      error?.message,
+    );
+    return [];
+  }
+
+  const result: LeaderboardEntry[] = data.map((row: any) => ({
+    userId: row.user_id,
+    displayName: row.display_name || "Player",
+    totalScore: Number(row.total_score) || 0,
+    puzzlesSolved: Number(row.puzzles_solved) || 0,
+    streak: Number(row.streak) || 0,
+    rank: Number(row.rank) || 0,
+  }));
+
+  puzzleCache.set(cacheKey, result);
+  return result;
 }

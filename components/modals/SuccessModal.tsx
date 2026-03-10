@@ -1,8 +1,9 @@
-import { FontAwesome5, MaterialIcons } from "@expo/vector-icons";
+import { MaterialIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   Modal,
+  Platform,
   StatusBar,
   StyleSheet,
   Text,
@@ -10,23 +11,25 @@ import {
   View,
 } from "react-native";
 import Animated, {
-  BounceIn,
   FadeInDown,
   FadeInUp,
   ZoomIn,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withSpring,
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { theme } from "../../constants/theme";
 import { usePuzzleStore } from "../../stores/puzzleStore";
 import { useUserStore } from "../../stores/userStore";
 import { formatCompactNumber } from "../../utils/formatNumber";
-// import { Audio } from "expo-av"; // Uncomment when adding actual audio files
 
 /**
- * SuccessModal — Full-screen puzzle completion page.
+ * SuccessModal — Full-screen puzzle completion & streak flow.
  *
- * Implements a Duolingo-style sequenced animation reveal for Time, Accuracy,
- * Coins, and Current Streak. Includes hooks for `expo-av` sound effects.
+ * Phase 1: Puzzle Stats (no scrolling, fits in screen)
+ * Phase 2: If streak > 0, shows full-screen Duolingo-style streak flame on "Continue"
  */
 
 interface SuccessModalProps {
@@ -48,75 +51,54 @@ export function SuccessModal({
   const { profile } = useUserStore();
 
   const [displayCoins, setDisplayCoins] = useState(0);
-
-  // --- Sound Effects Boilerplate ---
-  // To enable: place .wav files in assets/sounds/ and uncomment this block.
-  /*
-  const playSound = async (type: "success" | "pop" | "count" | "streak") => {
-    try {
-      let file;
-      switch (type) {
-        case "success": file = require("../../assets/sounds/success.wav"); break;
-        case "pop": file = require("../../assets/sounds/pop.wav"); break;
-        case "count": file = require("../../assets/sounds/count.wav"); break;
-        case "streak": file = require("../../assets/sounds/streak.wav"); break;
-      }
-      const { sound } = await Audio.Sound.createAsync(file);
-      await sound.playAsync();
-    } catch (e) {
-      console.warn("Audio play failed:", e);
-    }
-  };
-  */
-  // Note: For now, we mock playSound so the app doesn't crash without the files
-  const playSound = (type: string) => {
-    // console.log("Simulated sound playing:", type);
-  };
+  const [showStreakScreen, setShowStreakScreen] = useState(false);
 
   const accuracy = Math.round(getAccuracy() * 100);
   const finalCoins =
     earnedProp ?? (activePuzzle?.difficulty === "easy" ? 150 : 540);
 
-  // Trigger sound sequence matching the Reanimated layout enter animations
+  // Flame bounce animation for streak screen
+  const flameScale = useSharedValue(0);
+
   useEffect(() => {
-    if (visible && activePuzzle) {
-      // 0ms: Trophy zooms in
-      playSound("success");
-
-      // 400ms: Stat boxes drop in
-      setTimeout(() => playSound("pop"), 400);
-
-      // 1000ms: Coin counting starts
+    if (visible && activePuzzle && !showStreakScreen) {
+      // Coin counter animation
       const coinDelay = setTimeout(() => {
         let current = 0;
-        const step = Math.ceil(finalCoins / 40); // 40 steps max
+        const step = Math.ceil(finalCoins / 30);
         const interval = setInterval(() => {
           current += step;
           if (current >= finalCoins) {
             setDisplayCoins(finalCoins);
             clearInterval(interval);
           } else {
-            playSound("count"); // Rapid tick
             setDisplayCoins(current);
           }
-        }, 25);
+        }, 30);
         return () => clearInterval(interval);
-      }, 1000);
-
-      // 2200ms: Streak flame bounces in (only if a new streak was earned)
-      if (isNewStreak) {
-        setTimeout(() => playSound("streak"), 2200);
-      }
-
+      }, 800);
       return () => clearTimeout(coinDelay);
-    } else {
-      setDisplayCoins(0); // Reset on close
+    } else if (!visible) {
+      setDisplayCoins(0);
+      setShowStreakScreen(false);
+      flameScale.value = 0;
     }
-  }, [visible, activePuzzle, finalCoins]);
+  }, [visible, activePuzzle, finalCoins, showStreakScreen]);
 
-  if (!activePuzzle) return null;
+  const handleFirstContinue = () => {
+    if (profile.currentStreak > 0) {
+      // Move to Phase 2 (Streak Screen)
+      setShowStreakScreen(true);
+      flameScale.value = withDelay(
+        300,
+        withSpring(1, { damping: 12, stiffness: 100 }),
+      );
+    } else {
+      handleFinalReturn();
+    }
+  };
 
-  const handleReturn = () => {
+  const handleFinalReturn = () => {
     onClose();
     router.replace("/");
   };
@@ -127,6 +109,76 @@ export function SuccessModal({
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
+  const flameAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: flameScale.value }],
+  }));
+
+  if (!activePuzzle) return null;
+
+  // ═══════════════════════════════════════════════════════════════════
+  // PHASE 2: STREAK SCREEN
+  // ═══════════════════════════════════════════════════════════════════
+  if (showStreakScreen) {
+    return (
+      <Modal
+        visible={visible}
+        animationType="fade"
+        presentationStyle="fullScreen"
+      >
+        <SafeAreaView style={styles.streakScreen}>
+          <StatusBar barStyle="light-content" />
+          <View style={styles.streakCenter}>
+            <Animated.View style={[styles.bigFlameWrap, flameAnimatedStyle]}>
+              <MaterialIcons
+                name="local-fire-department"
+                size={120}
+                color={theme.colors.accentGold}
+              />
+            </Animated.View>
+
+            <Animated.Text
+              entering={FadeInDown.delay(700).springify()}
+              style={styles.streakCount}
+            >
+              {profile.currentStreak}
+            </Animated.Text>
+
+            <Animated.Text
+              entering={FadeInDown.delay(800).springify()}
+              style={styles.streakDaysLabel}
+            >
+              Day Streak!
+            </Animated.Text>
+
+            {isNewStreak && (
+              <Animated.Text
+                entering={FadeInDown.delay(1000).duration(400)}
+                style={styles.streakSubtext}
+              >
+                Streak extended! Play tomorrow to keep it burning.
+              </Animated.Text>
+            )}
+          </View>
+
+          <Animated.View
+            entering={FadeInUp.delay(1200)}
+            style={styles.bottomActions}
+          >
+            <TouchableOpacity
+              style={styles.continueBtn}
+              onPress={handleFinalReturn}
+            >
+              <Text style={styles.continueBtnText}>CONTINUE</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </SafeAreaView>
+      </Modal>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // PHASE 1: PUZZLE STATS SCREEN
+  // ═══════════════════════════════════════════════════════════════════
   return (
     <Modal
       visible={visible}
@@ -136,46 +188,36 @@ export function SuccessModal({
       <SafeAreaView style={styles.screen}>
         <StatusBar barStyle="light-content" />
 
-        <View style={styles.spacerTop} />
-
         <View style={styles.centerContent}>
-          {/* Phase 1: Main Trophy / Success Icon */}
+          {/* Main Trophy */}
           <Animated.View
             entering={ZoomIn.duration(600).springify().damping(12)}
             style={styles.trophyCircle}
           >
             <MaterialIcons
               name="emoji-events"
-              size={56}
+              size={48}
               color={theme.colors.accentGold}
             />
           </Animated.View>
 
           <Animated.Text
-            entering={FadeInDown.delay(200).duration(500)}
+            entering={FadeInDown.delay(200).duration(400)}
             style={styles.title}
           >
             Puzzle Solved!
           </Animated.Text>
 
-          <Animated.Text
-            entering={FadeInDown.delay(300).duration(500)}
-            style={styles.subtitle}
-          >
-            {activePuzzle.category.toUpperCase()} •{" "}
-            {activePuzzle.difficulty.toUpperCase()}
-          </Animated.Text>
-
-          {/* Phase 2: Top Stats Grid (2x2 Neat Matrix) */}
+          {/* Compact matrix of stats (2x2) */}
           <View style={styles.statsCardGrid}>
             <View style={styles.statsCardRow}>
               <Animated.View
-                entering={FadeInUp.delay(400).duration(400)}
+                entering={FadeInUp.delay(300).duration(400)}
                 style={styles.statBoxGrid}
               >
                 <MaterialIcons
                   name="timer"
-                  size={24}
+                  size={20}
                   color={theme.colors.accentGold}
                 />
                 <Text style={styles.statValue}>{formatTime(timer)}</Text>
@@ -190,7 +232,7 @@ export function SuccessModal({
               >
                 <MaterialIcons
                   name="check-circle"
-                  size={24}
+                  size={20}
                   color={theme.colors.accentGreen}
                 />
                 <Text style={styles.statValue}>{accuracy}%</Text>
@@ -202,12 +244,12 @@ export function SuccessModal({
 
             <View style={styles.statsCardRow}>
               <Animated.View
-                entering={FadeInUp.delay(550).duration(400)}
+                entering={FadeInUp.delay(500).duration(400)}
                 style={styles.statBoxGrid}
               >
                 <MaterialIcons
                   name="star"
-                  size={24}
+                  size={20}
                   color={theme.colors.accentGold}
                 />
                 <Text style={styles.statValue}>
@@ -218,14 +260,13 @@ export function SuccessModal({
 
               <View style={styles.statDividerGrid} />
 
-              {/* Phase 3: Dynamic Coin Counter */}
               <Animated.View
-                entering={FadeInUp.delay(700).duration(400)}
+                entering={FadeInUp.delay(600).duration(400)}
                 style={styles.statBoxGrid}
               >
                 <MaterialIcons
                   name="monetization-on"
-                  size={24}
+                  size={20}
                   color={theme.colors.accentGold}
                 />
                 <Text
@@ -238,77 +279,28 @@ export function SuccessModal({
             </View>
           </View>
 
-          {/* Phase 3.5: Extra Stats Row */}
+          {/* Compact details pill */}
           <Animated.View
-            entering={FadeInUp.delay(850).duration(400)}
+            entering={FadeInUp.delay(700).duration(400)}
             style={styles.extraStats}
           >
-            <View style={styles.extraStatPill}>
-              <MaterialIcons
-                name="grid-on"
-                size={14}
-                color="rgba(255,255,255,0.5)"
-              />
-              <Text style={styles.extraStatText}>
-                {activePuzzle.gridSize}×{activePuzzle.gridSize}
-              </Text>
-            </View>
-            <View style={styles.extraStatPill}>
-              <MaterialIcons
-                name="text-fields"
-                size={14}
-                color="rgba(255,255,255,0.5)"
-              />
-              <Text style={styles.extraStatText}>
-                {activePuzzle.totalWords} words
-              </Text>
-            </View>
-            <View style={styles.extraStatPill}>
-              <MaterialIcons
-                name="emoji-objects"
-                size={14}
-                color="rgba(255,255,255,0.5)"
-              />
-              <Text style={styles.extraStatText}>
-                {activePuzzle.hintsUsed} hints
-              </Text>
-            </View>
+            <Text style={styles.extraStatText}>
+              {activePuzzle.category.replace(/_/g, " ").toUpperCase()} •{" "}
+              {activePuzzle.difficulty.toUpperCase()} • {activePuzzle.gridSize}×
+              {activePuzzle.gridSize}
+            </Text>
           </Animated.View>
-
-          {/* Phase 4: Big Streak Focus */}
-          {isNewStreak && (
-            <Animated.View
-              entering={BounceIn.delay(2200).duration(800)}
-              style={styles.streakContainer}
-            >
-              <View style={styles.streakIconWrap}>
-                <FontAwesome5
-                  name="fire"
-                  size={24}
-                  color={theme.colors.bgPrimary}
-                />
-              </View>
-              <View style={styles.streakTextCol}>
-                <Text style={styles.streakLabel}>STREAK</Text>
-                <View style={styles.streakValueRow}>
-                  <Text style={styles.streakValue}>
-                    {profile.currentStreak}
-                  </Text>
-                  <Text style={styles.streakDays}>DAYS</Text>
-                </View>
-              </View>
-            </Animated.View>
-          )}
         </View>
 
-        <View style={styles.spacerBottom} />
-
-        {/* Continue Button Drop-in */}
+        {/* Continue Button */}
         <Animated.View
-          entering={FadeInUp.delay(2800).duration(600).springify()}
+          entering={FadeInUp.delay(900).duration(500).springify()}
           style={styles.bottomActions}
         >
-          <TouchableOpacity style={styles.continueBtn} onPress={handleReturn}>
+          <TouchableOpacity
+            style={styles.continueBtn}
+            onPress={handleFirstContinue}
+          >
             <Text style={styles.continueBtnText}>CONTINUE</Text>
             <MaterialIcons name="arrow-forward" size={20} color="#000" />
           </TouchableOpacity>
@@ -326,67 +318,55 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: theme.colors.bgPrimary,
-  },
-  spacerTop: {
-    flex: 1,
-  },
-  spacerBottom: {
-    flex: 1,
+    justifyContent: "space-between", // Pushes content and button to edges
   },
   centerContent: {
+    flex: 1,
     alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 24,
   },
   trophyCircle: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: "rgba(238, 205, 43, 0.08)",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 28,
+    marginBottom: 20,
     borderWidth: 1,
     borderColor: "rgba(238, 205, 43, 0.15)",
   },
   title: {
     fontFamily: theme.typography.heading.fontFamily,
-    fontSize: 36,
+    fontSize: 28,
     color: "#fff",
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontFamily: theme.typography.body.fontFamily,
-    fontSize: 14,
-    color: theme.colors.accentGold,
-    marginBottom: 36,
-    textTransform: "uppercase",
-    letterSpacing: 2,
-    fontWeight: "bold",
+    marginBottom: 32,
   },
   statsCardGrid: {
     backgroundColor: theme.colors.bgSecondary,
-    borderRadius: 24,
+    borderRadius: 20,
     width: "100%",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.08)",
-    marginBottom: 32,
+    marginBottom: 20,
     overflow: "hidden",
   },
   statsCardRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 20,
+    paddingVertical: 16,
     paddingHorizontal: 8,
   },
   statBoxGrid: {
     flex: 1,
     alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 12,
+    gap: 4,
+    paddingHorizontal: 8,
   },
   statDividerGrid: {
     width: 1,
-    height: 60,
+    height: 48,
     backgroundColor: "rgba(255,255,255,0.08)",
   },
   statHorizontalDivider: {
@@ -395,92 +375,36 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.08)",
   },
   statValue: {
-    fontFamily: theme.typography.cellLetter.fontFamily,
+    fontFamily: theme.typography.display.fontFamily,
     fontSize: 24,
     color: "#fff",
-    fontWeight: "bold",
   },
   statLabel: {
     fontFamily: theme.typography.body.fontFamily,
-    fontSize: 11,
+    fontSize: 10,
     color: "rgba(255,255,255,0.4)",
     fontWeight: "bold",
-    letterSpacing: 1.5,
+    letterSpacing: 1,
   },
   extraStats: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 10,
-    marginBottom: 32,
-  },
-  extraStatPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
     backgroundColor: "rgba(255,255,255,0.03)",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.04)",
   },
   extraStatText: {
     fontFamily: theme.typography.body.fontFamily,
-    fontSize: 12,
+    fontSize: 11,
     color: "rgba(255,255,255,0.4)",
-  },
-  streakContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: theme.colors.bgSecondary,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: theme.colors.accentGold,
-    gap: 16,
-    ...theme.shadows.goldGlow,
-  },
-  streakIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: theme.colors.accentGold,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  streakTextCol: {
-    alignItems: "flex-start",
-    justifyContent: "center",
-  },
-  streakLabel: {
-    fontFamily: theme.typography.body.fontFamily,
-    fontSize: 10,
-    color: "rgba(255,255,255,0.5)",
-    fontWeight: "bold",
-    letterSpacing: 2,
-    marginBottom: 2,
-  },
-  streakValueRow: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    gap: 6,
-  },
-  streakValue: {
-    fontFamily: theme.typography.display.fontFamily,
-    fontSize: 28,
-    color: theme.colors.textPrimary,
-    lineHeight: 32,
-  },
-  streakDays: {
-    fontFamily: theme.typography.cellLetter.fontFamily,
-    fontSize: 14,
-    color: theme.colors.accentGold,
-    fontWeight: "bold",
+    letterSpacing: 0.5,
+    fontWeight: "600",
   },
   bottomActions: {
     paddingHorizontal: 24,
-    paddingBottom: 24,
+    paddingBottom: Platform.OS === "ios" ? 12 : 24,
+    paddingTop: 12,
   },
   continueBtn: {
     backgroundColor: theme.colors.accentGold,
@@ -488,7 +412,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     width: "100%",
-    paddingVertical: 18,
+    paddingVertical: 16,
     borderRadius: 16,
     gap: 10,
     ...theme.shadows.goldGlow,
@@ -499,5 +423,41 @@ const styles = StyleSheet.create({
     color: "#000",
     fontWeight: "bold",
     letterSpacing: 1.5,
+  },
+
+  // Streak Screen Styles
+  streakScreen: {
+    flex: 1,
+    backgroundColor: theme.colors.bgPrimary,
+    justifyContent: "space-between",
+  },
+  streakCenter: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 32,
+  },
+  bigFlameWrap: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  streakCount: {
+    fontFamily: theme.typography.display.fontFamily,
+    fontSize: 72,
+    color: theme.colors.accentGold,
+    lineHeight: 80,
+  },
+  streakDaysLabel: {
+    fontFamily: theme.typography.heading.fontFamily,
+    fontSize: 24,
+    color: "#fff",
+    marginBottom: 16,
+  },
+  streakSubtext: {
+    fontFamily: theme.typography.body.fontFamily,
+    fontSize: 14,
+    color: "rgba(255,255,255,0.5)",
+    textAlign: "center",
+    lineHeight: 20,
   },
 });

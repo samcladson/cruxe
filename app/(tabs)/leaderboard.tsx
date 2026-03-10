@@ -1,166 +1,357 @@
+/**
+ * leaderboard.tsx — Global leaderboard screen.
+ *
+ * Fetches real player scores from the `leaderboard_view` in Supabase.
+ * The view aggregates total score per user across all puzzle completions.
+ * Falls back to an empty state with a retry button if the fetch fails.
+ */
+
 import { MaterialIcons } from "@expo/vector-icons";
-import React, { useEffect } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import Animated, {
   FadeInDown,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
   withSpring,
+  withTiming,
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { theme } from "../../constants/theme";
+import {
+  fetchLeaderboard,
+  LeaderboardEntry,
+} from "../../services/puzzleService";
+import { useUserStore } from "../../stores/userStore";
+import { formatCompactNumber } from "../../utils/formatNumber";
 
-// MOCK DATA
-const LEADERBOARD = [
-  {
-    id: "1",
-    name: "Julian",
-    points: 12450,
-    streak: 42,
-    rank: 1,
-    avatarColor: theme.colors.accentGold,
-  },
-  {
-    id: "2",
-    name: "SarahM",
-    points: 11200,
-    streak: 28,
-    rank: 2,
-    avatarColor: "#C0C0C0",
-  }, // Silver
-  {
-    id: "3",
-    name: "CruxPzl",
-    points: 10850,
-    streak: 15,
-    rank: 3,
-    avatarColor: "#CD7F32",
-  }, // Bronze
-  { id: "4", name: "Player492", points: 9400, streak: 8, rank: 4 },
-  { id: "5", name: "WordMaster", points: 8850, streak: 12, rank: 5 },
-  { id: "6", name: "CrossGuy", points: 7200, streak: 5, rank: 6 },
-  { id: "7", name: "EmmaW", points: 6150, streak: 2, rank: 7 },
-  { id: "8", name: "Novice", points: 4000, streak: 1, rank: 8 },
-];
+// ─── Podium Bar ───────────────────────────────────────────────────────
 
-function PodiumBar({ rank, user, height, delay }: any) {
+function PodiumBar({
+  rank,
+  entry,
+  height,
+  delay,
+  isCurrentUser,
+}: {
+  rank: number;
+  entry?: LeaderboardEntry;
+  height: number;
+  delay: number;
+  isCurrentUser: boolean;
+}) {
   const animatedHeight = useSharedValue(0);
+  const animatedOpacity = useSharedValue(0);
 
   useEffect(() => {
     animatedHeight.value = withDelay(
       delay,
-      withSpring(height, { damping: 15 }),
+      withSpring(height, {
+        mass: 1,
+        damping: 18,
+        stiffness: 120,
+        overshootClamping: false,
+      }),
     );
-  }, []);
+    animatedOpacity.value = withDelay(delay, withTiming(1, { duration: 600 }));
+  }, [entry?.userId]); // Re-trigger if the specific user sitting in this rank changes
 
   const barStyle = useAnimatedStyle(() => ({
     height: animatedHeight.value,
+    opacity: animatedOpacity.value,
   }));
 
-  const bgColors: any = {
+  const barColors: Record<number, string> = {
     1: theme.colors.accentGold,
-    2: "#e5e7eb", // Silverish
-    3: "#ca8a04", // Bronzeish
+    2: "#e5e7eb",
+    3: "#ca8a04",
   };
-
-  const barColor = bgColors[rank];
+  const barColor = barColors[rank] || theme.colors.accentGold;
 
   return (
     <View style={styles.podiumColumn}>
       <Animated.View
-        entering={FadeInDown.delay(delay + 300).springify()}
+        entering={FadeInDown.delay(delay + 200)
+          .duration(500)
+          .springify()
+          .mass(0.8)
+          .damping(16)}
         style={styles.podiumAvatarWrap}
       >
-        <View style={styles.podiumAvatar}>
-          <MaterialIcons name="person" size={24} color={barColor} />
+        <View
+          style={[
+            styles.podiumAvatar,
+            isCurrentUser && styles.podiumAvatarHighlight,
+            !entry && { borderColor: "rgba(255,255,255,0.05)" },
+          ]}
+        >
+          <MaterialIcons
+            name="person"
+            size={24}
+            color={entry ? barColor : "rgba(255,255,255,0.2)"}
+          />
         </View>
-        <Text style={styles.podiumName} numberOfLines={1}>
-          {user.name}
+        <Text
+          style={[
+            styles.podiumName,
+            !entry && { color: "rgba(255,255,255,0.3)" },
+          ]}
+          numberOfLines={1}
+        >
+          {entry ? entry.displayName : "---"}
+          {isCurrentUser ? " ★" : ""}
         </Text>
-        <Text style={styles.podiumPoints}>{user.points}</Text>
+        <Text
+          style={[
+            styles.podiumPoints,
+            !entry && { color: "rgba(255,255,255,0.3)" },
+          ]}
+        >
+          {entry ? formatCompactNumber(entry.totalScore) : "---"}
+        </Text>
       </Animated.View>
 
       <Animated.View
-        style={[styles.podiumBar, barStyle, { backgroundColor: barColor }]}
+        style={[
+          styles.podiumBar,
+          barStyle,
+          { backgroundColor: barColor, opacity: entry ? 1 : 0.4 },
+        ]}
       >
-        <Text style={styles.podiumRankText}>{rank}</Text>
+        <Text
+          style={[
+            styles.podiumRankText,
+            !entry && { color: "rgba(0,0,0,0.3)" },
+          ]}
+        >
+          {rank}
+        </Text>
       </Animated.View>
     </View>
   );
 }
 
+// ─── Screen ───────────────────────────────────────────────────────────
+
 export default function LeaderboardScreen() {
-  const topThree = LEADERBOARD.slice(0, 3);
-  const restList = LEADERBOARD.slice(3);
+  const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const currentUserId = useUserStore((s) => s.profile.id);
+
+  const load = useCallback(async (isRefresh = false) => {
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+    setError(null);
+
+    try {
+      const data = await fetchLeaderboard(50);
+      setEntries(data);
+    } catch (err) {
+      setError("Could not load leaderboard. Check connection and try again.");
+      console.warn("[Leaderboard] Fetch failed:", err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const topThree = entries.slice(0, 3);
+  const rest = entries.slice(3);
+
+  // ── Loading state
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Leaderboard</Text>
+          <Text style={styles.subtitle}>Top players globally</Text>
+        </View>
+        <View style={styles.centred}>
+          <ActivityIndicator size="large" color={theme.colors.accentGold} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ── Error state
+  if (error) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Leaderboard</Text>
+        </View>
+        <View style={styles.centred}>
+          <MaterialIcons
+            name="wifi-off"
+            size={48}
+            color={theme.colors.textMuted}
+          />
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={() => load()}>
+            <Text style={styles.retryText}>Try Again</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Empty state is now handled inline within the list rendering
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Leaderboard</Text>
-        <Text style={styles.subtitle}>Top players this week</Text>
+        <Text style={styles.subtitle}>Top players globally</Text>
       </View>
 
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => load(true)}
+            tintColor={theme.colors.accentGold}
+          />
+        }
       >
-        {/* Podium Section (2 - 1 - 3 Order) */}
+        {/* Podium — always show */}
         <View style={styles.podiumSection}>
-          <PodiumBar rank={2} user={topThree[1]} height={120} delay={200} />
-          <PodiumBar rank={1} user={topThree[0]} height={160} delay={0} />
-          <PodiumBar rank={3} user={topThree[2]} height={90} delay={400} />
+          <PodiumBar
+            key={`podium-2-${topThree[1]?.userId || "empty"}`}
+            rank={2}
+            entry={topThree[1]}
+            height={120}
+            delay={200}
+            isCurrentUser={topThree[1]?.userId === currentUserId}
+          />
+          <PodiumBar
+            key={`podium-1-${topThree[0]?.userId || "empty"}`}
+            rank={1}
+            entry={topThree[0]}
+            height={160}
+            delay={0}
+            isCurrentUser={topThree[0]?.userId === currentUserId}
+          />
+          <PodiumBar
+            key={`podium-3-${topThree[2]?.userId || "empty"}`}
+            rank={3}
+            entry={topThree[2]}
+            height={90}
+            delay={400}
+            isCurrentUser={topThree[2]?.userId === currentUserId}
+          />
         </View>
 
-        {/* List Section */}
+        {/* Rest of the list */}
         <View style={styles.listSection}>
-          {restList.map((player, index) => (
-            <Animated.View
-              key={player.id}
-              entering={FadeInDown.delay(600 + index * 100).springify()}
-              style={styles.listRow}
+          {rest.length === 0 && (
+            <View
+              style={{
+                paddingTop: 40,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
             >
-              <View style={styles.listRankBox}>
-                <Text style={styles.listRankText}>{player.rank}</Text>
-              </View>
-              <View style={styles.listAvatar}>
-                <MaterialIcons
-                  name="person"
-                  size={20}
-                  color={theme.colors.textMuted}
-                />
-              </View>
-              <View style={styles.listPlayerInfo}>
-                <Text style={styles.listPlayerName}>{player.name}</Text>
-                <View style={styles.listPlayerMeta}>
-                  <MaterialIcons
-                    name="local-fire-department"
-                    size={12}
-                    color={theme.colors.accentGold}
-                  />
-                  <Text style={styles.listStreakText}>
-                    {player.streak} streak
-                  </Text>
+              <MaterialIcons
+                name="format-list-bulleted"
+                size={32}
+                color="rgba(255,255,255,0.1)"
+                style={{ marginBottom: 12 }}
+              />
+              <Text
+                style={{
+                  fontFamily: theme.typography.body.fontFamily,
+                  color: "rgba(255,255,255,0.3)",
+                }}
+              >
+                {entries.length === 0 ? "No players yet" : "No other players"}
+              </Text>
+            </View>
+          )}
+          {rest.map((player, index) => {
+            const isMe = player.userId === currentUserId;
+            return (
+              <Animated.View
+                key={player.userId}
+                entering={FadeInDown.delay(600 + index * 60)
+                  .duration(400)
+                  .springify()
+                  .damping(18)
+                  .stiffness(150)}
+                style={[styles.listRow, isMe && styles.listRowHighlight]}
+              >
+                <View style={styles.listRankBox}>
+                  <Text style={styles.listRankText}>{player.rank}</Text>
                 </View>
-              </View>
-              <View style={styles.listScoreBox}>
-                <Text style={styles.listScoreText}>{player.points}</Text>
-                <Text style={styles.listScoreLabel}>PTS</Text>
-              </View>
-            </Animated.View>
-          ))}
-          <View style={{ height: 100 }} /> {/* Padding for Floating Tab Bar */}
+                <View style={styles.listAvatar}>
+                  <MaterialIcons
+                    name="person"
+                    size={20}
+                    color={
+                      isMe ? theme.colors.accentGold : theme.colors.textMuted
+                    }
+                  />
+                </View>
+                <View style={styles.listPlayerInfo}>
+                  <Text
+                    style={[
+                      styles.listPlayerName,
+                      isMe && styles.listPlayerNameMe,
+                    ]}
+                  >
+                    {player.displayName}
+                    {isMe ? "  (You)" : ""}
+                  </Text>
+                  <View style={styles.listPlayerMeta}>
+                    <MaterialIcons
+                      name="local-fire-department"
+                      size={12}
+                      color={theme.colors.accentGold}
+                    />
+                    <Text style={styles.listStreakText}>
+                      {player.streak} streak
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.listScoreBox}>
+                  <Text style={styles.listScoreText}>
+                    {formatCompactNumber(player.totalScore)}
+                  </Text>
+                  <Text style={styles.listScoreLabel}>PTS</Text>
+                </View>
+              </Animated.View>
+            );
+          })}
+          <View style={{ height: 100 }} />
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.bgPrimary,
-  },
+  container: { flex: 1, backgroundColor: theme.colors.bgPrimary },
   header: {
     paddingHorizontal: 24,
     paddingTop: 8,
@@ -177,8 +368,37 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.body.fontFamily,
     color: theme.colors.textSecondary,
   },
-  content: {
-    flexGrow: 1,
+  content: { flexGrow: 1 },
+  centred: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 32,
+    gap: 16,
+  },
+  errorText: {
+    fontFamily: theme.typography.body.fontFamily,
+    color: theme.colors.textSecondary,
+    textAlign: "center",
+  },
+  emptyText: {
+    fontFamily: theme.typography.body.fontFamily,
+    color: theme.colors.textSecondary,
+    textAlign: "center",
+    marginTop: 8,
+  },
+  retryBtn: {
+    marginTop: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.accentGold,
+  },
+  retryText: {
+    fontFamily: theme.typography.body.fontFamily,
+    color: theme.colors.accentGold,
+    fontWeight: "bold",
   },
   podiumSection: {
     flexDirection: "row",
@@ -187,17 +407,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     marginTop: 40,
     marginBottom: 40,
-    height: 240, // Fixed height for animation container
+    height: 240,
     gap: 12,
   },
-  podiumColumn: {
-    alignItems: "center",
-    width: "30%",
-  },
-  podiumAvatarWrap: {
-    alignItems: "center",
-    marginBottom: 12,
-  },
+  podiumColumn: { alignItems: "center", width: "30%" },
+  podiumAvatarWrap: { alignItems: "center", marginBottom: 12 },
   podiumAvatar: {
     width: 48,
     height: 48,
@@ -208,6 +422,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 8,
+  },
+  podiumAvatarHighlight: {
+    borderColor: theme.colors.accentGold,
+    borderWidth: 2,
   },
   podiumName: {
     fontFamily: theme.typography.subheading.fontFamily,
@@ -257,10 +475,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.05)",
   },
-  listRankBox: {
-    width: 32,
-    alignItems: "center",
+  listRowHighlight: {
+    borderColor: theme.colors.accentGold,
+    borderWidth: 1,
   },
+  listRankBox: { width: 32, alignItems: "center" },
   listRankText: {
     fontFamily: theme.typography.cellLetter.fontFamily,
     fontSize: 16,
@@ -278,28 +497,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.05)",
   },
-  listPlayerInfo: {
-    flex: 1,
-  },
+  listPlayerInfo: { flex: 1 },
   listPlayerName: {
     fontFamily: theme.typography.heading.fontFamily,
     fontSize: 16,
     color: theme.colors.textPrimary,
     marginBottom: 4,
   },
-  listPlayerMeta: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
+  listPlayerNameMe: { color: theme.colors.accentGold },
+  listPlayerMeta: { flexDirection: "row", alignItems: "center", gap: 4 },
   listStreakText: {
     fontFamily: theme.typography.caption.fontFamily,
     fontSize: 12,
     color: theme.colors.textSecondary,
   },
-  listScoreBox: {
-    alignItems: "flex-end",
-  },
+  listScoreBox: { alignItems: "flex-end" },
   listScoreText: {
     fontFamily: theme.typography.cellLetter.fontFamily,
     fontSize: 16,
