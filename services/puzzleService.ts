@@ -75,25 +75,42 @@ export interface CompletionData {
 }
 
 /**
- * Returns today's local date as YYYY-MM-DD.
- * Uses the device's local timezone intentionally — the generate-ahead buffer
- * on the server ensures puzzles exist for every user's local date.
+ * Returns today's date as YYYY-MM-DD in **UTC**.
+ *
+ * The GitHub Actions cron that generates puzzles always writes puzzle_date
+ * using `new Date().toISOString().split('T')[0]` — which is a UTC date.
+ * The client must query with the same UTC date to match the DB rows correctly.
+ *
+ * Using local device timezone (e.g. IST = UTC+5:30) would cause the app to
+ * query for a date one day ahead of what the server actually stored, making
+ * every puzzle appear missing until the next UTC midnight.
  */
-function getTodayLocal(): string {
+function getTodayUTC(): string {
+  return new Date().toISOString().split("T")[0];
+}
+
+/**
+ * Returns yesterday's date as YYYY-MM-DD in **UTC**.
+ * Used as a graceful fallback when today's UTC puzzles haven't been generated
+ * yet (e.g. the cron job runs at 00:05 UTC and the user opens the app just
+ * after UTC midnight before the job completes).
+ */
+function getYesterdayUTC(): string {
   const d = new Date();
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  const localDate = `${year}-${month}-${day}`;
-  const utcDate = d.toISOString().split("T")[0];
-  return localDate;
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().split("T")[0];
 }
 
 // ─── Puzzle fetching ─────────────────────────────────────────────────
 
 /**
  * Fetches today's Daily Challenge puzzle metadata for the home screen.
- * Returns null if no Daily Challenge exists for today (e.g., cron hasn't run yet).
+ *
+ * Resolution order:
+ *  1. Today UTC with is_daily_challenge = true  (ideal)
+ *  2. Yesterday UTC with is_daily_challenge = true  (cron delay fallback)
+ *  3. Any puzzle from the most recent available date  (when the dedicated
+ *     daily_challenge row was never generated, e.g. due to API rate limits)
  */
 export async function fetchDailyChallenge(
   userId: string = "guest",
@@ -102,26 +119,68 @@ export async function fetchDailyChallenge(
   const cached = puzzleCache.get<PuzzleMeta>(cacheKey);
   if (cached) return cached;
 
-  const today = getTodayLocal();
+  const today = getTodayUTC();
+  const yesterday = getYesterdayUTC();
 
-  const { data, error } = await supabase
-    .from("daily_puzzles")
-    .select(
-      "id, category, difficulty, grid_size, total_words, estimated_time, variant",
-    )
-    .eq("puzzle_date", today)
-    .eq("is_daily_challenge", true)
-    .maybeSingle();
+  // ── Step 1 & 2: Try today then yesterday for a proper daily-challenge row ──
+  let data: any = null;
 
-  if (error || !data) {
+  for (const date of [today, yesterday]) {
+    const { data: row, error } = await supabase
+      .from("daily_puzzles")
+      .select(
+        "id, category, difficulty, grid_size, total_words, estimated_time, variant",
+      )
+      .eq("puzzle_date", date)
+      .eq("is_daily_challenge", true)
+      .maybeSingle();
+
+    if (!error && row) {
+      data = row;
+      break;
+    }
+  }
+
+  // ── Step 3: No dedicated daily-challenge row found. ────────────────────────
+  // The canonical daily challenge format is general/medium/10x10.
+  // Search the most recent 50 rows and pick in priority order:
+  //   general/medium/10x10 → any medium/10x10 → any medium → first available
+  if (!data) {
     console.warn(
-      "[puzzleService] No daily challenge found for today:",
-      error?.message,
+      "[puzzleService] No is_daily_challenge=true row found. "
+      + "Falling back to general/medium/10x10 from most recent available date.",
     );
+
+    const { data: candidates, error: candErr } = await supabase
+      .from("daily_puzzles")
+      .select(
+        "id, category, difficulty, grid_size, total_words, estimated_time, variant, puzzle_date",
+      )
+      .order("puzzle_date", { ascending: false })
+      .limit(50);
+
+    if (!candErr && candidates && candidates.length > 0) {
+      // Exact canonical target first
+      const generalMedium10 = candidates.find(
+        (c: any) => c.category === "general" && c.difficulty === "medium" && c.grid_size === 10,
+      );
+      const anyMedium10 = candidates.find(
+        (c: any) => c.difficulty === "medium" && c.grid_size === 10,
+      );
+      const anyMedium = candidates.find((c: any) => c.difficulty === "medium");
+      data = generalMedium10 ?? anyMedium10 ?? anyMedium ?? candidates[0];
+      console.log(
+        `[puzzleService] Using fallback puzzle: ${data.category}/${data.difficulty}/${data.grid_size}x${data.grid_size} from ${data.puzzle_date}`,
+      );
+    }
+  }
+
+  if (!data) {
+    console.warn("[puzzleService] No puzzles found in DB at all.");
     return null;
   }
 
-  // Check if this specific user has completed it
+  // Check if this specific user has completed the resolved puzzle
   const { data: completion } = await supabase
     .from("puzzle_completions")
     .select("score, accuracy, time_taken")
@@ -168,8 +227,12 @@ export async function getDailyPlayerCount(puzzleId: string): Promise<number> {
 }
 
 /**
- * Fetches all puzzle metadata for a given category today.
+ * Fetches all puzzle metadata for a given category.
  * Returns lightweight cards for the category listing screen — no full puzzle data.
+ *
+ * Strategy: try today (UTC) first, then search back up to 7 days to find the
+ * most recent date that has puzzles for this category. This handles the rotating
+ * schedule where not every category has a puzzle generated every single day.
  *
  * Optionally checks completion status for a given user ID.
  */
@@ -181,31 +244,51 @@ export async function fetchCategoryPuzzles(
   const cached = puzzleCache.get<PuzzleMeta[]>(cacheKey);
   if (cached) return cached;
 
-  const today = getTodayLocal();
+  const today = getTodayUTC();
 
-  // Fetch today's puzzles for this category (metadata only, no puzzle_data)
-  const { data: puzzles, error: puzzleError } = await supabase
+  // Search the last 7 days for this category (rotating schedule means
+  // not every category exists on every date).
+  // Use a single range query ordered by date desc for efficiency.
+  const sevenDaysAgo = (() => {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() - 7);
+    return d.toISOString().split("T")[0];
+  })();
+
+  const { data: allRows, error: queryError } = await supabase
     .from("daily_puzzles")
     .select(
-      "id, category, difficulty, grid_size, variant, total_words, estimated_time",
+      "id, category, difficulty, grid_size, variant, total_words, estimated_time, puzzle_date",
     )
-    .eq("puzzle_date", today)
     .eq("category", category)
     .eq("is_daily_challenge", false)
+    .gte("puzzle_date", sevenDaysAgo)
+    .lte("puzzle_date", today)
+    .order("puzzle_date", { ascending: false })
     .order("difficulty")
     .order("grid_size")
     .order("variant");
 
-  if (puzzleError || !puzzles) {
+  if (queryError || !allRows || allRows.length === 0) {
     console.error(
-      "[puzzleService] Failed to fetch category puzzles:",
-      puzzleError?.message,
+      `[puzzleService] No category puzzles found for ${category} in the last 7 days.`,
+      queryError?.message,
     );
     return [];
   }
 
-  // Fetch user's completions for today's puzzles in this category
-  const puzzleIds = puzzles.map((p) => p.id);
+  // Group rows by puzzle_date and use only the most recent date that has rows.
+  const mostRecentDate = allRows[0].puzzle_date as string;
+  const puzzles = allRows.filter((r: any) => r.puzzle_date === mostRecentDate);
+
+  if (mostRecentDate !== today) {
+    console.warn(
+      `[puzzleService] No ${category} puzzles for today, using ${mostRecentDate} (most recent available).`,
+    );
+  }
+
+  // Fetch user completions for the resolved puzzle set
+  const puzzleIds = puzzles.map((p: any) => p.id);
   const { data: completions } = await supabase
     .from("puzzle_completions")
     .select("puzzle_id, score, accuracy, time_taken")
@@ -219,7 +302,7 @@ export async function fetchCategoryPuzzles(
     ]),
   );
 
-  const result = puzzles.map((p) => {
+  const result = puzzles.map((p: any) => {
     const completion = completionMap.get(p.id);
     return {
       id: p.id,
@@ -238,6 +321,39 @@ export async function fetchCategoryPuzzles(
 
   puzzleCache.set(cacheKey, result);
   return result;
+}
+
+/**
+ * Returns the set of category IDs that have fresh puzzles generated for TODAY.
+ * Used by the home screen to show the "NEW" freshness badge only when today's
+ * puzzles are actually available (not a previous-day fallback).
+ *
+ * Makes a single lightweight Supabase query — no full puzzle data loaded.
+ */
+export async function fetchTodayAvailableCategories(): Promise<Set<string>> {
+  const cacheKey = "today_available_categories";
+  const cached = puzzleCache.get<Set<string>>(cacheKey);
+  if (cached) return cached;
+
+  const today = getTodayUTC();
+
+  const { data, error } = await supabase
+    .from("daily_puzzles")
+    .select("category")
+    .eq("puzzle_date", today)
+    .eq("is_daily_challenge", false);
+
+  if (error || !data) {
+    console.warn(
+      "[puzzleService] Could not determine today's available categories:",
+      error?.message,
+    );
+    return new Set();
+  }
+
+  const categories = new Set(data.map((row) => row.category as string));
+  puzzleCache.set(cacheKey, categories);
+  return categories;
 }
 
 export interface ActivityItem {
@@ -356,7 +472,9 @@ export async function fetchDailyPuzzle(
   variant: number = 1,
   date?: string,
 ): Promise<Puzzle | null> {
-  const targetDate = date || getTodayLocal();
+  // Use the explicitly provided date as-is, or auto-select today with fallback.
+  const targetDate = date || getTodayUTC();
+  const isAutoDate = !date; // Only fall back when the caller didn't pin a specific date
 
   const { data, error } = await supabase
     .from("daily_puzzles")
@@ -369,10 +487,47 @@ export async function fetchDailyPuzzle(
     .maybeSingle();
 
   if (error || !data) {
+    // If the caller pinned an explicit date, don't second-guess it.
+    if (!isAutoDate) {
+      console.warn(
+        `[puzzleService] No daily puzzle found for ${category}/${difficulty}/${gridSize} on ${targetDate}`,
+      );
+      return null;
+    }
+
+    // Auto-date path: gracefully attempt yesterday's puzzle.
     console.warn(
-      `[puzzleService] No daily puzzle found for ${category}/${difficulty}/${gridSize}`,
+      `[puzzleService] No daily puzzle for today (${category}/${difficulty}/${gridSize}), trying yesterday as fallback`,
     );
-    return null;
+
+    const yesterday = getYesterdayUTC();
+    const fallback = await supabase
+      .from("daily_puzzles")
+      .select("id, puzzle_data")
+      .eq("puzzle_date", yesterday)
+      .eq("category", category)
+      .eq("difficulty", difficulty)
+      .eq("grid_size", gridSize)
+      .eq("variant", variant)
+      .maybeSingle();
+
+    if (fallback.error || !fallback.data) {
+      console.warn(
+        `[puzzleService] No puzzle found for yesterday either (${category}/${difficulty}/${gridSize}).`,
+      );
+      return null;
+    }
+
+    const fallbackPuzzleData = fallback.data.puzzle_data;
+    if (!fallbackPuzzleData || !fallbackPuzzleData.words) return null;
+
+    return buildPuzzle(
+      fallbackPuzzleData.words,
+      category,
+      difficulty,
+      gridSize,
+      fallback.data.id,
+    );
   }
 
   const puzzleData = data.puzzle_data;

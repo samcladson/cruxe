@@ -4,7 +4,7 @@ name: Generate Daily Puzzles
 # Generates for today, tomorrow, and day-after-tomorrow (UTC) to cover all timezones.
 # Also available as a manual trigger via workflow_dispatch for specific dates.
 # Runs the script directly in Node.js — no Edge Functions, no timeouts.
-# 
+#
 # NOTE: Currently running the `-free` variant to stay within Gemini 2.5 Flash Free Tier limits (20 RPD).
 # To upgrade to the full 101-puzzle daily suite, swap `generate-daily-puzzles-free.ts` with `generate-daily-puzzles.ts`.
 on:

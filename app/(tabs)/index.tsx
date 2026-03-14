@@ -27,6 +27,7 @@ import {
   ActivityItem,
   fetchDailyChallenge,
   fetchRecentActivity,
+  fetchTodayAvailableCategories,
   getDailyPlayerCount,
   PuzzleMeta,
 } from "../../services/puzzleService";
@@ -66,6 +67,12 @@ export default function HomeScreen() {
   const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([]);
   const [loadingActivity, setLoadingActivity] = useState(true);
 
+  /**
+   * Categories that have fresh puzzles generated for TODAY (not a fallback day).
+   * Used to conditionally show the "NEW" freshness badge on category cards.
+   */
+  const [freshCategories, setFreshCategories] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     async function loadDaily() {
       const challenge = await fetchDailyChallenge(profile.id);
@@ -75,6 +82,12 @@ export default function HomeScreen() {
     }
     loadDaily();
   }, [profile.id]);
+
+  // Determine which categories have genuinely fresh (today's) puzzles available.
+  // This drives the "NEW" badge — if a category is on fallback, the badge is hidden.
+  useEffect(() => {
+    fetchTodayAvailableCategories().then(setFreshCategories);
+  }, []);
 
   useEffect(() => {
     if (!dailyPuzzle) return;
@@ -381,7 +394,10 @@ export default function HomeScreen() {
                       color={cat.color}
                     />
                   </View>
-                  <Text style={styles.newText}>NEW</Text>
+                  {/* Only show the NEW badge when today's puzzles are genuinely available */}
+                  {freshCategories.has(key) && (
+                    <Text style={styles.newText}>NEW</Text>
+                  )}
                 </View>
                 <View>
                   <Text style={styles.catTitle}>{cat.title}</Text>

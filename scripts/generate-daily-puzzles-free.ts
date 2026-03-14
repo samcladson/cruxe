@@ -246,55 +246,54 @@ function buildRotatingManifest(targetDate: string): PuzzleSpec[] {
     "entertainment",
     "sports",
   ];
-  
+
   const possibleGridSizes: GridSize[] = [6, 8, 10, 12];
   const possibleDifficulties: Difficulty[] = ["easy", "medium", "hard", "expert"];
 
-  // 1. One fixed Daily Challenge (always Medium 10x10)
+  // ── 15 rotating category puzzles (3 per category) ────────────────────────
+  // Generated FIRST so they always land in the DB even if the last call fails.
+  categories.forEach((category, i) => {
+    for (let slot = 0; slot < 3; slot++) {
+      const diffIndex = (dayOfYear + i + slot) % possibleDifficulties.length;
+      const gridIndex = (dayOfYear + i * 2 + slot) % possibleGridSizes.length;
+      specs.push({
+        category,
+        difficulty: possibleDifficulties[diffIndex],
+        gridSize: possibleGridSizes[gridIndex],
+        variant: 1,
+        isDailyChallenge: false,
+      });
+    }
+  });
+
+  // ── 3 rotating wildcard puzzles ──────────────────────────────────────────
+  for (let slot = 0; slot < 3; slot++) {
+    const catIndex = (dayOfYear * 7 + slot) % categories.length;
+    const diffIndex = (dayOfYear * 3 + slot) % possibleDifficulties.length;
+    const gridIndex = (dayOfYear * 5 + slot) % possibleGridSizes.length;
+    specs.push({
+      category: categories[catIndex],
+      difficulty: possibleDifficulties[diffIndex],
+      gridSize: possibleGridSizes[gridIndex],
+      variant: 2,
+      isDailyChallenge: false,
+    });
+  }
+
+  // ── 1 dedicated Daily Challenge — always LAST ───────────────────────────
+  // Placed at the end of the queue so all 18 category puzzles are safely
+  // generated before this call is made. Stored with is_daily_challenge=true
+  // directly in the upsert — no separate UPDATE/promotion step required.
+  // Fixed format: general / medium / 10×10 / variant 1.
   specs.push({
-    category: "daily_challenge",
+    category: "general",
     difficulty: "medium",
     gridSize: 10,
     variant: 1,
     isDailyChallenge: true,
   });
 
-  // 2. Iterate through core categories and generate exactly 3 puzzles each (= 15 puzzles)
-  // By shifting the indexes using dayOfYear, the exact combo (e.g. History + Hard + 12x12) 
-  // sweeps across a 4-5 day cycle naturally naturally.
-  categories.forEach((category, i) => {
-    // Generate 3 puzzles for each category to ensure difficulty variety on the same day
-    for (let slot = 0; slot < 3; slot++) {
-      // Create offset math so that each category gets a distinct spread of grids/difficulties
-      const diffIndex = (dayOfYear + i + slot) % possibleDifficulties.length;
-      const gridIndex = (dayOfYear + i * 2 + slot) % possibleGridSizes.length;
-      
-      specs.push({
-        category,
-        difficulty: possibleDifficulties[diffIndex],
-        gridSize: possibleGridSizes[gridIndex],
-        variant: 1, // Only 1 variant per combo per day
-        isDailyChallenge: false,
-      });
-    }
-  });
-
-  // 3. Three rotating 'wildcard' puzzles to round up to exactly 19 puzzles
-  for (let slot = 0; slot < 3; slot++) {
-      const catIndex = (dayOfYear * 7 + slot) % categories.length;
-      const diffIndex = (dayOfYear * 3 + slot) % possibleDifficulties.length;
-      const gridIndex = (dayOfYear * 5 + slot) % possibleGridSizes.length;
-
-      specs.push({
-        category: categories[catIndex],
-        difficulty: possibleDifficulties[diffIndex],
-        gridSize: possibleGridSizes[gridIndex],
-        variant: 2, // Variant 2 ensures no unique conflict with the main loop
-        isDailyChallenge: false,
-      });
-  }
-
-  return specs; // Exactly 19 items
+  return specs; // 19 total: 18 category + 1 daily challenge (under 20 RPD free-tier limit)
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -342,7 +341,7 @@ async function main() {
 
   // Build manifest
   const manifest = buildRotatingManifest(targetDate);
-  console.log(`📋 Manifest: ${manifest.length} curated rotating puzzles\n`);
+  console.log(`📋 Manifest: ${manifest.length} puzzles (18 category + 1 daily challenge)\n`);
 
   // Check existing puzzles
   const { data: existing, error: fetchError } = await supabase
