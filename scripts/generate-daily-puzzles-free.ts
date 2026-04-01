@@ -177,6 +177,27 @@ Return a JSON array of exactly ${wordCount} objects. No markdown, no extra text.
       generationConfig: {
         temperature: 0.95,
         responseMimeType: "application/json",
+        responseSchema: {
+          type: "ARRAY",
+          items: {
+            type: "OBJECT",
+            properties: {
+              word: {
+                type: "STRING",
+                description: "The crossword answer word. UPPERCASE, A-Z only, no spaces or hyphens."
+              },
+              clue: {
+                type: "STRING",
+                description: "A clever, concise crossword clue. Max 65 characters."
+              },
+              isHint: {
+                type: "BOOLEAN",
+                description: "True for exactly 2-3 short, common-letter words chosen to help players get a grid foothold."
+              }
+            },
+            required: ["word", "clue", "isHint"]
+          }
+        }
       },
     }),
   });
@@ -192,28 +213,45 @@ Return a JSON array of exactly ${wordCount} objects. No markdown, no extra text.
   const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!responseText) throw new Error("Gemini returned empty response");
 
-  // Robustly extract JSON objects from response using regex.
-  // Gemini REST (without responseSchema enforcement) can return malformed arrays.
-  // This picks out every well-formed object matching our expected schema.
-  const extractedWords: GeneratedClue[] = [];
-  const objectRegex =
-    /\{[^{}]*"word"\s*:\s*"([^"]+)"[^{}]*"clue"\s*:\s*"([^"]+)"[^{}]*"isHint"\s*:\s*(true|false)[^{}]*\}/g;
-
-  let match;
-  while ((match = objectRegex.exec(responseText)) !== null) {
-    const word = match[1].toUpperCase().replace(/[^A-Z]/g, "");
-    if (word.length >= 3 && word.length <= maxLength) {
-      extractedWords.push({
-        word,
+  let parsedArray: any[] = [];
+  try {
+    // Attempt standard JSON parsing first, which works 99% of the time with responseSchema
+    parsedArray = JSON.parse(responseText);
+    if (!Array.isArray(parsedArray)) {
+      parsedArray = [];
+    }
+  } catch (err) {
+    // Fallback: Robustly extract JSON objects from raw response using regex if JSON is malformed
+    const objectRegex = /\{[^{}]*"(?:word|answer)"\s*:\s*"([^"]+)"[^{}]*"clue"\s*:\s*"([^"]+)"(?:[^{}]*"isHint"\s*:\s*(true|false))?[^{}]*\}/g;
+    let match;
+    while ((match = objectRegex.exec(responseText)) !== null) {
+      parsedArray.push({
+        word: match[1],
         clue: match[2],
         isHint: match[3] === "true",
       });
     }
   }
 
+  const extractedWords: GeneratedClue[] = [];
+  for (const item of parsedArray) {
+    // Handle cases where Gemini uses "answer" instead of "word" despite schema
+    const rawWord = item.word || item.answer;
+    if (!rawWord || typeof rawWord !== "string") continue;
+    
+    const word = rawWord.toUpperCase().replace(/[^A-Z]/g, "");
+    if (word.length >= 3 && word.length <= maxLength && typeof item.clue === "string") {
+      extractedWords.push({
+        word,
+        clue: item.clue,
+        isHint: Boolean(item.isHint),
+      });
+    }
+  }
+
   if (extractedWords.length === 0) {
     console.warn(
-      `[JSON Parse Error] Raw text:\n${responseText.substring(0, 200)}...`,
+      `[JSON Parse Error] Raw text:\n${responseText.substring(0, 400)}...`,
     );
     throw new Error(
       "Could not extract any valid word objects from Gemini response",

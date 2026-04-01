@@ -1,26 +1,94 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import React from "react";
+import * as Haptics from "expo-haptics";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { PurchasesOffering, PurchasesPackage } from "react-native-purchases";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { theme } from "../../constants/theme";
+import { fetchCurrentOffering, purchasePackage, restorePurchases } from "../../services/revenueCatService";
+import { useSettingsStore } from "../../stores/settingsStore";
 import { useUserStore } from "../../stores/userStore";
 
-const PACKS = [
-  { id: 1, title: "STARTER PACK", coins: 500, price: "$1.99", popular: false },
-  { id: 2, title: "PRO PACK", coins: 1200, price: "$4.99", popular: true },
-  { id: 3, title: "ELITE PACK", coins: 3000, price: "$9.99", popular: false },
-  { id: 4, title: "EXPERT PACK", coins: 7500, price: "$19.99", popular: false },
-];
+// Mock packs removed. Packages are now fetched dynamically from RevenueCat.
+// We expect package identifiers in RevenueCat to end with the coin amount, e.g., "cruxe_starter_500"
 
 export default function StoreScreen() {
   const coins = useUserStore((state) => state.profile.coins);
+  const addCoins = useUserStore((state) => state.addCoins);
+  const hapticsEnabled = useSettingsStore((state) => state.hapticsEnabled);
+
+  const [offering, setOffering] = useState<PurchasesOffering | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [purchasing, setPurchasing] = useState(false);
+
+  useEffect(() => {
+    async function loadOfferings() {
+      const current = await fetchCurrentOffering();
+      setOffering(current);
+      setLoading(false);
+    }
+    loadOfferings();
+  }, []);
+
+  const triggerHaptic = () => {
+    if (hapticsEnabled) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  };
+
+  /**
+   * Helper to extract the coin integer from the RevenueCat package identifier.
+   * Assumes your Product IDs are structured like `com.cruxe.coins.500` or `starter_500`.
+   */
+  const extractCoinsFromId = (identifier: string): number => {
+    const match = identifier.match(/\d+$/);
+    return match ? parseInt(match[0], 10) : 0;
+  };
+
+  const handlePurchase = async (pkg: PurchasesPackage) => {
+    if (purchasing) return;
+    triggerHaptic();
+    setPurchasing(true);
+
+    const { error, userCancelled } = await purchasePackage(pkg);
+    setPurchasing(false);
+
+    if (userCancelled) return;
+
+    if (error) {
+      Alert.alert("Purchase Failed", error.message);
+      return;
+    }
+
+    // Success! Grant coins based on the product ID pattern
+    const coinAmount = extractCoinsFromId(pkg.product.identifier);
+    if (coinAmount > 0) {
+      addCoins(coinAmount);
+      if (hapticsEnabled) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Purchase Successful!", `You received ${coinAmount.toLocaleString()} coins.`);
+    } else {
+      Alert.alert("Purchase Successful!", "Your coins have been credited.");
+    }
+  };
+
+  const handleRestore = async () => {
+    triggerHaptic();
+    const { error } = await restorePurchases();
+    if (error) {
+      Alert.alert("Restore Failed", error.message);
+    } else {
+      Alert.alert("Purchases Restored", "Your previous purchases have been synced.");
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -61,53 +129,68 @@ export default function StoreScreen() {
           <Text style={styles.sectionTitle}>COIN PACKS</Text>
         </View>
 
-        <View style={styles.list}>
-          {PACKS.map((pack) => (
-            <TouchableOpacity
-              key={pack.id}
-              style={[styles.packRow, pack.popular && styles.popularRow]}
-              activeOpacity={0.8}
-            >
-              {pack.popular && (
-                <View style={styles.popularBadge}>
-                  <Text style={styles.popularBadgeText}>MOST POPULAR</Text>
-                </View>
-              )}
+        {loading ? (
+          <ActivityIndicator size="large" color={theme.colors.accentGold} style={{ marginTop: 40 }} />
+        ) : offering && offering.availablePackages.length > 0 ? (
+          <View style={styles.grid}>
+            {offering.availablePackages.map((pkg) => {
+              // Extract data from the RevenueCat package
+              const coinAmount = extractCoinsFromId(pkg.product.identifier);
+              // Hardcode 'popular' logic for the demo, or derive from package metadata later
+              const isPopular = pkg.identifier === "$rc_lifetime" || pkg.identifier.includes("pro");
 
-              <View style={styles.rowLeft}>
-                <View style={styles.iconContainer}>
-                  <MaterialIcons
-                    name="monetization-on"
-                    size={28}
-                    color={theme.colors.accentGold}
-                  />
-                </View>
-                <View style={styles.textContainer}>
-                  <Text style={styles.packTitle}>{pack.title}</Text>
-                  <Text style={styles.packCoins}>
-                    {pack.coins.toLocaleString()}
-                  </Text>
-                </View>
-              </View>
-
-              <View
-                style={[
-                  styles.buyButton,
-                  pack.popular && styles.buyButtonPopular,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.buyButtonText,
-                    pack.popular && styles.buyButtonTextPopular,
-                  ]}
+              return (
+                <TouchableOpacity
+                  key={pkg.identifier}
+                  style={[styles.packCard, isPopular && styles.popularCard]}
+                  activeOpacity={0.8}
+                  onPress={() => handlePurchase(pkg)}
+                  disabled={purchasing}
                 >
-                  {pack.price}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
+                  {isPopular && (
+                    <View style={styles.popularBadge}>
+                      <Text style={styles.popularBadgeText}>POPULAR</Text>
+                    </View>
+                  )}
+
+                  <View style={styles.cardIconWrap}>
+                    <MaterialIcons
+                      name="monetization-on"
+                      size={28}
+                      color={theme.colors.accentGold}
+                    />
+                  </View>
+
+                  {/* RevenueCat product titles usually include the app name, e.g., "500 Coins (Cruxe)". Clean it up. */}
+                  <Text style={styles.packTitle} numberOfLines={1}>
+                    {pkg.product.title.toUpperCase().replace(/\s*\(.*\)/, "")}
+                  </Text>
+                  
+                  <Text style={styles.packCoins}>
+                    {coinAmount > 0 ? coinAmount.toLocaleString() : "---"}
+                  </Text>
+
+                  <View style={[styles.buyButton, isPopular && styles.buyButtonPopular]}>
+                    <Text style={[styles.buyButtonText, isPopular && styles.buyButtonTextPopular]}>
+                      {pkg.product.priceString}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ) : (
+          <View style={{ alignItems: "center", marginTop: 40 }}>
+            <MaterialIcons name="storefront" size={48} color="rgba(255,255,255,0.1)" />
+            <Text style={{ color: theme.colors.textMuted, marginTop: 16, textAlign: "center" }}>
+              Store is currently unavailable.{"\n"}Check your connection or API keys.
+            </Text>
+          </View>
+        )}
+
+        <TouchableOpacity style={styles.restoreButton} onPress={handleRestore}>
+          <Text style={styles.restoreText}>RESTORE PURCHASES</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -120,11 +203,11 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 24,
-    paddingBottom: 40,
+    paddingBottom: 20,
     paddingTop: 16,
   },
   balanceWrapper: {
-    marginBottom: 40,
+    marginBottom: 32,
   },
   balanceGlow: {
     position: "absolute",
@@ -140,7 +223,7 @@ const styles = StyleSheet.create({
   balanceCard: {
     backgroundColor: theme.colors.bgSecondary,
     borderRadius: 20,
-    padding: 32,
+    padding: 24,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
@@ -149,79 +232,73 @@ const styles = StyleSheet.create({
   },
   balanceAmount: {
     fontFamily: theme.typography.display.fontFamily,
-    fontSize: 48,
+    fontSize: 40,
     color: theme.colors.textPrimary,
   },
   balanceLabel: {
     fontFamily: theme.typography.cellLetter.fontFamily,
-    fontSize: 12,
+    fontSize: 10,
     color: theme.colors.accentGold,
     fontWeight: "bold",
     letterSpacing: 2,
   },
   sectionHeader: {
-    marginBottom: 20,
+    marginBottom: 16,
   },
   sectionTitle: {
     fontFamily: theme.typography.heading.fontFamily,
-    fontSize: 18,
+    fontSize: 16,
     color: theme.colors.textPrimary,
     letterSpacing: 1,
   },
-  list: {
-    gap: 16,
-  },
-  packRow: {
+  grid: {
     flexDirection: "row",
-    alignItems: "center",
+    flexWrap: "wrap",
     justifyContent: "space-between",
+  },
+  packCard: {
+    width: "48%",
     backgroundColor: theme.colors.bgSecondary,
     borderRadius: 16,
     padding: 16,
+    alignItems: "center",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.05)",
+    marginBottom: 12,
   },
-  popularRow: {
+  popularCard: {
     borderColor: theme.colors.accentGold,
     ...theme.shadows.goldGlow,
-    marginTop: 12, // Extra space for the top badge
+    marginTop: 8,
   },
   popularBadge: {
     position: "absolute",
-    top: -12,
-    left: 24,
+    top: -10,
     backgroundColor: theme.colors.accentGold,
-    paddingHorizontal: 16,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 10,
     zIndex: 10,
   },
   popularBadgeText: {
     fontFamily: theme.typography.cellLetter.fontFamily,
-    fontSize: 10,
+    fontSize: 8,
     color: "#000",
     fontWeight: "bold",
     letterSpacing: 1,
   },
-  rowLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
-  },
-  iconContainer: {
-    width: 48,
-    height: 48,
+  cardIconWrap: {
+    width: 44,
+    height: 44,
     borderRadius: 12,
     backgroundColor: "rgba(238, 205, 43, 0.1)",
     alignItems: "center",
     justifyContent: "center",
-  },
-  textContainer: {
-    justifyContent: "center",
+    marginBottom: 10,
   },
   packTitle: {
     fontFamily: theme.typography.cellLetter.fontFamily,
-    fontSize: 12,
+    fontSize: 9,
     color: theme.colors.textSecondary,
     fontWeight: "bold",
     letterSpacing: 1,
@@ -231,26 +308,39 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.heading.fontFamily,
     fontSize: 20,
     color: theme.colors.textPrimary,
+    marginBottom: 12,
   },
   buyButton: {
     backgroundColor: "rgba(255,255,255,0.08)",
-    paddingVertical: 10,
+    paddingVertical: 8,
     paddingHorizontal: 20,
     borderRadius: 100,
     alignItems: "center",
-    minWidth: 80,
+    width: "100%",
   },
   buyButtonPopular: {
     backgroundColor: theme.colors.accentGold,
   },
   buyButtonText: {
     fontFamily: theme.typography.cellLetter.fontFamily,
-    fontSize: 14,
+    fontSize: 13,
     color: theme.colors.textPrimary,
     fontWeight: "bold",
     letterSpacing: 1,
   },
   buyButtonTextPopular: {
     color: "#000",
+  },
+  restoreButton: {
+    marginTop: 32,
+    alignItems: "center",
+    paddingVertical: 12,
+  },
+  restoreText: {
+    fontFamily: theme.typography.cellLetter.fontFamily,
+    fontSize: 12,
+    color: theme.colors.textMuted,
+    textDecorationLine: "underline",
+    letterSpacing: 2,
   },
 });

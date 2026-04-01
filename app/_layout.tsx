@@ -16,12 +16,9 @@ import {
   Manrope_700Bold,
 } from "@expo-google-fonts/manrope";
 import { AppState, AppStateStatus } from "react-native";
-import {
-  ensureUserProfile,
-  initAuth,
-  onAuthStateChange,
-} from "../services/authService";
+import { ensureUserProfile, initAuth, onAuthStateChange } from "../services/authService";
 import { drainPendingCompletions } from "../services/offlineSyncService";
+import { initRevenueCat, loginToRevenueCat } from "../services/revenueCatService";
 import { useUserStore } from "../stores/userStore";
 
 export {
@@ -82,11 +79,14 @@ function RootLayoutNav() {
     let unsubscribe: (() => void) | undefined;
 
     const bootstrap = async () => {
+      await initRevenueCat();
+
       const authState = await initAuth();
       const userId = authState.user?.id;
 
       if (userId) {
         setUserId(userId);
+        await loginToRevenueCat(userId);
         await ensureUserProfile(userId);
         await syncFromSupabase(userId);
         console.log("[Layout] Auth bootstrap complete for user:", userId);
@@ -98,6 +98,7 @@ function RootLayoutNav() {
       unsubscribe = onAuthStateChange(async (user) => {
         if (user?.id && user.id !== useUserStore.getState().profile.id) {
           setUserId(user.id);
+          await loginToRevenueCat(user.id);
           await syncFromSupabase(user.id);
         }
       });
@@ -157,6 +158,41 @@ function RootLayoutNav() {
         <Stack>
           <Stack.Screen name="(auth)" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="collection/index"
+            options={{
+              headerShown: true,
+              headerTitle: "Today's Collection",
+              headerStyle: { backgroundColor: "#1a1810" },
+              headerTintColor: "#fff",
+              headerTitleStyle: { fontFamily: "Manrope_600SemiBold" },
+              headerBackTitle: "Home",
+            }}
+          />
+          <Stack.Screen
+            name="category/[id]"
+            options={{
+              headerShown: true,
+              headerTitle: "",
+              headerTransparent: true,
+              headerTintColor: "#fff",
+              headerBackTitle: "Home",
+            }}
+          />
+          <Stack.Screen
+            name="legal/privacy"
+            options={{
+              headerShown: false,
+              presentation: "modal",
+            }}
+          />
+          <Stack.Screen
+            name="legal/terms"
+            options={{
+              headerShown: false,
+              presentation: "modal",
+            }}
+          />
           <Stack.Screen
             name="game/generate"
             options={{ headerShown: false, animation: "fade" }}

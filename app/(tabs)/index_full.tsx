@@ -25,10 +25,9 @@ import { CATEGORIES } from "../../constants/categories";
 import { theme } from "../../constants/theme";
 import {
   ActivityItem,
-  CollectionSummary,
   fetchDailyChallenge,
   fetchRecentActivity,
-  fetchTodayCollectionSummary,
+  fetchTodayAvailableCategories,
   getDailyPlayerCount,
   PuzzleMeta,
 } from "../../services/puzzleService";
@@ -68,8 +67,11 @@ export default function HomeScreen() {
   const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([]);
   const [loadingActivity, setLoadingActivity] = useState(true);
 
-  const [collectionSummary, setCollectionSummary] =
-    useState<CollectionSummary | null>(null);
+  /**
+   * Categories that have fresh puzzles generated for TODAY (not a fallback day).
+   * Used to conditionally show the "NEW" freshness badge on category cards.
+   */
+  const [freshCategories, setFreshCategories] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     async function loadDaily() {
@@ -81,8 +83,10 @@ export default function HomeScreen() {
     loadDaily();
   }, [profile.id]);
 
+  // Determine which categories have genuinely fresh (today's) puzzles available.
+  // This drives the "NEW" badge — if a category is on fallback, the badge is hidden.
   useEffect(() => {
-    fetchTodayCollectionSummary().then(setCollectionSummary);
+    fetchTodayAvailableCategories().then(setFreshCategories);
   }, []);
 
   useEffect(() => {
@@ -360,32 +364,47 @@ export default function HomeScreen() {
           </View>
         </TouchableOpacity>
 
-        {/* Minimalist Today's Collection Section */}
+        {/* Categories Section */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Today's Collection</Text>
+          <Text style={styles.sectionTitle}>Your Categories</Text>
+          <TouchableOpacity onPress={() => setIsCategoriesModalVisible(true)}>
+            <Text style={styles.sectionLink}>VIEW ALL</Text>
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.minimalistCollection}>
-          <Text style={styles.collectionText}>
-            <Text style={styles.boldText}>{collectionSummary?.totalPuzzles || "19"} puzzles</Text> across{" "}
-            <Text style={styles.boldText}>
-              {collectionSummary?.categories.length || "5"} categories
-            </Text>{" "}
-            are curated for you to solve.
-          </Text>
-
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => router.push("/collection" as any)}
-            style={styles.minimalistCTA}
-          >
-            <Text style={styles.minimalistCTAText}>EXPLORE COLLECTION</Text>
-            <MaterialIcons
-              name="arrow-forward"
-              size={18}
-              color={theme.colors.bgPrimary}
-            />
-          </TouchableOpacity>
+        <View style={styles.grid}>
+          {Object.entries(CATEGORIES)
+            .slice(0, 4)
+            .map(([key, cat]) => (
+              <TouchableOpacity
+                key={key}
+                style={styles.categoryCard}
+                onPress={() => router.push(`/category/${key}` as any)}
+              >
+                <View style={styles.catTop}>
+                  <View
+                    style={[
+                      styles.iconWrap,
+                      { backgroundColor: cat.color + "20" },
+                    ]}
+                  >
+                    <MaterialIcons
+                      name={cat.icon as any}
+                      size={24}
+                      color={cat.color}
+                    />
+                  </View>
+                  {/* Only show the NEW badge when today's puzzles are genuinely available */}
+                  {freshCategories.has(key) && (
+                    <Text style={styles.newText}>NEW</Text>
+                  )}
+                </View>
+                <View>
+                  <Text style={styles.catTitle}>{cat.title}</Text>
+                  <Text style={styles.catDesc}>{cat.description}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
         </View>
 
         {/* Recent Activity Section */}
@@ -473,7 +492,69 @@ export default function HomeScreen() {
         </View>
       </ScrollView>
 
-      {/* Categories modal removed in V1 to focus strictly on Daily Edition */}
+      {/* Categories View All Modal */}
+      <Modal
+        visible={isCategoriesModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setIsCategoriesModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>All Categories</Text>
+            <TouchableOpacity
+              onPress={() => setIsCategoriesModalVisible(false)}
+            >
+              <MaterialIcons
+                name="close"
+                size={24}
+                color={theme.colors.textPrimary}
+              />
+            </TouchableOpacity>
+          </View>
+          <ScrollView
+            contentContainerStyle={styles.modalContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.grid}>
+              {Object.entries(CATEGORIES).map(([key, cat]) => (
+                <TouchableOpacity
+                  key={key}
+                  style={styles.categoryCard}
+                  onPress={() => {
+                    setIsCategoriesModalVisible(false);
+                    // Slight delay to allow modal to close before routing
+                    setTimeout(
+                      () => router.push(`/category/${key}` as any),
+                      150,
+                    );
+                  }}
+                >
+                  <View style={styles.catTop}>
+                    <View
+                      style={[
+                        styles.iconWrap,
+                        { backgroundColor: cat.color + "20" },
+                      ]}
+                    >
+                      <MaterialIcons
+                        name={cat.icon as any}
+                        size={24}
+                        color={cat.color}
+                      />
+                    </View>
+                  </View>
+                  <View>
+                    <Text style={styles.catTitle}>{cat.title}</Text>
+                    <Text style={styles.catDesc}>{cat.description}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={{ height: 40 }} />
+          </ScrollView>
+        </View>
+      </Modal>
 
       {/* Activity View All Modal */}
       <Modal
@@ -809,40 +890,10 @@ const styles = StyleSheet.create({
     color: theme.colors.textPrimary,
     marginBottom: 2,
   },
-  minimalistCollection: {
-    backgroundColor: theme.colors.bgSecondary,
-    borderRadius: 20,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.05)",
-  },
-  collectionText: {
-    fontFamily: theme.typography.body.fontFamily,
-    fontSize: 18,
-    color: "#fff",
-    lineHeight: 28,
-    marginBottom: 24,
-  },
-  boldText: {
-    fontFamily: theme.typography.heading.fontFamily,
-    color: theme.colors.accentGold,
-    fontWeight: "bold",
-  },
-  minimalistCTA: {
-    backgroundColor: theme.colors.accentGold,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 14,
-    borderRadius: 12,
-    gap: 8,
-  },
-  minimalistCTAText: {
-    fontFamily: theme.typography.cellLetter.fontFamily,
-    fontSize: 14,
-    color: theme.colors.bgPrimary,
-    fontWeight: "bold",
-    letterSpacing: 1,
+  catDesc: {
+    fontFamily: theme.typography.caption.fontFamily,
+    fontSize: 12,
+    color: theme.colors.textMuted,
   },
   activityList: {
     gap: 12,

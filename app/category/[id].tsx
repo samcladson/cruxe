@@ -23,12 +23,6 @@ export default function CategoryScreen() {
   const [puzzles, setPuzzles] = useState<PuzzleMeta[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Filter state
-  const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty>(
-    Difficulty.EASY,
-  );
-  const [selectedSize, setSelectedSize] = useState<string>("6x6");
-
   const userProfile = useUserStore((state) => state.profile);
   const spendCoins = useUserStore((state) => state.spendCoins);
 
@@ -50,16 +44,7 @@ export default function CategoryScreen() {
     // Only fetch once when the category or user ID actually changes
   }, [id, userProfile.id]);
 
-  const filteredPuzzles = puzzles.filter((p) => {
-    if (
-      selectedDifficulty &&
-      p.difficulty.toLowerCase() !== selectedDifficulty.toLowerCase()
-    )
-      return false;
-    if (selectedSize && p.gridSize !== parseInt(selectedSize.split("x")[0]))
-      return false;
-    return true;
-  });
+  const filteredPuzzles = puzzles;
 
   if (!category) {
     return (
@@ -112,85 +97,7 @@ export default function CategoryScreen() {
           </View>
         </View>
 
-        {/* Filters Section */}
-        <View style={styles.filtersSection}>
-          {/* Difficulty Pills */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.difficultyScroll}
-          >
-            {difficulties.map((diff) => {
-              const isActive =
-                selectedDifficulty.toLowerCase() === diff.toLowerCase();
-              return (
-                <TouchableOpacity
-                  key={diff}
-                  style={[
-                    styles.difficultyPill,
-                    isActive && styles.difficultyPillActive,
-                  ]}
-                  onPress={() =>
-                    setSelectedDifficulty(diff.toLowerCase() as Difficulty)
-                  }
-                >
-                  <Text
-                    style={[
-                      styles.difficultyText,
-                      isActive && styles.difficultyTextActive,
-                    ]}
-                  >
-                    {diff}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-
-          {/* Grid Sizes */}
-          <View style={styles.sizeContainer}>
-            {gridSizes.map((size) => {
-              const isActive = selectedSize === size;
-              return (
-                <TouchableOpacity
-                  key={size}
-                  style={[styles.sizeBtn, isActive && styles.sizeBtnActive]}
-                  onPress={() => setSelectedSize(size)}
-                >
-                  <Text
-                    style={[styles.sizeText, isActive && styles.sizeTextActive]}
-                  >
-                    {size}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* Global Play Button */}
-        <View style={styles.playActionSection}>
-          <TouchableOpacity
-            style={[
-              styles.globalPlayBtn,
-              (!selectedDifficulty || !selectedSize) &&
-                styles.globalPlayBtnDisabled,
-            ]}
-            disabled={!selectedDifficulty || !selectedSize}
-            onPress={() => {
-              router.push({
-                pathname: "/game/generate",
-                params: {
-                  category: id,
-                  difficulty: selectedDifficulty?.toLowerCase(),
-                  size: selectedSize ? parseInt(selectedSize.split("x")[0]) : 8,
-                },
-              });
-            }}
-          >
-            <Text style={[styles.globalPlayBtnText]}>GENERATE & PLAY</Text>
-          </TouchableOpacity>
-        </View>
+        {/* Filters Section and Global Play Button removed in V1 to focus on curated list */}
 
         {/* Puzzle List */}
         <View style={styles.puzzleList}>
@@ -208,18 +115,8 @@ export default function CategoryScreen() {
                 color="rgba(255,255,255,0.1)"
               />
               <Text style={{ color: theme.colors.textMuted, marginTop: 16 }}>
-                No puzzles match these filters
+                No puzzles available for today yet.
               </Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setSelectedDifficulty(Difficulty.EASY);
-                  setSelectedSize("6x6");
-                }}
-              >
-                <Text style={{ color: theme.colors.accentGold, marginTop: 12 }}>
-                  Return to Defaults
-                </Text>
-              </TouchableOpacity>
             </View>
           ) : (
             filteredPuzzles.map((puzzle) => (

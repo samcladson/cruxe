@@ -1,16 +1,60 @@
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import React from "react";
-import { ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import React, { useState } from "react";
+import { 
+  Alert,
+  Platform,
+  ScrollView, 
+  StyleSheet, 
+  Switch, 
+  Text, 
+  TouchableOpacity,
+  View,
+  ActivityIndicator
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { router } from "expo-router";
 import { CATEGORIES } from "../../constants/categories";
 import { theme } from "../../constants/theme"; // Keep theme imported as it's used elsewhere
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useUserStore } from "../../stores/userStore";
 import { formatCompactNumber } from "../../utils/formatNumber";
+import { linkAppleAccount, linkGoogleAccount } from "../../services/authService";
+import * as Haptics from "expo-haptics";
 
 export default function ProfileScreen() {
   const profile = useUserStore((state) => state.profile);
   const settings = useSettingsStore();
+  const [isLinking, setIsLinking] = useState(false);
+
+  const triggerHaptic = () => {
+    if (settings.hapticsEnabled) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  };
+
+  const handleAppleLink = async () => {
+    triggerHaptic();
+    setIsLinking(true);
+    const { error, user } = await linkAppleAccount();
+    setIsLinking(false);
+    if (error) {
+      Alert.alert("Link Failed", error.message);
+    } else if (user) {
+      Alert.alert("Success", "Your account is now securely linked to Apple!");
+    }
+  };
+
+  const handleGoogleLink = async () => {
+    triggerHaptic();
+    setIsLinking(true);
+    const { error, user } = await linkGoogleAccount();
+    setIsLinking(false);
+    if (error) {
+      Alert.alert("Link Failed", error.message);
+    } else if (user) {
+      Alert.alert("Success", "Your account is now securely linked to Google!");
+    }
+  };
 
   const formatCategoryTitle = (catKey: string) => {
     if (catKey === "daily_challenge") return "Daily Challenge";
@@ -26,11 +70,11 @@ export default function ProfileScreen() {
         <View style={styles.avatarGlow}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>
-              {profile.displayName.charAt(0)}
+              {(profile?.displayName || "Player").charAt(0)}
             </Text>
           </View>
         </View>
-        <Text style={styles.name}>{profile.displayName}</Text>
+        <Text style={styles.name}>{profile?.displayName || "Player"}</Text>
         <View style={styles.badgePill}>
           <MaterialIcons
             name="stars"
@@ -58,7 +102,7 @@ export default function ProfileScreen() {
                 size={24}
                 color="#F59E0B"
               />
-              <Text style={styles.heroStatValue}>{profile.currentStreak}</Text>
+              <Text style={styles.heroStatValue}>{profile?.currentStreak || 0}</Text>
               <Text style={styles.heroStatLabel}>STREAK</Text>
             </View>
             <View style={styles.statDivider} />
@@ -81,7 +125,7 @@ export default function ProfileScreen() {
                 color={theme.colors.accentGreen}
               />
               <Text style={styles.heroStatValue}>
-                {profile.totalPuzzlesSolved}
+                {profile?.totalPuzzlesSolved || 0}
               </Text>
               <Text style={styles.heroStatLabel}>SOLVED</Text>
             </View>
@@ -97,7 +141,7 @@ export default function ProfileScreen() {
           Category Mastery
         </Text>
         <View style={styles.categoryGrid}>
-          {Object.entries(profile.categoryStats).map(([cat, stats]) => (
+          {Object.entries(profile?.categoryStats || {}).map(([cat, stats]) => (
             <View key={cat} style={styles.categoryBox}>
               <View style={styles.catIconWrap}>
                 <MaterialIcons
@@ -117,14 +161,58 @@ export default function ProfileScreen() {
               </View>
             </View>
           ))}
-          {Object.keys(profile.categoryStats).length === 0 && (
+          {Object.keys(profile?.categoryStats || {}).length === 0 && (
             <Text style={styles.emptyText}>
               Complete puzzles to unlock stats.
             </Text>
           )}
         </View>
 
-        {/* Settings Section */}
+        {/* Account Settings */}
+        <Text
+          style={[
+            styles.sectionTitle,
+            { marginTop: 32, marginBottom: 16, paddingHorizontal: 4 },
+          ]}
+        >
+          Account & Sync
+        </Text>
+        <View style={styles.settingsGroup}>
+          {Platform.OS === "ios" && (
+            <>
+              <TouchableOpacity style={styles.settingRow} onPress={handleAppleLink} disabled={isLinking}>
+                <View style={styles.settingInfo}>
+                  <View style={styles.settingIconWrap}>
+                    <Ionicons name="logo-apple" size={18} color={theme.colors.textPrimary} />
+                  </View>
+                  <Text style={styles.settingText}>Sign in with Apple</Text>
+                </View>
+                {isLinking ? (
+                  <ActivityIndicator size="small" color={theme.colors.accentGold} />
+                ) : (
+                  <MaterialIcons name="chevron-right" size={24} color={theme.colors.textMuted} />
+                )}
+              </TouchableOpacity>
+              <View style={styles.settingDivider} />
+            </>
+          )}
+
+          <TouchableOpacity style={styles.settingRow} onPress={handleGoogleLink} disabled={isLinking}>
+            <View style={styles.settingInfo}>
+              <View style={styles.settingIconWrap}>
+                <Ionicons name="logo-google" size={18} color={theme.colors.textPrimary} />
+              </View>
+              <Text style={styles.settingText}>Sign in with Google</Text>
+            </View>
+            {isLinking && Platform.OS !== "ios" ? (
+              <ActivityIndicator size="small" color={theme.colors.accentGold} />
+            ) : (
+              <MaterialIcons name="chevron-right" size={24} color={theme.colors.textMuted} />
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {/* App Settings */}
         <Text
           style={[
             styles.sectionTitle,
@@ -179,6 +267,45 @@ export default function ProfileScreen() {
               thumbColor="#fff"
             />
           </View>
+        </View>
+
+        {/* About & Legal Section */}
+        <Text
+          style={[
+            styles.sectionTitle,
+            { marginTop: 32, marginBottom: 16, paddingHorizontal: 4 },
+          ]}
+        >
+          About & Legal
+        </Text>
+        <View style={styles.settingsGroup}>
+          <TouchableOpacity 
+            style={styles.settingRow} 
+            onPress={() => router.push("/legal/privacy")}
+          >
+            <View style={styles.settingInfo}>
+              <View style={styles.settingIconWrap}>
+                <MaterialIcons name="privacy-tip" size={18} color={theme.colors.textPrimary} />
+              </View>
+              <Text style={styles.settingText}>Privacy Policy</Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={24} color={theme.colors.textMuted} />
+          </TouchableOpacity>
+
+          <View style={styles.settingDivider} />
+
+          <TouchableOpacity 
+            style={styles.settingRow} 
+            onPress={() => router.push("/legal/terms")}
+          >
+            <View style={styles.settingInfo}>
+              <View style={styles.settingIconWrap}>
+                <MaterialIcons name="gavel" size={18} color={theme.colors.textPrimary} />
+              </View>
+              <Text style={styles.settingText}>Terms of Service</Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={24} color={theme.colors.textMuted} />
+          </TouchableOpacity>
         </View>
 
         <View style={styles.footer}>

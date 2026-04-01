@@ -21,15 +21,32 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
+const isSSR = typeof window === "undefined";
+
+const customStorage = {
+  getItem: (key: string) => {
+    if (isSSR) return null;
+    return AsyncStorage.getItem(key);
+  },
+  setItem: (key: string, value: string) => {
+    if (isSSR) return Promise.resolve();
+    return AsyncStorage.setItem(key, value);
+  },
+  removeItem: (key: string) => {
+    if (isSSR) return Promise.resolve();
+    return AsyncStorage.removeItem(key);
+  },
+};
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     // Persist the session to AsyncStorage so anonymous users keep their
     // identity across restarts without signing in again.
-    storage: AsyncStorage,
+    storage: customStorage,
     persistSession: true,
     // Automatically refresh tokens before they expire
     autoRefreshToken: true,
     // Detect session from URL (needed for OAuth redirect flows later)
-    detectSessionInUrl: false,
+    detectSessionInUrl: !isSSR,
   },
 });

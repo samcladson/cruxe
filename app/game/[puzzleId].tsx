@@ -1,4 +1,5 @@
 import { MaterialIcons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -19,6 +20,7 @@ import { theme } from "../../constants/theme";
 import { recordCompletion } from "../../services/puzzleService";
 import { calculateScore, ScoreBreakdown } from "../../services/scoreEngine";
 import { usePuzzleStore } from "../../stores/puzzleStore";
+import { useSettingsStore } from "../../stores/settingsStore";
 import { useUserStore } from "../../stores/userStore";
 import { Difficulty } from "../../types/puzzle.types";
 
@@ -142,6 +144,11 @@ export default function GameScreen() {
     await syncToSupabase().catch((err) =>
       console.warn("[GameScreen] Profile sync failed:", err),
     );
+
+    // Trigger success haptic
+    if (useSettingsStore.getState().hapticsEnabled) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
 
     setShowSuccessModal(true);
   }, [activePuzzle, timer, profile.id]);

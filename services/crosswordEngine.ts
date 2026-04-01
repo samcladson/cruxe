@@ -227,7 +227,7 @@ function findCandidatePlacements(
 export function buildPuzzle(
   words: { word: string; clue: string; isHint?: boolean }[],
   category: Category = "general",
-  difficulty: Difficulty = "medium",
+  difficulty: Difficulty = Difficulty.MEDIUM,
   gridSize: GridSize = 10,
   puzzleId?: string,
 ): Puzzle | null {

@@ -10,7 +10,18 @@
  */
 
 import { Session, User } from "@supabase/supabase-js";
+import * as AppleAuthentication from "expo-apple-authentication";
+import * as Crypto from "expo-crypto";
+import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import { supabase } from "./supabaseClient";
+
+// ─── Setup Google Sign-In ────────────────────────────────────────────
+// TODO: Replace with your actual Google Web Client ID from Google Cloud Console
+GoogleSignin.configure({
+  webClientId: "YOUR_WEB_CLIENT_ID.apps.googleusercontent.com",
+  offlineAccess: true,
+});
+
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -142,5 +153,96 @@ export async function ensureUserProfile(
 
   if (error) {
     console.error("[Auth] Failed to ensure user profile row:", error.message);
+  }
+}
+
+// ─── Social Logins (Linking) ─────────────────────────────────────────
+
+/**
+ * Initiates native Apple Sign-In and links it to the current Supabase session.
+ * Uses a crypto nonce to prevent replay attacks per Apple guidelines.
+ */
+export async function linkAppleAccount(): Promise<{ error: Error | null; user?: User }> {
+  try {
+    const rawNonce = Math.random().toString(36).substring(2, 10);
+    const hashedNonce = await Crypto.digestStringAsync(
+      Crypto.CryptoDigestAlgorithm.SHA256,
+      rawNonce
+    );
+
+    const credential = await AppleAuthentication.signInAsync({
+      requestedScopes: [
+        AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+        AppleAuthentication.AppleAuthenticationScope.EMAIL,
+      ],
+      nonce: hashedNonce,
+    });
+
+    if (!credential.identityToken) {
+      throw new Error("No identityToken returned from Apple Sign In");
+    }
+
+    // Link the Apple identity to the existing anonymous user
+    const { data, error } = await supabase.auth.linkIdentity({
+      provider: "apple",
+      token: credential.identityToken,
+    });
+
+    if (error) throw error;
+    
+    console.log("[Auth] Successfully linked Apple account");
+    return { error: null, user: data.user };
+  } catch (error: any) {
+    if (error.code === "ERR_REQUEST_CANCELED") {
+      console.log("[Auth] Apple Sign-In canceled by user");
+      return { error: null }; // Silent cancel
+    }
+    console.error("[Auth] Apple Sign-In error:", error);
+    return { error };
+  }
+}
+
+/**
+ * Initiates native Google Sign-In and links it to the current Supabase session.
+ */
+export async function linkGoogleAccount(): Promise<{ error: Error | null; user?: User }> {
+  try {
+    await GoogleSignin.hasPlayServices();
+    const response = await GoogleSignin.signIn();
+    
+    // google-signin v11+ uses a response object with type and data
+    let idToken: string | null = null;
+    
+    if ((response as any).type === "success") {
+      idToken = (response as any).data?.idToken;
+    } else if ((response as any).idToken) {
+      // Fallback for older package versions
+      idToken = (response as any).idToken;
+    } else {
+      console.log("[Auth] Google Sign-In not successful (type !== success)");
+      return { error: null };
+    }
+
+    if (!idToken) {
+      throw new Error("No ID token returned from Google Sign In");
+    }
+
+    // Link the Google identity to the existing anonymous user
+    const { data, error } = await supabase.auth.linkIdentity({
+      provider: "google",
+      token: idToken,
+    });
+
+    if (error) throw error;
+
+    console.log("[Auth] Successfully linked Google account");
+    return { error: null, user: data.user };
+  } catch (error: any) {
+    if (error.code === "ASYNC_OP_IN_PROGRESS" || error.code === "SIGN_IN_CANCELLED") {
+      console.log("[Auth] Google Sign-In canceled or already in progress");
+      return { error: null }; // Silent cancel
+    }
+    console.error("[Auth] Google Sign-In error:", error);
+    return { error };
   }
 }

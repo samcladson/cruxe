@@ -298,26 +298,143 @@ export async function fetchCategoryPuzzles(
   const completionMap = new Map(
     (completions || []).map((c) => [
       c.puzzle_id,
-      { score: c.score, accuracy: c.accuracy, timeTaken: c.time_taken },
+      {
+        score: c.score,
+        accuracy: c.accuracy,
+        timeTaken: c.time_taken,
+      },
     ]),
   );
 
-  const result = puzzles.map((p: any) => {
-    const completion = completionMap.get(p.id);
-    return {
-      id: p.id,
-      category: p.category as Category,
-      difficulty: p.difficulty as Difficulty,
-      gridSize: p.grid_size as GridSize,
-      variant: p.variant,
-      totalWords: p.total_words,
-      estimatedTime: p.estimated_time,
-      isCompleted: !!completion,
-      score: completion?.score ?? null,
-      accuracy: completion?.accuracy ?? null,
-      timeTaken: completion?.timeTaken ?? null,
-    };
-  });
+  const result: PuzzleMeta[] = puzzles.map((p: any) => ({
+    id: p.id,
+    category: p.category as Category,
+    difficulty: p.difficulty as Difficulty,
+    gridSize: p.grid_size as GridSize,
+    variant: p.variant,
+    totalWords: p.total_words,
+    estimatedTime: p.estimated_time,
+    isCompleted: completionMap.has(p.id),
+    score: completionMap.get(p.id)?.score ?? null,
+    accuracy: completionMap.get(p.id)?.accuracy ?? null,
+    timeTaken: completionMap.get(p.id)?.timeTaken ?? null,
+  }));
+
+  puzzleCache.set(cacheKey, result);
+  return result;
+}
+
+export interface CollectionSummary {
+  totalPuzzles: number;
+  categories: {
+    id: Category;
+    count: number;
+  }[];
+}
+
+/**
+ * Returns a summary of all puzzles available in today's (or most recent) daily collection.
+ */
+export async function fetchTodayCollectionSummary(): Promise<CollectionSummary | null> {
+  const cacheKey = "today_collection_summary";
+  const cached = puzzleCache.get<CollectionSummary>(cacheKey);
+  if (cached) return cached;
+
+  const today = getTodayUTC();
+  const yesterday = getYesterdayUTC();
+
+  // Try today first, fallback to yesterday
+  for (const date of [today, yesterday]) {
+    const { data, error } = await supabase
+      .from("daily_puzzles")
+      .select("category")
+      .eq("puzzle_date", date);
+
+    if (!error && data && data.length > 0) {
+      const counts: Record<string, number> = {};
+      data.forEach((row) => {
+        counts[row.category] = (counts[row.category] || 0) + 1;
+      });
+
+      const summary: CollectionSummary = {
+        totalPuzzles: data.length,
+        categories: Object.entries(counts).map(([id, count]) => ({
+          id: id as Category,
+          count,
+        })),
+      };
+
+      puzzleCache.set(cacheKey, summary);
+      return summary;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Fetches every puzzle in today's collection for the unified view.
+ */
+export async function fetchAllPuzzlesForToday(
+  userId: string = "guest",
+): Promise<PuzzleMeta[]> {
+  const cacheKey = `all_puzzles_today_${userId}`;
+  const cached = puzzleCache.get<PuzzleMeta[]>(cacheKey);
+  if (cached) return cached;
+
+  const today = getTodayUTC();
+  const yesterday = getYesterdayUTC();
+
+  let targetDate = today;
+
+  // Determination of target date matching fetchTodayCollectionSummary
+  const { count } = await supabase
+    .from("daily_puzzles")
+    .select("*", { count: "exact", head: true })
+    .eq("puzzle_date", today);
+
+  if (!count || count === 0) {
+    targetDate = yesterday;
+  }
+
+  const { data: rows, error } = await supabase
+    .from("daily_puzzles")
+    .select(
+      "id, category, difficulty, grid_size, variant, total_words, estimated_time, is_daily_challenge",
+    )
+    .eq("puzzle_date", targetDate)
+    .order("is_daily_challenge", { ascending: false }) // Daily challenge first
+    .order("category")
+    .order("difficulty")
+    .order("grid_size");
+
+  if (error || !rows || rows.length === 0) return [];
+
+  // Fetch completions
+  const ids = rows.map((r) => r.id);
+  const { data: completions } = await supabase
+    .from("puzzle_completions")
+    .select("puzzle_id, score, accuracy, time_taken")
+    .eq("user_id", userId)
+    .in("puzzle_id", ids);
+
+  const completionMap = new Map(
+    (completions || []).map((c) => [c.puzzle_id, c]),
+  );
+
+  const result: PuzzleMeta[] = rows.map((row) => ({
+    id: row.id,
+    category: row.category as Category,
+    difficulty: row.difficulty as Difficulty,
+    gridSize: row.grid_size as GridSize,
+    variant: row.variant,
+    totalWords: row.total_words,
+    estimatedTime: row.estimated_time,
+    isCompleted: completionMap.has(row.id),
+    score: completionMap.get(row.id)?.score ?? null,
+    accuracy: completionMap.get(row.id)?.accuracy ?? null,
+    timeTaken: completionMap.get(row.id)?.time_taken ?? null,
+  }));
 
   puzzleCache.set(cacheKey, result);
   return result;
