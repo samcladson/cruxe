@@ -24,6 +24,8 @@ export interface UserProfile {
   currentStreak: number;
   longestStreak: number;
   lastPlayedDate: string;
+  /** ISO date string of the last daily login bonus claim (YYYY-MM-DD) */
+  lastDailyBonusDate: string;
   categoryStats: Record<Category, CategoryStat>;
   achievements: Achievement[];
   rank: number;

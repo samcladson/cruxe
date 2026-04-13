@@ -1,5 +1,6 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import React, { useMemo } from "react";
+import { SFX } from "../../services/soundService";
 import {
   Modal,
   ScrollView,
@@ -93,7 +94,10 @@ export function HintOptionsModal({ visible, onClose }: HintOptionsModalProps) {
   const handleRevealLetter = () => {
     if (!letterEnabled) return;
     const revealed = revealLetter();
-    if (revealed) spendCoins(REVEAL_LETTER_COST);
+    if (revealed) {
+      spendCoins(REVEAL_LETTER_COST);
+      SFX.hint();
+    }
     onClose();
   };
 
@@ -101,7 +105,10 @@ export function HintOptionsModal({ visible, onClose }: HintOptionsModalProps) {
     if (!wordEnabled) return;
     const cost = revealWordCost;
     const revealed = revealWord();
-    if (revealed > 0) spendCoins(cost);
+    if (revealed > 0) {
+      spendCoins(cost);
+      SFX.hint();
+    }
     onClose();
   };
 
@@ -113,6 +120,7 @@ export function HintOptionsModal({ visible, onClose }: HintOptionsModalProps) {
     } else {
       spendCoins(CHECK_ERRORS_COST);
     }
+    SFX.error();
     onClose();
   };
 

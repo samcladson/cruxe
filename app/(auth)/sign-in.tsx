@@ -1,15 +1,40 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useState } from "react";
+import { StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from "react-native";
 import { theme } from "../../constants/theme";
 import { useUserStore } from "../../stores/userStore";
+import { linkAppleAccount, linkGoogleAccount } from "../../services/authService";
 
 export default function SignInScreen() {
   const profile = useUserStore((state) => state.profile);
+  const [isLinking, setIsLinking] = useState(false);
 
-  const handleSignIn = () => {
-    // In a real app we'd initiate OAuth using Supabase
+  const handleGuestSignIn = () => {
+    router.replace("/(tabs)");
+  };
+
+  const handleGoogleSignIn = async () => {
+    setIsLinking(true);
+    const { error } = await linkGoogleAccount();
+    setIsLinking(false);
+    
+    // Even if it fails (e.g. user cancels), we let them play as guest/anon
+    // Or if it succeeds, they are linked and we route them in!
+    if (error) {
+      console.warn("[SignIn] Google Sign-In Issue:", error.message);
+    }
+    router.replace("/(tabs)");
+  };
+
+  const handleAppleSignIn = async () => {
+    setIsLinking(true);
+    const { error } = await linkAppleAccount();
+    setIsLinking(false);
+    
+    if (error) {
+      console.warn("[SignIn] Apple Sign-In Issue:", error.message);
+    }
     router.replace("/(tabs)");
   };
 
@@ -24,32 +49,38 @@ export default function SignInScreen() {
       </View>
 
       <View style={styles.buttonContainer}>
-        <TouchableOpacity
-          style={[styles.authButton, { backgroundColor: "#FFFFFF" }]}
-          onPress={handleSignIn}
-        >
-          <Ionicons name="logo-google" size={24} color="#000" />
-          <Text style={[styles.authButtonText, { color: "#000" }]}>
-            Continue with Google
-          </Text>
-        </TouchableOpacity>
+        {isLinking ? (
+          <ActivityIndicator size="large" color={theme.colors.accentGold} style={{ marginVertical: 20 }} />
+        ) : (
+          <>
+            <TouchableOpacity
+              style={[styles.authButton, { backgroundColor: "#FFFFFF" }]}
+              onPress={handleGoogleSignIn}
+            >
+              <Ionicons name="logo-google" size={24} color="#000" />
+              <Text style={[styles.authButtonText, { color: "#000" }]}>
+                Continue with Google
+              </Text>
+            </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[
-            styles.authButton,
-            { backgroundColor: "#000000", borderWidth: 1, borderColor: "#333" },
-          ]}
-          onPress={handleSignIn}
-        >
-          <Ionicons name="logo-apple" size={24} color="#FFF" />
-          <Text style={[styles.authButtonText, { color: "#FFF" }]}>
-            Continue with Apple
-          </Text>
-        </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.authButton,
+                { backgroundColor: "#000000", borderWidth: 1, borderColor: "#333" },
+              ]}
+              onPress={handleAppleSignIn}
+            >
+              <Ionicons name="logo-apple" size={24} color="#FFF" />
+              <Text style={[styles.authButtonText, { color: "#FFF" }]}>
+                Continue with Apple
+              </Text>
+            </TouchableOpacity>
 
-        <TouchableOpacity style={styles.guestButton} onPress={handleSignIn}>
-          <Text style={styles.guestText}>Continue as Guest</Text>
-        </TouchableOpacity>
+            <TouchableOpacity style={styles.guestButton} onPress={handleGuestSignIn}>
+              <Text style={styles.guestText}>Continue as Guest</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </View>
     </View>
   );

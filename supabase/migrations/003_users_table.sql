@@ -15,8 +15,8 @@ CREATE TABLE IF NOT EXISTS users (
   display_name      TEXT NOT NULL DEFAULT 'Player',
   avatar_url        TEXT NOT NULL DEFAULT '',
 
-  -- Economy
-  coins             INT NOT NULL DEFAULT 50,
+  -- Economy (200 welcome bonus for new users)
+  coins             INT NOT NULL DEFAULT 200,
 
   -- Lifetime stats
   total_score       INT NOT NULL DEFAULT 0,

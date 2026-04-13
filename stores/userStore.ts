@@ -56,6 +56,14 @@ interface UserState {
     score: number,
   ) => void;
 
+  // ─ Daily bonus ──────────────────────────────────────────────────
+  /**
+   * Claims the daily login bonus if not already claimed today.
+   * Returns the coin amount awarded (0 if already claimed).
+   * Streak multiplier: base 15 coins + 5 per streak day (capped at 50).
+   */
+  claimDailyBonus: () => number;
+
   // ─ Offline queue ────────────────────────────────────────────────
   /** Adds a failed completion to the pending queue for retry */
   enqueuePendingCompletion: (completion: PendingCompletion) => void;
@@ -106,12 +114,13 @@ const initialProfile: UserProfile = {
   id: "guest", // Replaced with real UUID after auth init
   displayName: "Player",
   avatarUrl: "",
-  coins: 50,
+  coins: 200, // Welcome bonus — generous start so new users can afford hints
   totalScore: 0,
   totalPuzzlesSolved: 0,
   currentStreak: 0,
   longestStreak: 0,
   lastPlayedDate: new Date().toISOString(),
+  lastDailyBonusDate: "",
   categoryStats: initialCategoryStats,
   achievements: [],
   rank: 0,
@@ -153,6 +162,28 @@ export const useUserStore = create<UserState>()(
           return true;
         }
         return false;
+      },
+
+      claimDailyBonus: () => {
+        const todayStr = new Date().toISOString().split("T")[0];
+        const { profile } = get();
+
+        if (profile.lastDailyBonusDate === todayStr) {
+          return 0; // Already claimed today
+        }
+
+        // Base 15 + 5 per streak day, capped at 50
+        const bonus = Math.min(50, 15 + profile.currentStreak * 5);
+
+        set((state) => ({
+          profile: {
+            ...state.profile,
+            coins: state.profile.coins + bonus,
+            lastDailyBonusDate: todayStr,
+          },
+        }));
+
+        return bonus;
       },
 
       incrementStreak: () => {

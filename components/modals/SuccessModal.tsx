@@ -21,6 +21,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { theme } from "../../constants/theme";
+import { SFX } from "../../services/soundService";
 import { usePuzzleStore } from "../../stores/puzzleStore";
 import { useUserStore } from "../../stores/userStore";
 import { formatCompactNumber } from "../../utils/formatNumber";
@@ -38,6 +39,8 @@ interface SuccessModalProps {
   coinsEarned?: number;
   scoreEarned?: number;
   isNewStreak?: boolean;
+  /** ID of the next unsolved puzzle in the same category/difficulty */
+  nextPuzzleId?: string | null;
 }
 
 export function SuccessModal({
@@ -46,6 +49,7 @@ export function SuccessModal({
   coinsEarned: earnedProp,
   scoreEarned = 0,
   isNewStreak = false,
+  nextPuzzleId,
 }: SuccessModalProps) {
   const { activePuzzle, timer, getAccuracy } = usePuzzleStore();
   const { profile } = useUserStore();
@@ -100,7 +104,17 @@ export function SuccessModal({
 
   const handleFinalReturn = () => {
     onClose();
-    router.replace("/");
+    router.replace("/(tabs)");
+  };
+
+  const handleNextPuzzle = () => {
+    if (!nextPuzzleId) return;
+    SFX.coinEarned();
+    onClose();
+    router.replace({
+      pathname: "/game/generate",
+      params: { id: nextPuzzleId },
+    } as any);
   };
 
   const formatTime = (seconds: number) => {
@@ -292,18 +306,36 @@ export function SuccessModal({
           </Animated.View>
         </View>
 
-        {/* Continue Button */}
+        {/* Action Buttons */}
         <Animated.View
           entering={FadeInUp.delay(900).duration(500).springify()}
           style={styles.bottomActions}
         >
-          <TouchableOpacity
-            style={styles.continueBtn}
-            onPress={handleFirstContinue}
-          >
-            <Text style={styles.continueBtnText}>CONTINUE</Text>
-            <MaterialIcons name="arrow-forward" size={20} color="#000" />
-          </TouchableOpacity>
+          {nextPuzzleId ? (
+            <>
+              <TouchableOpacity
+                style={styles.continueBtn}
+                onPress={handleNextPuzzle}
+              >
+                <Text style={styles.continueBtnText}>NEXT PUZZLE</Text>
+                <MaterialIcons name="arrow-forward" size={20} color="#000" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.secondaryBtn}
+                onPress={handleFirstContinue}
+              >
+                <Text style={styles.secondaryBtnText}>BACK TO HOME</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <TouchableOpacity
+              style={styles.continueBtn}
+              onPress={handleFirstContinue}
+            >
+              <Text style={styles.continueBtnText}>CONTINUE</Text>
+              <MaterialIcons name="arrow-forward" size={20} color="#000" />
+            </TouchableOpacity>
+          )}
         </Animated.View>
       </SafeAreaView>
     </Modal>
@@ -423,6 +455,19 @@ const styles = StyleSheet.create({
     color: "#000",
     fontWeight: "bold",
     letterSpacing: 1.5,
+  },
+
+  secondaryBtn: {
+    alignItems: "center",
+    paddingVertical: 14,
+    marginTop: 8,
+  },
+  secondaryBtnText: {
+    fontFamily: theme.typography.body.fontFamily,
+    fontSize: 14,
+    color: theme.colors.textMuted,
+    fontWeight: "600",
+    letterSpacing: 1,
   },
 
   // Streak Screen Styles

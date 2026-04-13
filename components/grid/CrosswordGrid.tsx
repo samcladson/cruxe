@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { Dimensions, StyleSheet, TextInput, View } from "react-native";
+import { SFX } from "../../services/soundService";
 import { usePuzzleStore } from "../../stores/puzzleStore";
 import { GridCell } from "./GridCell";
 
@@ -102,6 +103,7 @@ export function CrosswordGrid() {
           currentSelectedCell.col,
           nativeEvent.key,
         );
+        SFX.letterInput();
       }
       moveSelection(1);
     }
@@ -227,6 +229,7 @@ export function CrosswordGrid() {
                   cellSize={cellSize}
                   onPress={(r, c) => {
                     selectCell(r, c);
+                    SFX.cellTap();
                     // Force the keyboard to appear even if manually dismissed
                     if (inputRef.current) {
                       inputRef.current.blur();

@@ -9,19 +9,19 @@
  * losing any progress (Supabase links the identities).
  */
 
+import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import { Session, User } from "@supabase/supabase-js";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as Crypto from "expo-crypto";
-import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import { supabase } from "./supabaseClient";
 
 // ─── Setup Google Sign-In ────────────────────────────────────────────
 // TODO: Replace with your actual Google Web Client ID from Google Cloud Console
 GoogleSignin.configure({
-  webClientId: "YOUR_WEB_CLIENT_ID.apps.googleusercontent.com",
+  webClientId:
+    "1042059769347-31fuo35i64l5l0ap3tgt47t2v33k0t59.apps.googleusercontent.com",
   offlineAccess: true,
 });
-
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -162,12 +162,15 @@ export async function ensureUserProfile(
  * Initiates native Apple Sign-In and links it to the current Supabase session.
  * Uses a crypto nonce to prevent replay attacks per Apple guidelines.
  */
-export async function linkAppleAccount(): Promise<{ error: Error | null; user?: User }> {
+export async function linkAppleAccount(): Promise<{
+  error: Error | null;
+  user?: User;
+}> {
   try {
     const rawNonce = Math.random().toString(36).substring(2, 10);
     const hashedNonce = await Crypto.digestStringAsync(
       Crypto.CryptoDigestAlgorithm.SHA256,
-      rawNonce
+      rawNonce,
     );
 
     const credential = await AppleAuthentication.signInAsync({
@@ -189,7 +192,7 @@ export async function linkAppleAccount(): Promise<{ error: Error | null; user?: 
     });
 
     if (error) throw error;
-    
+
     console.log("[Auth] Successfully linked Apple account");
     return { error: null, user: data.user };
   } catch (error: any) {
@@ -205,14 +208,17 @@ export async function linkAppleAccount(): Promise<{ error: Error | null; user?: 
 /**
  * Initiates native Google Sign-In and links it to the current Supabase session.
  */
-export async function linkGoogleAccount(): Promise<{ error: Error | null; user?: User }> {
+export async function linkGoogleAccount(): Promise<{
+  error: Error | null;
+  user?: User;
+}> {
   try {
     await GoogleSignin.hasPlayServices();
     const response = await GoogleSignin.signIn();
-    
+
     // google-signin v11+ uses a response object with type and data
     let idToken: string | null = null;
-    
+
     if ((response as any).type === "success") {
       idToken = (response as any).data?.idToken;
     } else if ((response as any).idToken) {
@@ -238,7 +244,10 @@ export async function linkGoogleAccount(): Promise<{ error: Error | null; user?:
     console.log("[Auth] Successfully linked Google account");
     return { error: null, user: data.user };
   } catch (error: any) {
-    if (error.code === "ASYNC_OP_IN_PROGRESS" || error.code === "SIGN_IN_CANCELLED") {
+    if (
+      error.code === "ASYNC_OP_IN_PROGRESS" ||
+      error.code === "SIGN_IN_CANCELLED"
+    ) {
       console.log("[Auth] Google Sign-In canceled or already in progress");
       return { error: null }; // Silent cancel
     }

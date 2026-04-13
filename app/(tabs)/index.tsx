@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 import Animated, {
+  FadeInDown,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
@@ -33,6 +34,7 @@ import {
   PuzzleMeta,
 } from "../../services/puzzleService";
 import { supabase } from "../../services/supabaseClient";
+import { usePuzzleStore } from "../../stores/puzzleStore";
 import { useUserStore } from "../../stores/userStore";
 import { formatCompactNumber } from "../../utils/formatNumber";
 
@@ -59,9 +61,13 @@ function PulseDot() {
 
 export default function HomeScreen() {
   const profile = useUserStore((state) => state.profile);
+  const claimDailyBonus = useUserStore((state) => state.claimDailyBonus);
+  const activePuzzle = usePuzzleStore((state) => state.activePuzzle);
+  const timer = usePuzzleStore((state) => state.timer);
   const [isCategoriesModalVisible, setIsCategoriesModalVisible] =
     useState(false);
   const [isActivityModalVisible, setIsActivityModalVisible] = useState(false);
+  const [dailyBonusBanner, setDailyBonusBanner] = useState<number | null>(null);
 
   const [dailyPuzzle, setDailyPuzzle] = useState<PuzzleMeta | null>(null);
   const [dailyPlayerCount, setDailyPlayerCount] = useState<number>(0);
@@ -70,6 +76,17 @@ export default function HomeScreen() {
 
   const [collectionSummary, setCollectionSummary] =
     useState<CollectionSummary | null>(null);
+
+  // Claim daily login bonus on mount
+  useEffect(() => {
+    const bonus = claimDailyBonus();
+    if (bonus > 0) {
+      setDailyBonusBanner(bonus);
+      // Auto-dismiss after 4 seconds
+      const timer = setTimeout(() => setDailyBonusBanner(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   useEffect(() => {
     async function loadDaily() {
@@ -187,6 +204,65 @@ export default function HomeScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
+        {/* Daily Login Bonus Banner */}
+        {dailyBonusBanner !== null && (
+          <Animated.View
+            entering={FadeInDown.duration(400).springify()}
+            style={styles.bonusBanner}
+          >
+            <MaterialIcons
+              name="card-giftcard"
+              size={20}
+              color={theme.colors.accentGold}
+            />
+            <Text style={styles.bonusBannerText}>
+              Daily Bonus: <Text style={{ color: theme.colors.accentGold }}>+{dailyBonusBanner} coins</Text>
+            </Text>
+            <TouchableOpacity onPress={() => setDailyBonusBanner(null)}>
+              <MaterialIcons name="close" size={16} color={theme.colors.textMuted} />
+            </TouchableOpacity>
+          </Animated.View>
+        )}
+
+        {/* Resume In-Progress Puzzle Card */}
+        {activePuzzle && !activePuzzle.isComplete && (
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() =>
+              router.push({ pathname: `/game/${activePuzzle.id}` } as any)
+            }
+            style={styles.resumeCard}
+          >
+            <View style={styles.resumeLeft}>
+              <View style={styles.resumeIconWrap}>
+                <MaterialIcons
+                  name="play-arrow"
+                  size={22}
+                  color={theme.colors.accentGold}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.resumeTitle}>Continue Puzzle</Text>
+                <Text style={styles.resumeMeta}>
+                  {(CATEGORIES[activePuzzle.category]?.title || activePuzzle.category).toUpperCase()}{" "}
+                  • {activePuzzle.difficulty.toUpperCase()} • {activePuzzle.gridSize}x
+                  {activePuzzle.gridSize}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.resumeRight}>
+              <Text style={styles.resumeTimer}>
+                {Math.floor(timer / 60)}:{(timer % 60).toString().padStart(2, "0")}
+              </Text>
+              <MaterialIcons
+                name="arrow-forward"
+                size={18}
+                color={theme.colors.accentGold}
+              />
+            </View>
+          </TouchableOpacity>
+        )}
+
         {/* Hero Card: Daily Challenge */}
         <TouchableOpacity
           activeOpacity={dailyPuzzle?.isCompleted ? 1 : 0.9}
@@ -913,5 +989,73 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     padding: 24,
+  },
+  resumeCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: theme.colors.bgSecondary,
+    borderWidth: 1,
+    borderColor: "rgba(238, 205, 43, 0.15)",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+  },
+  resumeLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    gap: 12,
+  },
+  resumeIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "rgba(238, 205, 43, 0.1)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  resumeTitle: {
+    fontFamily: theme.typography.heading.fontFamily,
+    fontSize: 15,
+    color: theme.colors.textPrimary,
+    marginBottom: 2,
+  },
+  resumeMeta: {
+    fontFamily: theme.typography.cellLetter.fontFamily,
+    fontSize: 10,
+    color: theme.colors.textSecondary,
+    fontWeight: "bold",
+    letterSpacing: 0.5,
+  },
+  resumeRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  resumeTimer: {
+    fontFamily: theme.typography.cellLetter.fontFamily,
+    fontSize: 14,
+    color: theme.colors.textPrimary,
+    fontWeight: "bold",
+  },
+  bonusBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(238, 205, 43, 0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(238, 205, 43, 0.15)",
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginBottom: 20,
+    gap: 10,
+  },
+  bonusBannerText: {
+    flex: 1,
+    fontFamily: theme.typography.subheading.fontFamily,
+    fontSize: 14,
+    color: theme.colors.textPrimary,
+    fontWeight: "600",
   },
 });

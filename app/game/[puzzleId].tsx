@@ -17,8 +17,12 @@ import { CrosswordGrid } from "../../components/grid/CrosswordGrid";
 import { HintOptionsModal } from "../../components/modals/HintOptionsModal";
 import { SuccessModal } from "../../components/modals/SuccessModal";
 import { theme } from "../../constants/theme";
-import { recordCompletion } from "../../services/puzzleService";
+import {
+  fetchCategoryPuzzles,
+  recordCompletion,
+} from "../../services/puzzleService";
 import { calculateScore, ScoreBreakdown } from "../../services/scoreEngine";
+import { SFX } from "../../services/soundService";
 import { usePuzzleStore } from "../../stores/puzzleStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useUserStore } from "../../stores/userStore";
@@ -62,6 +66,7 @@ export default function GameScreen() {
     null,
   );
   const [isNewStreak, setIsNewStreak] = useState(false);
+  const [nextPuzzleId, setNextPuzzleId] = useState<string | null>(null);
 
   // Prevent duplicate completion recording on re-renders
   const hasRecorded = useRef(false);
@@ -145,9 +150,24 @@ export default function GameScreen() {
       console.warn("[GameScreen] Profile sync failed:", err),
     );
 
-    // Trigger success haptic
+    // Trigger success haptic + sound
     if (useSettingsStore.getState().hapticsEnabled) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+    SFX.puzzleComplete();
+
+    // Find next unsolved puzzle in the same category
+    try {
+      const categoryPuzzles = await fetchCategoryPuzzles(
+        activePuzzle.category as any,
+        userId,
+      );
+      const next = categoryPuzzles.find(
+        (p) => !p.isCompleted && p.id !== activePuzzle.id,
+      );
+      if (next) setNextPuzzleId(next.id);
+    } catch {
+      // Non-critical — just won't show "Next Puzzle" button
     }
 
     setShowSuccessModal(true);
@@ -252,6 +272,7 @@ export default function GameScreen() {
           coinsEarned={coinsEarned}
           scoreEarned={scoreEarned}
           isNewStreak={isNewStreak}
+          nextPuzzleId={nextPuzzleId}
         />
         <HintOptionsModal
           visible={showHintModal}

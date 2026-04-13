@@ -19,6 +19,7 @@ import { AppState, AppStateStatus } from "react-native";
 import { ensureUserProfile, initAuth, onAuthStateChange } from "../services/authService";
 import { drainPendingCompletions } from "../services/offlineSyncService";
 import { initRevenueCat, loginToRevenueCat } from "../services/revenueCatService";
+import { preloadSounds } from "../services/soundService";
 import { useUserStore } from "../stores/userStore";
 
 export {
@@ -79,6 +80,7 @@ function RootLayoutNav() {
     let unsubscribe: (() => void) | undefined;
 
     const bootstrap = async () => {
+      preloadSounds(); // Fire-and-forget — non-blocking
       await initRevenueCat();
 
       const authState = await initAuth();
