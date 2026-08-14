@@ -176,6 +176,9 @@ create table puzzle_stats (
 - `daily_puzzles.puzzle_data`: now stores the fully built grid and clue list, not
   only a word list.
 - `users`: add index on `total_score desc` for leaderboard reads.
+- `users`: add `last_daily_bonus_date date`. This field exists only in the
+  client's `UserProfile` type today, so the daily bonus cannot move server-side
+  without it.
 
 ### 5.3 Seeded `economy_config` keys
 
@@ -223,7 +226,8 @@ blindly.
 ### 6.2 Callable by `authenticated`
 
 ```
-spend_on_hint(puzzle_id, hint_type, action_id) -> { balance, cost }
+spend_on_hint(puzzle_id, hint_type, action_id,
+              letter_count default 1)          -> { balance, cost }
 pay_entry_fee(puzzle_id)                       -> { balance, fee }
 claim_daily_bonus()                            -> { bonus, streak, balance }
 set_display_name(name)                         -> { display_name }
@@ -240,6 +244,16 @@ double-charged.
 
 `set_display_name` exists rather than a column grant because a public
 leaderboard requires server-side validation of length, charset, and profanity.
+
+`spend_on_hint`'s `letter_count` is the one client-supplied quantity in the
+economy, because the remaining unrevealed letters of a word depend on what the
+player has typed — private client state the server cannot observe. The server
+clamps it to `[1, clue_length]` using the clue it owns, and records both the
+reported and charged values. The residual exposure is that a tampered client buys
+hints *more cheaply*; it cannot mint currency, and the discrepancy is visible in
+`hint_events`. Flat per-difficulty pricing for reveal-word would close this
+completely and should be considered in sub-project 2, where changing a price is
+in scope.
 
 `get_leaderboard` is `SECURITY DEFINER` and returns an explicit column list —
 display name, total score, solve count, streak, rank — so it structurally cannot
