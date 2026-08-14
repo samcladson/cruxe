@@ -18,6 +18,9 @@ import { CATEGORIES } from "../../constants/categories";
 import { theme } from "../../constants/theme"; // Keep theme imported as it's used elsewhere
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useUserStore } from "../../stores/userStore";
+import { usePuzzleStore } from "../../stores/puzzleStore";
+import { deleteAccount } from "../../services/economyService";
+import { supabase } from "../../services/supabaseClient";
 import { formatCompactNumber } from "../../utils/formatNumber";
 import {
   getLinkedProviders,
@@ -99,6 +102,43 @@ export default function ProfileScreen() {
               } else {
                 void refreshLinked();
                 router.replace("/(auth)/sign-in");
+              }
+            })();
+          },
+        },
+      ],
+    );
+  };
+
+  /**
+   * Permanent account deletion — required by Apple guideline 5.1.1(v) and
+   * Google Play policy. The consequences are stated plainly rather than
+   * buried, because coins are genuinely forfeited and not refundable.
+   */
+  const handleDeleteAccount = () => {
+    triggerHaptic();
+    Alert.alert(
+      "Delete account?",
+      "This permanently erases your profile, progress, streak, and remaining " +
+        "coins. Purchased coins are not refundable. This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            void (async () => {
+              setIsLinking(true);
+              try {
+                await deleteAccount();
+                await supabase.auth.signOut();
+                useUserStore.getState().resetLocalProfile();
+                usePuzzleStore.getState().clearActivePuzzle();
+                router.replace("/(auth)/sign-in");
+              } catch (e: any) {
+                Alert.alert("Could not delete account", e.message);
+              } finally {
+                setIsLinking(false);
               }
             })();
           },
@@ -342,6 +382,33 @@ export default function ProfileScreen() {
                 color={theme.colors.textMuted}
               />
             )}
+          </TouchableOpacity>
+
+          <View style={styles.settingDivider} />
+
+          {/* Permanent deletion — required for App Store and Play review */}
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={handleDeleteAccount}
+            disabled={isLinking}
+          >
+            <View style={styles.settingInfo}>
+              <View style={styles.settingIconWrap}>
+                <MaterialIcons
+                  name="delete-forever"
+                  size={18}
+                  color="#ef4444"
+                />
+              </View>
+              <Text style={[styles.settingText, { color: "#ef4444" }]}>
+                Delete account
+              </Text>
+            </View>
+            <MaterialIcons
+              name="chevron-right"
+              size={24}
+              color={theme.colors.textMuted}
+            />
           </TouchableOpacity>
         </View>
 

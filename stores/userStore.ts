@@ -1,13 +1,18 @@
 /**
  * userStore.ts — Zustand store for the current user's profile and stats.
  *
- * Local state is the source of truth for real-time UI updates (optimistic).
- * Supabase is the authoritative source for long-term persistence.
+ * The server owns the economy. This store is a READ MIRROR of it: `coins`,
+ * `totalScore`, `puzzlesSolved`, and the streaks are written only by the
+ * server and copied here for display. There is deliberately no addCoins,
+ * spendCoins, or syncToSupabase — the client cannot write those columns at
+ * all (see migration 008), so such a function could only ever produce a
+ * number that disagrees with reality.
  *
- * Sync strategy:
- *  - On app launch: hydrate from Supabase (takes precedence over local cache)
- *  - On puzzle completion: write optimistically to local, then sync to Supabase
- *  - Failed syncs are queued and retried on next app launch / network restore
+ * To change a balance, call the matching RPC in services/economyService.ts
+ * and pass its returned balance to `applyServerBalance`.
+ *
+ * `categoryStats` is the one genuinely local piece: a convenience rollup for
+ * the profile screen that nothing economic depends on.
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -19,68 +24,56 @@ import { CategoryStat, UserProfile } from "../types/user.types";
 
 // ─── Types ────────────────────────────────────────────────────────────
 
-/** A pending puzzle completion that failed to sync to Supabase while offline */
-export interface PendingCompletion {
+/**
+ * A solve awaiting server submission.
+ *
+ * Deliberately holds no reward figures — the server decides the score and
+ * the coins when the submission finally lands, so storing a guess here would
+ * only create something to contradict later.
+ */
+export interface PendingSolve {
   puzzleId: string;
-  userId: string;
-  score: number;
-  timeTaken: number;
-  accuracy: number;
-  hintsUsed: number;
-  coinsEarned: number;
-  puzzleDate: string;
-  category: string;
-  difficulty: string;
-  gridSize: number;
+  letters: string;
+  elapsedSeconds: number;
   queuedAt: string; // ISO timestamp
 }
 
 interface UserState {
   profile: UserProfile;
-  /** Completions that failed to write to Supabase (offline scenarios) */
-  pendingCompletions: PendingCompletion[];
+  /** Solves that could not reach the server yet (offline scenarios) */
+  pendingSolves: PendingSolve[];
 
   // ─ Profile actions ──────────────────────────────────────────────
   /** Sets the authenticated user's UUID — called after auth init */
   setUserId: (id: string) => void;
-  /** Updates the display name (used when user customises their profile) */
+  /** Mirrors a display name the server has already accepted. */
   setDisplayName: (name: string) => void;
-  addCoins: (amount: number) => void;
-  spendCoins: (amount: number) => boolean;
-  incrementStreak: () => void;
+  /** Local category rollup only. Economic totals come from the server. */
   completePuzzle: (
     category: Category,
     timeTaken: number,
     correctWords: number,
     totalWords: number,
-    score: number,
   ) => void;
 
-  // ─ Daily bonus ──────────────────────────────────────────────────
-  /**
-   * Claims the daily login bonus if not already claimed today.
-   * Returns the coin amount awarded (0 if already claimed).
-   * Streak multiplier: base 15 coins + 5 per streak day (capped at 50).
-   */
-  claimDailyBonus: () => number;
+  // ─ Server balance mirror ────────────────────────────────────────
+  /** Overwrites the local balance with a server-returned value. */
+  applyServerBalance: (coins: number) => void;
+  /** Re-reads the authoritative profile. Call after any economy action. */
+  refreshBalance: () => Promise<void>;
 
   // ─ Offline queue ────────────────────────────────────────────────
-  /** Adds a failed completion to the pending queue for retry */
-  enqueuePendingCompletion: (completion: PendingCompletion) => void;
-  /** Removes a completion from the queue after successful sync */
-  dequeuePendingCompletion: (puzzleId: string) => void;
+  /** Queues a solve that could not be submitted. */
+  enqueuePendingSolve: (solve: PendingSolve) => void;
+  /** Removes a solve from the queue after it is accepted by the server. */
+  dequeuePendingSolve: (puzzleId: string) => void;
 
-  // ─ Supabase sync ────────────────────────────────────────────────
+  // ─ Supabase read ────────────────────────────────────────────────
   /**
    * Fetches the user's profile from Supabase and hydrates the local store.
-   * Supabase wins over local cache on conflict — call on every app launch.
+   * Supabase always wins — call on every app launch.
    */
   syncFromSupabase: (userId: string) => Promise<void>;
-  /**
-   * Writes the current local profile to Supabase.
-   * Called after every puzzle completion and after profile edits.
-   */
-  syncToSupabase: () => Promise<void>;
 
   /**
    * Resets profile and the offline queue to initial values (e.g. before a new
@@ -120,7 +113,10 @@ const initialProfile: UserProfile = {
   id: "guest", // Replaced with real UUID after auth init
   displayName: "Player",
   avatarUrl: "",
-  coins: 200, // Welcome bonus — generous start so new users can afford hints
+  // Starts at zero. The welcome bonus is written by the auth trigger as a
+  // ledger entry (migration 008); showing 200 here before the server has
+  // granted it would display a balance the user does not have.
+  coins: 0,
   totalScore: 0,
   totalPuzzlesSolved: 0,
   currentStreak: 0,
@@ -138,7 +134,7 @@ export const useUserStore = create<UserState>()(
   persist(
     (set, get) => ({
       profile: initialProfile,
-      pendingCompletions: [],
+      pendingSolves: [],
 
       // ── Profile actions ─────────────────────────────────────────
       setUserId: (id: string) =>
@@ -151,86 +147,35 @@ export const useUserStore = create<UserState>()(
           profile: { ...state.profile, displayName: name },
         })),
 
-      addCoins: (amount: number) =>
-        set((state) => ({
-          profile: { ...state.profile, coins: state.profile.coins + amount },
-        })),
+      applyServerBalance: (coins: number) =>
+        set((state) => ({ profile: { ...state.profile, coins } })),
 
-      spendCoins: (amount: number) => {
+      refreshBalance: async () => {
         const { profile } = get();
-        if (profile.coins >= amount) {
-          set((state) => ({
-            profile: {
-              ...state.profile,
-              coins: state.profile.coins - amount,
-            },
-          }));
-          return true;
-        }
-        return false;
-      },
+        if (!profile.id || profile.id === "guest") return;
 
-      claimDailyBonus: () => {
-        const todayStr = new Date().toISOString().split("T")[0];
-        const { profile } = get();
-
-        if (profile.lastDailyBonusDate === todayStr) {
-          return 0; // Already claimed today
-        }
-
-        // Base 15 + 5 per streak day, capped at 50
-        const bonus = Math.min(50, 15 + profile.currentStreak * 5);
+        const { data, error } = await supabase
+          .from("users")
+          .select(
+            "coins, total_score, puzzles_solved, current_streak, longest_streak",
+          )
+          .eq("id", profile.id)
+          .maybeSingle();
+        if (error || !data) return;
 
         set((state) => ({
           profile: {
             ...state.profile,
-            coins: state.profile.coins + bonus,
-            lastDailyBonusDate: todayStr,
+            coins: data.coins,
+            totalScore: data.total_score,
+            totalPuzzlesSolved: data.puzzles_solved,
+            currentStreak: data.current_streak,
+            longestStreak: data.longest_streak,
           },
         }));
-
-        return bonus;
       },
 
-      incrementStreak: () => {
-        const todayStr = new Date().toISOString().split("T")[0];
-        set((state) => {
-          const lastPlayedStr = new Date(state.profile.lastPlayedDate)
-            .toISOString()
-            .split("T")[0];
-
-          if (lastPlayedStr === todayStr) {
-            return state; // Already played today — don't double-increment
-          }
-
-          const yesterday = new Date();
-          yesterday.setDate(yesterday.getDate() - 1);
-          const yesterdayStr = yesterday.toISOString().split("T")[0];
-
-          // Streak continues if played yesterday, resets to 1 otherwise
-          const newStreak =
-            lastPlayedStr === yesterdayStr
-              ? state.profile.currentStreak + 1
-              : 1;
-
-          return {
-            profile: {
-              ...state.profile,
-              currentStreak: newStreak,
-              longestStreak: Math.max(state.profile.longestStreak, newStreak),
-              lastPlayedDate: new Date().toISOString(),
-            },
-          };
-        });
-      },
-
-      completePuzzle: (
-        category,
-        timeTaken,
-        correctWords,
-        totalWords,
-        score,
-      ) => {
+      completePuzzle: (category, timeTaken, correctWords, totalWords) => {
         set((state) => {
           const existing = state.profile.categoryStats?.[category] || {
             solved: 0,
@@ -251,11 +196,11 @@ export const useUserStore = create<UserState>()(
               correctWords / Math.max(1, totalWords)) /
             newSolved;
 
+          // totalScore and totalPuzzlesSolved are deliberately NOT touched
+          // here — submit_solve owns them, and refreshBalance mirrors them.
           return {
             profile: {
               ...state.profile,
-              totalScore: (state.profile.totalScore || 0) + score,
-              totalPuzzlesSolved: state.profile.totalPuzzlesSolved + 1,
               categoryStats: {
                 ...state.profile.categoryStats,
                 [category]: {
@@ -271,19 +216,21 @@ export const useUserStore = create<UserState>()(
       },
 
       // ── Offline queue ───────────────────────────────────────────
-      enqueuePendingCompletion: (completion: PendingCompletion) => {
+      enqueuePendingSolve: (solve: PendingSolve) => {
         set((state) => ({
-          pendingCompletions: [
-            ...state.pendingCompletions,
-            { ...completion, queuedAt: new Date().toISOString() },
+          // Replace any earlier attempt at the same puzzle rather than
+          // stacking duplicates; submission is idempotent server-side anyway.
+          pendingSolves: [
+            ...state.pendingSolves.filter((s) => s.puzzleId !== solve.puzzleId),
+            { ...solve, queuedAt: new Date().toISOString() },
           ],
         }));
       },
 
-      dequeuePendingCompletion: (puzzleId: string) => {
+      dequeuePendingSolve: (puzzleId: string) => {
         set((state) => ({
-          pendingCompletions: state.pendingCompletions.filter(
-            (c) => c.puzzleId !== puzzleId,
+          pendingSolves: state.pendingSolves.filter(
+            (s) => s.puzzleId !== puzzleId,
           ),
         }));
       },
@@ -377,53 +324,13 @@ export const useUserStore = create<UserState>()(
       resetLocalProfile: () =>
         set({
           profile: { ...initialProfile },
-          pendingCompletions: [],
+          pendingSolves: [],
         }),
 
-      syncToSupabase: async () => {
-        const { profile } = get();
-        if (!profile.id || profile.id === "guest") return;
-
-        try {
-          // Sanitise bestTime before writing to Supabase:
-          // NO_BEST_TIME (MAX_SAFE_INTEGER) → 0 so the DB stays clean
-          const sanitisedStats: Record<string, any> = {};
-          for (const [cat, stats] of Object.entries(profile.categoryStats)) {
-            sanitisedStats[cat] = {
-              ...stats,
-              bestTime:
-                stats.bestTime === NO_BEST_TIME || !isFinite(stats.bestTime)
-                  ? 0
-                  : stats.bestTime,
-            };
-          }
-
-          const { error } = await supabase.from("users").upsert(
-            {
-              id: profile.id,
-              display_name: profile.displayName,
-              coins: profile.coins,
-              total_score: profile.totalScore,
-              puzzles_solved: profile.totalPuzzlesSolved,
-              current_streak: profile.currentStreak,
-              longest_streak: profile.longestStreak,
-              last_played_date: new Date(profile.lastPlayedDate)
-                .toISOString()
-                .split("T")[0],
-              category_stats: sanitisedStats,
-            },
-            { onConflict: "id" },
-          );
-
-          if (error) {
-            console.error("[UserStore] syncToSupabase failed:", error.message);
-          } else {
-            console.log("[UserStore] Profile synced to Supabase");
-          }
-        } catch (err) {
-          console.error("[UserStore] syncToSupabase error:", err);
-        }
-      },
+      // NOTE: there is no syncToSupabase. The client has no write access to
+      // the `users` table (migration 008 revokes INSERT/UPDATE/DELETE), which
+      // is precisely what stops coins and scores from being forgeable. Every
+      // change to that row goes through a SECURITY DEFINER RPC instead.
     }),
     {
       name: "user-storage",

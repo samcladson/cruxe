@@ -1,7 +1,9 @@
 import { MaterialIcons } from "@expo/vector-icons";
-import React, { useMemo } from "react";
+import * as Crypto from "expo-crypto";
+import React, { useEffect, useMemo, useState } from "react";
 import { SFX } from "../../services/soundService";
 import {
+  Alert,
   Modal,
   ScrollView,
   StatusBar,
@@ -18,10 +20,12 @@ import {
   canRevealLetter,
   canRevealWord,
   CHECK_ERRORS_COST,
-  getCheckErrorsCost,
-  getRevealWordCost,
+  getUnrevealedLetterCount,
   REVEAL_LETTER_COST,
 } from "../../services/hintEngine";
+import { loadHintPrices, spendOnHint } from "../../services/economyService";
+import { track } from "../../services/analyticsService";
+import { HintPrices } from "../../supabase/functions/_shared/economyTypes.ts";
 import { usePuzzleStore } from "../../stores/puzzleStore";
 import { useUserStore } from "../../stores/userStore";
 
@@ -50,8 +54,21 @@ export function HintOptionsModal({ visible, onClose }: HintOptionsModalProps) {
     decrementCheck,
   } = usePuzzleStore();
 
-  const { profile, spendCoins } = useUserStore();
+  const { profile } = useUserStore();
   const coins = profile.coins;
+
+  const [busy, setBusy] = useState(false);
+
+  // Display-only prices. The server derives what it actually charges from
+  // the same config row, so a stale value here is cosmetic, not exploitable.
+  const [prices, setPrices] = useState<HintPrices | null>(null);
+  useEffect(() => {
+    loadHintPrices().then(setPrices);
+  }, []);
+
+  const letterPrice = prices?.reveal_letter ?? REVEAL_LETTER_COST;
+  const wordPricePerLetter = prices?.reveal_word_per_letter ?? REVEAL_LETTER_COST;
+  const checkPrice = prices?.check_errors ?? CHECK_ERRORS_COST;
 
   const activeClue = getActiveClue();
 
@@ -61,14 +78,17 @@ export function HintOptionsModal({ visible, onClose }: HintOptionsModalProps) {
     return buildWordPreview(activePuzzle.grid, activeClue);
   }, [activePuzzle, activeClue]);
 
-  /** Dynamic cost for reveal word = 30 × unrevealed letters */
-  const revealWordCost = useMemo(() => {
+  /** How many letters a reveal-word would uncover. Sent to the server, which
+   *  clamps it to the clue's real length before charging. */
+  const unrevealedLetters = useMemo(() => {
     if (!activePuzzle || !activeClue) return 0;
-    return getRevealWordCost(activePuzzle.grid, activeClue);
+    return getUnrevealedLetterCount(activePuzzle.grid, activeClue);
   }, [activePuzzle, activeClue]);
 
-  /** Check errors: free if checks remain, 20 coins otherwise */
-  const checkErrorsCost = getCheckErrorsCost(checksRemaining);
+  const revealWordCost = unrevealedLetters * wordPricePerLetter;
+
+  /** Check errors: free while free checks remain, priced afterwards */
+  const checkErrorsCost = checksRemaining > 0 ? 0 : checkPrice;
 
   // Availability
   const letterAvailable = activePuzzle
@@ -79,49 +99,88 @@ export function HintOptionsModal({ visible, onClose }: HintOptionsModalProps) {
     : false;
 
   // Affordability
-  const canAffordLetter = canAffordHint(REVEAL_LETTER_COST, coins);
+  const canAffordLetter = canAffordHint(letterPrice, coins);
   const canAffordWord = canAffordHint(revealWordCost, coins);
   const canAffordCheck =
     checkErrorsCost === 0 || canAffordHint(checkErrorsCost, coins);
 
-  // Combined flags
-  const letterEnabled = letterAvailable && canAffordLetter;
-  const wordEnabled = wordAvailable && canAffordWord && revealWordCost > 0;
-  const checkEnabled = canAffordCheck;
+  // Combined flags — `busy` blocks a double-tap firing two charges
+  const letterEnabled = letterAvailable && canAffordLetter && !busy;
+  const wordEnabled =
+    wordAvailable && canAffordWord && revealWordCost > 0 && !busy;
+  const checkEnabled = canAffordCheck && !busy;
 
   // ─── Handlers ─────────────────────────────────────────────────
+  //
+  // Charge FIRST, then reveal. The previous order revealed the answer and
+  // then attempted payment, so a declined charge still gave the hint away.
 
-  const handleRevealLetter = () => {
+  /**
+   * Charges for a hint server-side.
+   *
+   * `actionId` is generated per tap and used as the idempotency key, so a
+   * retry after a flaky response is free rather than double-charged.
+   */
+  const charge = async (
+    hintType: "reveal_letter" | "reveal_word" | "check_errors",
+    letterCount: number,
+  ) => {
+    if (!activePuzzle) throw new Error("no_puzzle");
+    const result = await spendOnHint(
+      activePuzzle.id,
+      hintType,
+      Crypto.randomUUID(),
+      letterCount,
+    );
+    useUserStore.getState().applyServerBalance(result.balance);
+    track("hint_used", { hintType, cost: result.cost });
+    return result;
+  };
+
+  const handleRevealLetter = async () => {
     if (!letterEnabled) return;
-    const revealed = revealLetter();
-    if (revealed) {
-      spendCoins(REVEAL_LETTER_COST);
+    setBusy(true);
+    try {
+      await charge("reveal_letter", 1);
+      revealLetter();
       SFX.hint();
+      onClose();
+    } catch (e: any) {
+      Alert.alert("Hint unavailable", e.message);
+    } finally {
+      setBusy(false);
     }
-    onClose();
   };
 
-  const handleRevealWord = () => {
+  const handleRevealWord = async () => {
     if (!wordEnabled) return;
-    const cost = revealWordCost;
-    const revealed = revealWord();
-    if (revealed > 0) {
-      spendCoins(cost);
+    setBusy(true);
+    try {
+      await charge("reveal_word", unrevealedLetters);
+      revealWord();
       SFX.hint();
+      onClose();
+    } catch (e: any) {
+      Alert.alert("Hint unavailable", e.message);
+    } finally {
+      setBusy(false);
     }
-    onClose();
   };
 
-  const handleCheckErrors = () => {
+  const handleCheckErrors = async () => {
     if (!checkEnabled) return;
-    checkErrors();
-    if (checksRemaining > 0) {
+    setBusy(true);
+    try {
+      await charge("check_errors", 0);
+      checkErrors();
       decrementCheck();
-    } else {
-      spendCoins(CHECK_ERRORS_COST);
+      SFX.error();
+      onClose();
+    } catch (e: any) {
+      Alert.alert("Check unavailable", e.message);
+    } finally {
+      setBusy(false);
     }
-    SFX.error();
-    onClose();
   };
 
   return (
@@ -265,7 +324,7 @@ export function HintOptionsModal({ visible, onClose }: HintOptionsModalProps) {
                     !letterEnabled && styles.priceTextDisabled,
                   ]}
                 >
-                  {REVEAL_LETTER_COST}
+                  {letterPrice}
                 </Text>
                 <MaterialIcons
                   name="monetization-on"
@@ -410,7 +469,7 @@ export function HintOptionsModal({ visible, onClose }: HintOptionsModalProps) {
                         !checkEnabled && styles.priceTextDisabled,
                       ]}
                     >
-                      {CHECK_ERRORS_COST}
+                      {checkPrice}
                     </Text>
                     <MaterialIcons
                       name="monetization-on"

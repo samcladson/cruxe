@@ -41,6 +41,11 @@ interface SuccessModalProps {
   isNewStreak?: boolean;
   /** ID of the next unsolved puzzle in the same category/difficulty */
   nextPuzzleId?: string | null;
+  /**
+   * True when the solve has not reached the server yet, so no reward has
+   * been granted. Shows an honest "pending" line instead of a coin figure.
+   */
+  rewardPending?: boolean;
 }
 
 export function SuccessModal({
@@ -50,6 +55,7 @@ export function SuccessModal({
   scoreEarned = 0,
   isNewStreak = false,
   nextPuzzleId,
+  rewardPending = false,
 }: SuccessModalProps) {
   const { activePuzzle, timer, getAccuracy } = usePuzzleStore();
   const { profile } = useUserStore();
@@ -58,8 +64,10 @@ export function SuccessModal({
   const [showStreakScreen, setShowStreakScreen] = useState(false);
 
   const accuracy = Math.round(getAccuracy() * 100);
-  const finalCoins =
-    earnedProp ?? (activePuzzle?.difficulty === "easy" ? 150 : 540);
+  // No invented fallback: the reward is whatever the server granted, and
+  // zero until it says otherwise. The old 150/540 placeholder displayed
+  // coins the player had not actually received.
+  const finalCoins = earnedProp ?? 0;
 
   // Flame bounce animation for streak screen
   const flameScale = useSharedValue(0);
@@ -279,16 +287,39 @@ export function SuccessModal({
                 style={styles.statBoxGrid}
               >
                 <MaterialIcons
-                  name="monetization-on"
+                  name={rewardPending ? "cloud-off" : "monetization-on"}
                   size={20}
-                  color={theme.colors.accentGold}
+                  color={
+                    rewardPending
+                      ? theme.colors.textMuted
+                      : theme.colors.accentGold
+                  }
                 />
-                <Text
-                  style={[styles.statValue, { color: theme.colors.accentGold }]}
-                >
-                  +{formatCompactNumber(displayCoins)}
-                </Text>
-                <Text style={styles.statLabel}>COINS</Text>
+                {rewardPending ? (
+                  <>
+                    <Text
+                      style={[
+                        styles.statValue,
+                        { color: theme.colors.textMuted, fontSize: 14 },
+                      ]}
+                    >
+                      Pending
+                    </Text>
+                    <Text style={styles.statLabel}>SYNCS LATER</Text>
+                  </>
+                ) : (
+                  <>
+                    <Text
+                      style={[
+                        styles.statValue,
+                        { color: theme.colors.accentGold },
+                      ]}
+                    >
+                      +{formatCompactNumber(displayCoins)}
+                    </Text>
+                    <Text style={styles.statLabel}>COINS</Text>
+                  </>
+                )}
               </Animated.View>
             </View>
           </View>

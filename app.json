@@ -42,6 +42,13 @@
         {
           "iosUrlScheme": "com.googleusercontent.apps.1042059769347-31fuo35i64l5l0ap3tgt47t2v33k0t59"
         }
+      ],
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "REPLACE_WITH_SENTRY_ORG_SLUG",
+          "project": "cruxe"
+        }
       ]
     ],
     "experiments": {

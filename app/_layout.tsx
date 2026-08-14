@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/react-native";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { DarkTheme, ThemeProvider } from "@react-navigation/native";
 import { useFonts } from "expo-font";
@@ -16,8 +17,8 @@ import {
   Manrope_700Bold,
 } from "@expo-google-fonts/manrope";
 import { AppState, AppStateStatus } from "react-native";
-import { ensureUserProfile, initAuth, onAuthStateChange } from "../services/authService";
-import { drainPendingCompletions } from "../services/offlineSyncService";
+import { initAuth, onAuthStateChange } from "../services/authService";
+import { drainPendingSolves } from "../services/offlineSyncService";
 import { initRevenueCat, loginToRevenueCat } from "../services/revenueCatService";
 import { preloadSounds } from "../services/soundService";
 import { useUserStore } from "../stores/userStore";
@@ -32,10 +33,24 @@ export const unstable_settings = {
   initialRouteName: "(tabs)",
 };
 
+// Crash reporting. Disabled in development so local stack traces stay local
+// and the issue stream reflects real users only.
+Sentry.init({
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+  enabled: !__DEV__ && Boolean(process.env.EXPO_PUBLIC_SENTRY_DSN),
+  tracesSampleRate: 0.2,
+  // Puzzle content and auth tokens must never leave the device. The device
+  // name is dropped because users often put their real name in it.
+  beforeSend(event) {
+    if (event.contexts?.device) delete event.contexts.device.name;
+    return event;
+  },
+});
+
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
-export default function RootLayout() {
+function RootLayout() {
   const [loaded, error] = useFonts({
     Manrope_400Regular,
     Manrope_500Medium,
@@ -88,8 +103,10 @@ function RootLayoutNav() {
 
       if (userId) {
         setUserId(userId);
+        // Anonymous UUID only — enough to correlate a user's crashes,
+        // nothing that identifies a person.
+        Sentry.setUser({ id: userId });
         await loginToRevenueCat(userId);
-        await ensureUserProfile(userId);
         await syncFromSupabase(userId);
         console.log("[Layout] Auth bootstrap complete for user:", userId);
       } else {
@@ -118,14 +135,14 @@ function RootLayoutNav() {
   }, []);
 
   /**
-   * Drain offline completion queue whenever the app returns to the foreground.
-   * Queued completions are retried silently — the user sees nothing unless
+   * Drain the offline solve queue whenever the app returns to the foreground.
+   * Queued solves are retried silently — the user sees nothing unless
    * there's a persistent failure after many retries.
    */
   useEffect(() => {
     const handleAppStateChange = (nextState: AppStateStatus) => {
       if (nextState === "active") {
-        drainPendingCompletions().catch((err) =>
+        drainPendingSolves().catch((err) =>
           console.warn("[Layout] Offline drain error:", err),
         );
       }
@@ -215,3 +232,6 @@ function RootLayoutNav() {
     </SafeAreaProvider>
   );
 }
+
+// Wrapped so Sentry can capture render errors and navigation breadcrumbs.
+export default Sentry.wrap(RootLayout);

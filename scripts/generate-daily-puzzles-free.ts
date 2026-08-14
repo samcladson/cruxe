@@ -18,6 +18,7 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
+import { buildPuzzle } from "../services/crosswordEngine";
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -48,9 +49,23 @@ interface PuzzleWord {
   isHint: boolean;
 }
 
+/** A grid cell as persisted. Mirrors StoredCell in functions/_shared/grid.ts
+ *  plus the render-only fields the client needs. */
+interface StoredGridCell {
+  letter: string | null;
+  isBlocked: boolean;
+  isPreFilled: boolean;
+  clueNumbers: number[];
+  clueIds: string[];
+}
+
 interface DailyPuzzleData {
   words: PuzzleWord[];
+  /** The built grid. Present from migration 008 onward; absent on legacy rows. */
+  grid: StoredGridCell[][];
+  clues: unknown[];
   metadata: {
+    date?: string;
     category: Category;
     difficulty: Difficulty;
     gridSize: GridSize;
@@ -444,20 +459,45 @@ async function main() {
       if (words.length < 3)
         throw new Error(`Only ${words.length} words returned`);
 
-      // Build simple lightweight data structure
+      // Build the grid once, HERE, so every player gets the identical layout
+      // and the server can verify submissions against a known answer key.
+      // buildPuzzle uses Math.random() on retry attempts, so building it on
+      // each client would give every player a different puzzle.
+      const built = buildPuzzle(
+        words,
+        geminiCategory as any,
+        spec.difficulty as any,
+        spec.gridSize as any,
+        undefined,
+      );
+      if (!built) {
+        throw new Error("Grid construction failed");
+      }
+
       const puzzleData: DailyPuzzleData = {
         words,
+        grid: built.grid.map((row) =>
+          row.map((c) => ({
+            letter: c.letter,
+            isBlocked: c.isBlocked,
+            isPreFilled: c.isPreFilled,
+            clueNumbers: c.clueNumbers,
+            clueIds: c.clueIds,
+          })),
+        ),
+        clues: built.clues,
         metadata: {
           category: spec.category,
           difficulty: spec.difficulty,
           gridSize: spec.gridSize,
           isDailyChallenge: spec.isDailyChallenge,
-          estimatedTime: words.length * 30,
-          totalWords: words.length,
+          estimatedTime: built.estimatedTime,
+          totalWords: built.totalWords,
+          date: targetDate,
         },
       };
 
-      // Store ONLY the word definitions in database
+      // Store the built grid alongside the words
       const { error: insertError } = await supabase
         .from("daily_puzzles")
         .upsert(
@@ -469,8 +509,8 @@ async function main() {
             variant: spec.variant,
             is_daily_challenge: spec.isDailyChallenge,
             puzzle_data: puzzleData,
-            total_words: words.length,
-            estimated_time: puzzleData.metadata.estimatedTime,
+            total_words: built.totalWords,
+            estimated_time: built.estimatedTime,
           },
           { onConflict: "puzzle_date,category,difficulty,grid_size,variant" },
         );
@@ -478,7 +518,10 @@ async function main() {
       if (insertError) throw new Error(`Insert failed: ${insertError.message}`);
 
       generated++;
-      console.log(` ✅ Success: ${words.length} words stored`);
+      console.log(
+        ` ✅ Success: ${built.totalWords}/${words.length} words placed on a ` +
+          `${spec.gridSize}×${spec.gridSize} grid`,
+      );
     } catch (err) {
       errors++;
       const errMsg = err instanceof Error ? err.message : String(err);

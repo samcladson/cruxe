@@ -17,27 +17,23 @@ import { CrosswordGrid } from "../../components/grid/CrosswordGrid";
 import { HintOptionsModal } from "../../components/modals/HintOptionsModal";
 import { SuccessModal } from "../../components/modals/SuccessModal";
 import { theme } from "../../constants/theme";
+import { fetchCategoryPuzzles } from "../../services/puzzleService";
+import { submitSolve } from "../../services/economyService";
+import { track } from "../../services/analyticsService";
 import {
-  fetchCategoryPuzzles,
-  recordCompletion,
-} from "../../services/puzzleService";
-import { calculateScore, ScoreBreakdown } from "../../services/scoreEngine";
+  calculateScore,
+  DEFAULT_SCORING_CONFIG,
+  ScoreBreakdown,
+} from "../../services/scoreEngine";
+import { canonicalCellOrder } from "../../supabase/functions/_shared/grid.ts";
 import { SFX } from "../../services/soundService";
 import { usePuzzleStore } from "../../stores/puzzleStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useUserStore } from "../../stores/userStore";
 import { Difficulty } from "../../types/puzzle.types";
 
-/**
- * Coin rewards by difficulty level — flat bonus for completing a puzzle.
- * Kept separate from score so coins remain a soft currency, not the prestige metric.
- */
-const COIN_REWARDS: Record<Difficulty, number> = {
-  [Difficulty.EASY]: 10,
-  [Difficulty.MEDIUM]: 25,
-  [Difficulty.HARD]: 50,
-  [Difficulty.EXPERT]: 100,
-};
+// Coin rewards live in economy_config on the server. The client is told what
+// it earned; it never decides.
 
 /**
  * GameScreen — Main gameplay interface.
@@ -49,14 +45,7 @@ export default function GameScreen() {
   const { puzzleId } = useLocalSearchParams();
   const { activePuzzle, timer, checkCompletion, getAccuracy } =
     usePuzzleStore();
-  const {
-    profile,
-    addCoins,
-    completePuzzle,
-    incrementStreak,
-    syncToSupabase,
-    enqueuePendingCompletion,
-  } = useUserStore();
+  const { profile, completePuzzle, enqueuePendingSolve } = useUserStore();
 
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showHintModal, setShowHintModal] = useState(false);
@@ -67,100 +56,105 @@ export default function GameScreen() {
   );
   const [isNewStreak, setIsNewStreak] = useState(false);
   const [nextPuzzleId, setNextPuzzleId] = useState<string | null>(null);
+  /** True while the solve is real but the reward has not been granted yet. */
+  const [rewardPending, setRewardPending] = useState(false);
 
   // Prevent duplicate completion recording on re-renders
   const hasRecorded = useRef(false);
 
   /**
    * Full completion pipeline:
-   * 1. Calculate coin reward by difficulty
-   * 2. Award coins + update category stats + increment streak (optimistic)
-   * 3. Record completion to Supabase (fire-and-forget)
-   * 4. Show success modal
+   * 1. Serialise the player's letters in the server's canonical cell order
+   * 2. Show a *predicted* score immediately so the modal is never empty
+   * 3. Submit to the server, which verifies the grid and decides the real
+   *    score and coin reward
+   * 4. Replace the prediction with the authoritative result — or, offline,
+   *    queue the solve and say plainly that the reward is pending
    */
   const handleCompletion = useCallback(async () => {
     if (!activePuzzle || hasRecorded.current) return;
     hasRecorded.current = true;
 
-    const reward = COIN_REWARDS[activePuzzle.difficulty as Difficulty] || 25;
-    const accuracy = getAccuracy();
+    const letters = canonicalCellOrder(activePuzzle.grid)
+      .map(({ row, col }) => activePuzzle.grid[row][col].userInput || " ")
+      .join("");
 
-    // Multi-factor score: difficulty × grid × accuracy × time − hint penalty
-    const breakdown = calculateScore({
-      difficulty: activePuzzle.difficulty as Difficulty,
-      gridSize: activePuzzle.gridSize,
-      accuracy,
-      timeTaken: timer,
-      hintsUsed: activePuzzle.hintsUsed || 0,
-    });
-
-    setCoinsEarned(reward);
-    setScoreEarned(breakdown.finalScore);
-    setScoreBreakdown(breakdown);
+    // Predicted only — the server recomputes from its own answer key and
+    // config, and its number wins the moment it arrives.
+    const predicted = calculateScore(
+      {
+        difficulty: activePuzzle.difficulty as Difficulty,
+        gridSize: activePuzzle.gridSize,
+        accuracy: getAccuracy(),
+        timeTaken: timer,
+        hintsUsed: activePuzzle.hintsUsed || 0,
+      },
+      DEFAULT_SCORING_CONFIG,
+    );
+    setScoreEarned(predicted.finalScore);
+    setScoreBreakdown(predicted);
+    setRewardPending(true);
 
     const todayStr = new Date().toISOString().split("T")[0];
     const lastPlayedStr = new Date(profile.lastPlayedDate)
       .toISOString()
       .split("T")[0];
-    const isNew = todayStr !== lastPlayedStr;
-    setIsNewStreak(isNew);
+    setIsNewStreak(todayStr !== lastPlayedStr);
 
-    // Optimistic local updates
-    addCoins(reward);
-    completePuzzle(
-      activePuzzle.category as any,
-      timer,
-      Math.round(accuracy * activePuzzle.totalWords),
-      activePuzzle.totalWords,
-      breakdown.finalScore,
-    );
-    incrementStreak();
+    setShowSuccessModal(true);
 
-    // Record to Supabase (fire-and-forget; failures queued for retry)
-    const userId = profile.id && profile.id !== "guest" ? profile.id : "guest";
-    const completionData = {
-      puzzleId: activePuzzle.id || "",
-      userId,
-      score: breakdown.finalScore,
-      timeTaken: timer,
-      accuracy,
-      hintsUsed: activePuzzle.hintsUsed || 0,
-      coinsEarned: reward,
-      puzzleDate: activePuzzle.date || new Date().toISOString().split("T")[0],
-      category: activePuzzle.category,
-      difficulty: activePuzzle.difficulty,
-      gridSize: activePuzzle.gridSize,
-    };
-
-    const recorded = await recordCompletion(completionData).catch((err) => {
-      console.warn("[GameScreen] Failed to record completion:", err);
-      return false;
-    });
-
-    if (!recorded) {
-      // Offline or error — queue for retry when connectivity is restored
-      enqueuePendingCompletion({
-        ...completionData,
-        queuedAt: new Date().toISOString(),
-      });
-    }
-
-    // Sync updated profile (streak, coins, totalScore) to Supabase
-    await syncToSupabase().catch((err) =>
-      console.warn("[GameScreen] Profile sync failed:", err),
-    );
-
-    // Trigger success haptic + sound
     if (useSettingsStore.getState().hapticsEnabled) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
     SFX.puzzleComplete();
 
+    try {
+      const result = await submitSolve(activePuzzle.id, letters, timer);
+
+      setScoreEarned(result.score);
+      setScoreBreakdown(result.breakdown);
+      setCoinsEarned(result.coinsEarned);
+      setRewardPending(false);
+
+      track("puzzle_completed", {
+        difficulty: activePuzzle.difficulty,
+        gridSize: activePuzzle.gridSize,
+        score: result.score,
+        grade: result.grade,
+        hintsUsed: result.hintsUsed,
+        timeTaken: timer,
+      });
+      if (useUserStore.getState().profile.totalPuzzlesSolved === 0) {
+        track("first_solve", { difficulty: activePuzzle.difficulty });
+      }
+
+      useUserStore.getState().applyServerBalance(result.newBalance);
+      completePuzzle(
+        activePuzzle.category as any,
+        timer,
+        Math.round(result.accuracy * activePuzzle.totalWords),
+        activePuzzle.totalWords,
+      );
+      await useUserStore.getState().refreshBalance();
+    } catch (err) {
+      // Offline or server unreachable. The solve is real; the reward is not
+      // granted yet. Queue it and say so, rather than inventing coins that
+      // the server might later disagree with.
+      console.warn("[GameScreen] Submission deferred:", err);
+      enqueuePendingSolve({
+        puzzleId: activePuzzle.id,
+        letters,
+        elapsedSeconds: timer,
+        queuedAt: new Date().toISOString(),
+      });
+      setRewardPending(true);
+    }
+
     // Find next unsolved puzzle in the same category
     try {
       const categoryPuzzles = await fetchCategoryPuzzles(
         activePuzzle.category as any,
-        userId,
+        profile.id,
       );
       const next = categoryPuzzles.find(
         (p) => !p.isCompleted && p.id !== activePuzzle.id,
@@ -169,9 +163,26 @@ export default function GameScreen() {
     } catch {
       // Non-critical — just won't show "Next Puzzle" button
     }
-
-    setShowSuccessModal(true);
   }, [activePuzzle, timer, profile.id]);
+
+  // Funnel: entering and leaving a puzzle. `hasRecorded` distinguishes a
+  // genuine abandon from a normal post-completion unmount.
+  useEffect(() => {
+    if (!activePuzzle) return;
+    track("puzzle_started", {
+      difficulty: activePuzzle.difficulty,
+      gridSize: activePuzzle.gridSize,
+    });
+    return () => {
+      if (!hasRecorded.current) {
+        track("puzzle_abandoned", {
+          difficulty: activePuzzle.difficulty,
+          gridSize: activePuzzle.gridSize,
+          secondsPlayed: usePuzzleStore.getState().timer,
+        });
+      }
+    };
+  }, [activePuzzle?.id]);
 
   // Trigger completion when puzzle is solved
   useEffect(() => {
@@ -273,6 +284,7 @@ export default function GameScreen() {
           scoreEarned={scoreEarned}
           isNewStreak={isNewStreak}
           nextPuzzleId={nextPuzzleId}
+          rewardPending={rewardPending}
         />
         <HintOptionsModal
           visible={showHintModal}
