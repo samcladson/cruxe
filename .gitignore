@@ -40,3 +40,7 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# crash dumps
+crash_log*.txt
+crash_buffer*.txt
