@@ -33,8 +33,10 @@ export default function StoreScreen() {
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  /** product_id -> coins, straight from the server catalogue. */
-  const [products, setProducts] = useState<Record<string, number>>({});
+  /** product_id -> catalogue entry, straight from the server. */
+  const [products, setProducts] = useState<
+    Record<string, { coins: number; isPopular: boolean }>
+  >({});
 
   useEffect(() => {
     track("store_viewed");
@@ -52,11 +54,16 @@ export default function StoreScreen() {
   useEffect(() => {
     supabase
       .from("coin_products")
-      .select("product_id, coins")
+      .select("product_id, coins, is_popular")
       .then(({ data }) => {
         if (data) {
           setProducts(
-            Object.fromEntries(data.map((p) => [p.product_id, p.coins])),
+            Object.fromEntries(
+              data.map((p) => [
+                p.product_id,
+                { coins: p.coins, isPopular: p.is_popular },
+              ]),
+            ),
           );
         }
       });
@@ -226,9 +233,11 @@ export default function StoreScreen() {
           <View style={styles.grid}>
             {offering.availablePackages.map((pkg) => {
               // Extract data from the RevenueCat package
-              const coinAmount = products[pkg.product.identifier] ?? 0;
-              // Hardcode 'popular' logic for the demo, or derive from package metadata later
-              const isPopular = pkg.identifier === "$rc_lifetime" || pkg.identifier.includes("pro");
+              const entry = products[pkg.product.identifier];
+              const coinAmount = entry?.coins ?? 0;
+              // Which tier is the anchor comes from coin_products, so the
+              // badge can move without shipping a build.
+              const isPopular = entry?.isPopular ?? false;
 
               return (
                 <TouchableOpacity
