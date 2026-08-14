@@ -24,6 +24,7 @@ import {
   REVEAL_LETTER_COST,
 } from "../../services/hintEngine";
 import { loadHintPrices, spendOnHint } from "../../services/economyService";
+import { track } from "../../services/analyticsService";
 import { HintPrices } from "../../supabase/functions/_shared/economyTypes.ts";
 import { usePuzzleStore } from "../../stores/puzzleStore";
 import { useUserStore } from "../../stores/userStore";
@@ -132,6 +133,7 @@ export function HintOptionsModal({ visible, onClose }: HintOptionsModalProps) {
       letterCount,
     );
     useUserStore.getState().applyServerBalance(result.balance);
+    track("hint_used", { hintType, cost: result.cost });
     return result;
   };
 

@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/react-native";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { DarkTheme, ThemeProvider } from "@react-navigation/native";
 import { useFonts } from "expo-font";
@@ -32,10 +33,24 @@ export const unstable_settings = {
   initialRouteName: "(tabs)",
 };
 
+// Crash reporting. Disabled in development so local stack traces stay local
+// and the issue stream reflects real users only.
+Sentry.init({
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+  enabled: !__DEV__ && Boolean(process.env.EXPO_PUBLIC_SENTRY_DSN),
+  tracesSampleRate: 0.2,
+  // Puzzle content and auth tokens must never leave the device. The device
+  // name is dropped because users often put their real name in it.
+  beforeSend(event) {
+    if (event.contexts?.device) delete event.contexts.device.name;
+    return event;
+  },
+});
+
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
-export default function RootLayout() {
+function RootLayout() {
   const [loaded, error] = useFonts({
     Manrope_400Regular,
     Manrope_500Medium,
@@ -88,6 +103,9 @@ function RootLayoutNav() {
 
       if (userId) {
         setUserId(userId);
+        // Anonymous UUID only — enough to correlate a user's crashes,
+        // nothing that identifies a person.
+        Sentry.setUser({ id: userId });
         await loginToRevenueCat(userId);
         await syncFromSupabase(userId);
         console.log("[Layout] Auth bootstrap complete for user:", userId);
@@ -214,3 +232,6 @@ function RootLayoutNav() {
     </SafeAreaProvider>
   );
 }
+
+// Wrapped so Sentry can capture render errors and navigation breadcrumbs.
+export default Sentry.wrap(RootLayout);

@@ -37,6 +37,7 @@ import { supabase } from "../../services/supabaseClient";
 import { usePuzzleStore } from "../../stores/puzzleStore";
 import { useUserStore } from "../../stores/userStore";
 import { claimDailyBonus } from "../../services/economyService";
+import { track } from "../../services/analyticsService";
 import { formatCompactNumber } from "../../utils/formatNumber";
 
 function PulseDot() {
@@ -88,6 +89,10 @@ export default function HomeScreen() {
         const result = await claimDailyBonus();
         if (cancelled || result.already_claimed || result.bonus === 0) return;
         useUserStore.getState().applyServerBalance(result.balance);
+        track("daily_bonus_claimed", {
+          bonus: result.bonus,
+          streak: result.streak,
+        });
         setDailyBonusBanner(result.bonus);
         timer = setTimeout(() => setDailyBonusBanner(null), 4000);
       } catch {

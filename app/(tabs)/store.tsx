@@ -16,6 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { theme } from "../../constants/theme";
 import { fetchCurrentOffering, purchasePackage, restorePurchases } from "../../services/revenueCatService";
 import { syncPurchases } from "../../services/economyService";
+import { track } from "../../services/analyticsService";
 import { supabase } from "../../services/supabaseClient";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useUserStore } from "../../stores/userStore";
@@ -34,6 +35,10 @@ export default function StoreScreen() {
   const [confirming, setConfirming] = useState(false);
   /** product_id -> coins, straight from the server catalogue. */
   const [products, setProducts] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    track("store_viewed");
+  }, []);
 
   useEffect(() => {
     async function loadOfferings() {
@@ -110,6 +115,7 @@ export default function StoreScreen() {
     triggerHaptic();
     setPurchasing(true);
     const balanceBefore = useUserStore.getState().profile.coins;
+    track("purchase_started", { productId: pkg.product.identifier });
 
     const { error, userCancelled } = await purchasePackage(pkg);
 
@@ -119,6 +125,7 @@ export default function StoreScreen() {
     }
     if (error) {
       setPurchasing(false);
+      track("purchase_failed", { productId: pkg.product.identifier });
       Alert.alert("Purchase Failed", error.message);
       return;
     }
@@ -129,6 +136,11 @@ export default function StoreScreen() {
     const granted = await waitForCredit(balanceBefore, 12000);
     setConfirming(false);
     setPurchasing(false);
+
+    track("purchase_completed", {
+      productId: pkg.product.identifier,
+      creditConfirmed: granted,
+    });
 
     if (granted) {
       if (hapticsEnabled) {

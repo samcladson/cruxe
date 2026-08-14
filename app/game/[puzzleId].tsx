@@ -19,6 +19,7 @@ import { SuccessModal } from "../../components/modals/SuccessModal";
 import { theme } from "../../constants/theme";
 import { fetchCategoryPuzzles } from "../../services/puzzleService";
 import { submitSolve } from "../../services/economyService";
+import { track } from "../../services/analyticsService";
 import {
   calculateScore,
   DEFAULT_SCORING_CONFIG,
@@ -115,6 +116,18 @@ export default function GameScreen() {
       setCoinsEarned(result.coinsEarned);
       setRewardPending(false);
 
+      track("puzzle_completed", {
+        difficulty: activePuzzle.difficulty,
+        gridSize: activePuzzle.gridSize,
+        score: result.score,
+        grade: result.grade,
+        hintsUsed: result.hintsUsed,
+        timeTaken: timer,
+      });
+      if (useUserStore.getState().profile.totalPuzzlesSolved === 0) {
+        track("first_solve", { difficulty: activePuzzle.difficulty });
+      }
+
       useUserStore.getState().applyServerBalance(result.newBalance);
       completePuzzle(
         activePuzzle.category as any,
@@ -151,6 +164,25 @@ export default function GameScreen() {
       // Non-critical — just won't show "Next Puzzle" button
     }
   }, [activePuzzle, timer, profile.id]);
+
+  // Funnel: entering and leaving a puzzle. `hasRecorded` distinguishes a
+  // genuine abandon from a normal post-completion unmount.
+  useEffect(() => {
+    if (!activePuzzle) return;
+    track("puzzle_started", {
+      difficulty: activePuzzle.difficulty,
+      gridSize: activePuzzle.gridSize,
+    });
+    return () => {
+      if (!hasRecorded.current) {
+        track("puzzle_abandoned", {
+          difficulty: activePuzzle.difficulty,
+          gridSize: activePuzzle.gridSize,
+          secondsPlayed: usePuzzleStore.getState().timer,
+        });
+      }
+    };
+  }, [activePuzzle?.id]);
 
   // Trigger completion when puzzle is solved
   useEffect(() => {

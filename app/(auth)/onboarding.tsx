@@ -1,11 +1,12 @@
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Dimensions, StyleSheet, Text, View } from "react-native";
 import Animated, { SlideInRight, SlideOutLeft } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button } from "../../components/ui/Button";
 import { theme } from "../../constants/theme";
 import { useSettingsStore } from "../../stores/settingsStore";
+import { track } from "../../services/analyticsService";
 
 const { width } = Dimensions.get("window");
 
@@ -30,10 +31,15 @@ const SLIDES = [
 export default function OnboardingScreen() {
   const [currentIndex, setCurrentIndex] = useState(0);
 
+  useEffect(() => {
+    track("onboarding_started");
+  }, []);
+
   const handleNext = () => {
     if (currentIndex < SLIDES.length - 1) {
       setCurrentIndex((prev) => prev + 1);
     } else {
+      track("onboarding_completed", { slides: SLIDES.length });
       useSettingsStore.getState().setHasCompletedOnboarding(true);
       router.replace("/(auth)/sign-in");
     }
