@@ -15,6 +15,7 @@ import { CATEGORIES } from "../../constants/categories";
 import { theme } from "../../constants/theme";
 import { fetchAllPuzzlesForToday, PuzzleMeta } from "../../services/puzzleService";
 import { useUserStore } from "../../stores/userStore";
+import { payEntryFee } from "../../services/economyService";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { Difficulty, ENTRY_FEES } from "../../types/puzzle.types";
 
@@ -27,7 +28,6 @@ export default function CollectionScreen() {
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
 
   const userProfile = useUserStore((state) => state.profile);
-  const spendCoins = useUserStore((state) => state.spendCoins);
   const hapticsEnabled = useSettingsStore((state) => state.hapticsEnabled);
 
   const triggerHaptic = () => {
@@ -259,7 +259,7 @@ export default function CollectionScreen() {
                   {/* Action Button — same as category screen */}
                   <TouchableOpacity
                     style={styles.cardActionBtn}
-                    onPress={() => {
+                    onPress={async () => {
                       triggerHaptic();
                       if (puzzle.isCompleted) {
                         router.push({
@@ -269,23 +269,22 @@ export default function CollectionScreen() {
                         return;
                       }
 
-                      const fee = ENTRY_FEES[puzzle.difficulty as Difficulty];
-                      if (userProfile.coins < fee) {
-                        Alert.alert(
-                          "Not enough coins!",
-                          `You need ${fee} coins to play a ${puzzle.difficulty} puzzle.`,
-                          [{ text: "OK", style: "default" }]
-                        );
+                      // The server owns the price and the balance check. A
+                      // failure must not start the puzzle.
+                      try {
+                        const { balance } = await payEntryFee(puzzle.id);
+                        useUserStore.getState().applyServerBalance(balance);
+                      } catch (e: any) {
+                        Alert.alert("Can't start puzzle", e.message, [
+                          { text: "OK", style: "default" },
+                        ]);
                         return;
                       }
 
-                      const success = spendCoins(fee);
-                      if (success) {
-                        router.push({
-                          pathname: "/game/generate",
-                          params: { id: puzzle.id },
-                        });
-                      }
+                      router.push({
+                        pathname: "/game/generate",
+                        params: { id: puzzle.id },
+                      });
                     }}
                   >
                     <MaterialIcons

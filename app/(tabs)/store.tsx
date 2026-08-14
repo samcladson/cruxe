@@ -15,20 +15,25 @@ import { PurchasesOffering, PurchasesPackage } from "react-native-purchases";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { theme } from "../../constants/theme";
 import { fetchCurrentOffering, purchasePackage, restorePurchases } from "../../services/revenueCatService";
+import { syncPurchases } from "../../services/economyService";
+import { supabase } from "../../services/supabaseClient";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useUserStore } from "../../stores/userStore";
 
-// Mock packs removed. Packages are now fetched dynamically from RevenueCat.
-// We expect package identifiers in RevenueCat to end with the coin amount, e.g., "cruxe_starter_500"
+// Coin amounts come from the `coin_products` table, never from parsing the
+// product identifier. The old regex granted 2 coins for a SKU like
+// "cruxe_pack_v2", and let the client decide what a purchase was worth.
 
 export default function StoreScreen() {
   const coins = useUserStore((state) => state.profile.coins);
-  const addCoins = useUserStore((state) => state.addCoins);
   const hapticsEnabled = useSettingsStore((state) => state.hapticsEnabled);
 
   const [offering, setOffering] = useState<PurchasesOffering | null>(null);
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  /** product_id -> coins, straight from the server catalogue. */
+  const [products, setProducts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     async function loadOfferings() {
@@ -39,6 +44,19 @@ export default function StoreScreen() {
     loadOfferings();
   }, []);
 
+  useEffect(() => {
+    supabase
+      .from("coin_products")
+      .select("product_id, coins")
+      .then(({ data }) => {
+        if (data) {
+          setProducts(
+            Object.fromEntries(data.map((p) => [p.product_id, p.coins])),
+          );
+        }
+      });
+  }, []);
+
   const triggerHaptic = () => {
     if (hapticsEnabled) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -46,47 +64,108 @@ export default function StoreScreen() {
   };
 
   /**
-   * Helper to extract the coin integer from the RevenueCat package identifier.
-   * Assumes your Product IDs are structured like `com.cruxe.coins.500` or `starter_500`.
+   * Resolves true once the balance actually increases.
+   *
+   * Coins are granted by the RevenueCat webhook, not by this screen, so we
+   * watch our own ledger — which RLS already lets us read — and fall back to
+   * a direct balance check if the realtime message is missed.
    */
-  const extractCoinsFromId = (identifier: string): number => {
-    const match = identifier.match(/\d+$/);
-    return match ? parseInt(match[0], 10) : 0;
-  };
+  const waitForCredit = (before: number, timeoutMs: number) =>
+    new Promise<boolean>((resolve) => {
+      let settled = false;
+
+      const finish = (ok: boolean) => {
+        if (settled) return;
+        settled = true;
+        supabase.removeChannel(channel);
+        clearTimeout(timer);
+        resolve(ok);
+      };
+
+      const channel = supabase
+        .channel("own_ledger")
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "coin_ledger",
+            filter: `user_id=eq.${useUserStore.getState().profile.id}`,
+          },
+          (payload: any) => {
+            useUserStore.getState().applyServerBalance(payload.new.balance_after);
+            if (payload.new.balance_after > before) finish(true);
+          },
+        )
+        .subscribe();
+
+      const timer = setTimeout(async () => {
+        await useUserStore.getState().refreshBalance();
+        finish(useUserStore.getState().profile.coins > before);
+      }, timeoutMs);
+    });
 
   const handlePurchase = async (pkg: PurchasesPackage) => {
     if (purchasing) return;
     triggerHaptic();
     setPurchasing(true);
+    const balanceBefore = useUserStore.getState().profile.coins;
 
     const { error, userCancelled } = await purchasePackage(pkg);
-    setPurchasing(false);
 
-    if (userCancelled) return;
-
+    if (userCancelled) {
+      setPurchasing(false);
+      return;
+    }
     if (error) {
+      setPurchasing(false);
       Alert.alert("Purchase Failed", error.message);
       return;
     }
 
-    // Success! Grant coins based on the product ID pattern
-    const coinAmount = extractCoinsFromId(pkg.product.identifier);
-    if (coinAmount > 0) {
-      addCoins(coinAmount);
-      if (hapticsEnabled) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert("Purchase Successful!", `You received ${coinAmount.toLocaleString()} coins.`);
+    // The store has the money. This screen grants nothing — it waits for the
+    // webhook's credit to land, so force-quitting here cannot lose a purchase.
+    setConfirming(true);
+    const granted = await waitForCredit(balanceBefore, 12000);
+    setConfirming(false);
+    setPurchasing(false);
+
+    if (granted) {
+      if (hapticsEnabled) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+      Alert.alert("Purchase complete", "Your coins have been added.");
     } else {
-      Alert.alert("Purchase Successful!", "Your coins have been credited.");
+      // Never imply the money is lost — it is not. The webhook will land, and
+      // Restore Purchases reconciles anything that does not.
+      Alert.alert(
+        "Purchase received",
+        "Your coins are on the way and will appear shortly. " +
+          "You can also tap Restore Purchases at any time.",
+      );
     }
   };
 
   const handleRestore = async () => {
     triggerHaptic();
-    const { error } = await restorePurchases();
-    if (error) {
-      Alert.alert("Restore Failed", error.message);
-    } else {
-      Alert.alert("Purchases Restored", "Your previous purchases have been synced.");
+    setPurchasing(true);
+    try {
+      // Sync the RevenueCat SDK, then ask the server to credit anything a
+      // dropped webhook missed. Consumables are not restorable by the store,
+      // so without this second step the button could only ever be decorative.
+      await restorePurchases();
+      const { credited, balance } = await syncPurchases();
+      useUserStore.getState().applyServerBalance(balance);
+      Alert.alert(
+        "Purchases restored",
+        credited > 0
+          ? `${credited} purchase${credited === 1 ? "" : "s"} credited.`
+          : "Everything was already up to date.",
+      );
+    } catch (e: any) {
+      Alert.alert("Restore Failed", e.message);
+    } finally {
+      setPurchasing(false);
     }
   };
 
@@ -135,7 +214,7 @@ export default function StoreScreen() {
           <View style={styles.grid}>
             {offering.availablePackages.map((pkg) => {
               // Extract data from the RevenueCat package
-              const coinAmount = extractCoinsFromId(pkg.product.identifier);
+              const coinAmount = products[pkg.product.identifier] ?? 0;
               // Hardcode 'popular' logic for the demo, or derive from package metadata later
               const isPopular = pkg.identifier === "$rc_lifetime" || pkg.identifier.includes("pro");
 
@@ -191,10 +270,24 @@ export default function StoreScreen() {
           </View>
         )}
 
-        <TouchableOpacity style={styles.restoreButton} onPress={handleRestore}>
+        <TouchableOpacity
+          style={styles.restoreButton}
+          onPress={handleRestore}
+          disabled={purchasing}
+        >
           <Text style={styles.restoreText}>RESTORE PURCHASES</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {confirming && (
+        <View style={styles.confirmOverlay}>
+          <ActivityIndicator size="large" color={theme.colors.accentGold} />
+          <Text style={styles.confirmTitle}>Confirming your purchase</Text>
+          <Text style={styles.confirmBody}>
+            Your payment went through. We're adding your coins now.
+          </Text>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -345,5 +438,27 @@ const styles = StyleSheet.create({
     color: theme.colors.textMuted,
     textDecorationLine: "underline",
     letterSpacing: 2,
+  },
+  confirmOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.85)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 40,
+  },
+  confirmTitle: {
+    fontFamily: theme.typography.heading.fontFamily,
+    fontSize: 18,
+    color: theme.colors.textPrimary,
+    marginTop: 24,
+    textAlign: "center",
+  },
+  confirmBody: {
+    fontFamily: theme.typography.body.fontFamily,
+    fontSize: 14,
+    color: theme.colors.textMuted,
+    marginTop: 8,
+    textAlign: "center",
+    lineHeight: 20,
   },
 });

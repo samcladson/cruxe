@@ -16,8 +16,8 @@ import {
   Manrope_700Bold,
 } from "@expo-google-fonts/manrope";
 import { AppState, AppStateStatus } from "react-native";
-import { ensureUserProfile, initAuth, onAuthStateChange } from "../services/authService";
-import { drainPendingCompletions } from "../services/offlineSyncService";
+import { initAuth, onAuthStateChange } from "../services/authService";
+import { drainPendingSolves } from "../services/offlineSyncService";
 import { initRevenueCat, loginToRevenueCat } from "../services/revenueCatService";
 import { preloadSounds } from "../services/soundService";
 import { useUserStore } from "../stores/userStore";
@@ -89,7 +89,6 @@ function RootLayoutNav() {
       if (userId) {
         setUserId(userId);
         await loginToRevenueCat(userId);
-        await ensureUserProfile(userId);
         await syncFromSupabase(userId);
         console.log("[Layout] Auth bootstrap complete for user:", userId);
       } else {
@@ -118,14 +117,14 @@ function RootLayoutNav() {
   }, []);
 
   /**
-   * Drain offline completion queue whenever the app returns to the foreground.
-   * Queued completions are retried silently — the user sees nothing unless
+   * Drain the offline solve queue whenever the app returns to the foreground.
+   * Queued solves are retried silently — the user sees nothing unless
    * there's a persistent failure after many retries.
    */
   useEffect(() => {
     const handleAppStateChange = (nextState: AppStateStatus) => {
       if (nextState === "active") {
-        drainPendingCompletions().catch((err) =>
+        drainPendingSolves().catch((err) =>
           console.warn("[Layout] Offline drain error:", err),
         );
       }

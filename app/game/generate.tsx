@@ -8,33 +8,28 @@ import {
   View,
 } from "react-native";
 import { theme } from "../../constants/theme";
-import { buildPuzzle } from "../../services/crosswordEngine";
-import { generatePuzzleWords } from "../../services/geminiService";
 import {
   fetchDailyPuzzle,
   fetchPuzzleById,
 } from "../../services/puzzleService";
+import { payEntryFee } from "../../services/economyService";
 import { usePuzzleStore } from "../../stores/puzzleStore";
 import { useUserStore } from "../../stores/userStore";
-import {
-  Category,
-  Difficulty,
-  ENTRY_FEES,
-  GridSize,
-} from "../../types/puzzle.types";
+import { Category, Difficulty, GridSize } from "../../types/puzzle.types";
 
 /**
  * GenerateScreen — Transitional loading screen between category selection and gameplay.
  *
- * Primary flow (v4): Fetches a pre-built daily puzzle from Supabase.
- * Fallback flow: If no server puzzle exists (e.g., cron hasn't run yet),
- * falls back to client-side Gemini generation.
+ * Fetches a pre-built daily puzzle from Supabase and charges the entry fee
+ * server-side once the specific puzzle is known.
+ *
+ * There is deliberately no client-side generation fallback: a puzzle built
+ * on-device has no row in daily_puzzles, so the server holds no answer key
+ * for it and the solve could never be verified, scored, or rewarded.
  */
 export default function GenerateScreen() {
   const params = useLocalSearchParams();
   const setActivePuzzle = usePuzzleStore((state) => state.setActivePuzzle);
-  const profile = useUserStore((state) => state.profile);
-  const spendCoins = useUserStore((state) => state.spendCoins);
 
   const category = (params.category as Category) || "general";
   const difficulty = (params.difficulty as Difficulty) || "medium";
@@ -69,25 +64,9 @@ export default function GenerateScreen() {
           }
         }
 
-        // Before generating or fetching a new active puzzle, check the ENTRY FEE
-        const fee = ENTRY_FEES[difficulty];
-        // Ensure they have enough coins
-        if (profile.coins < fee) {
-          if (mounted) {
-            setErrorMsg(
-              `Not enough coins! You need ${fee} coins to play this puzzle.`,
-            );
-            setStatus("error");
-          }
-          return;
-        }
-
-        // Deduct the coins now that we are committed to generating/playing
-        spendCoins(fee);
-
-        // Flow 2: General match fetching / generation
+        // Flow 2: Match a server puzzle by its parameters.
         console.log(
-          `[GenerateScreen] Fetching puzzle fallback: ${category}/${difficulty}/${gridSize}x${gridSize}/v${variant}`,
+          `[GenerateScreen] Fetching puzzle: ${category}/${difficulty}/${gridSize}x${gridSize}/v${variant}`,
         );
 
         const puzzle = await fetchDailyPuzzle(
@@ -97,36 +76,37 @@ export default function GenerateScreen() {
           variant,
         );
 
-        if (puzzle && mounted) {
-          console.log("[GenerateScreen] ✅ Loaded from server");
-          setActivePuzzle(puzzle);
-          router.replace({ pathname: `/game/${puzzle.id}` } as any);
+        if (!puzzle) {
+          // No client-side generation fallback any more. A locally generated
+          // puzzle has no row in daily_puzzles, so the server has no answer
+          // key for it and the solve could never be verified or rewarded.
+          if (mounted) {
+            setErrorMsg(
+              "Today's puzzles aren't ready yet. Please try again shortly.",
+            );
+            setStatus("error");
+          }
           return;
         }
 
-        // Flow 3: Client-side generation if server puzzle not available
-        console.log(
-          "[GenerateScreen] ⚠️ No server puzzle found, falling back to client generation",
-        );
-
-        const words = await generatePuzzleWords(category, difficulty, gridSize);
-        const generatedPuzzle = buildPuzzle(
-          words,
-          category,
-          difficulty,
-          gridSize,
-        );
-
-        if (mounted) {
-          if (generatedPuzzle) {
-            setActivePuzzle(generatedPuzzle);
-            router.replace({
-              pathname: `/game/${generatedPuzzle.id}`,
-            } as any);
-          } else {
-            setErrorMsg("Failed to build puzzle geometry");
+        // Charge only once we know which puzzle the player is getting. The
+        // server derives the fee from that puzzle's difficulty, and the
+        // charge is idempotent per (user, puzzle) so re-entering is free.
+        try {
+          const { balance } = await payEntryFee(puzzle.id);
+          useUserStore.getState().applyServerBalance(balance);
+        } catch (e: any) {
+          if (mounted) {
+            setErrorMsg(e.message);
             setStatus("error");
           }
+          return;
+        }
+
+        if (mounted) {
+          console.log("[GenerateScreen] ✅ Loaded from server");
+          setActivePuzzle(puzzle);
+          router.replace({ pathname: `/game/${puzzle.id}` } as any);
         }
       } catch (err) {
         console.error("[GenerateScreen] Failed:", err);

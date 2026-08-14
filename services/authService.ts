@@ -133,35 +133,13 @@ export function onAuthStateChange(
   return () => data.subscription.unsubscribe();
 }
 
-// ─── Ensure Profile Row ──────────────────────────────────────────────
-
-/**
- * Creates the user's row in the `users` table if it does not exist yet.
- * Called after every successful auth — safe to call repeatedly (upsert).
- *
- * @param userId - The auth user UUID
- * @param displayName - Name to use if creating for the first time
- */
-export async function ensureUserProfile(
-  userId: string,
-  displayName: string = "Player",
-): Promise<void> {
-  const { error } = await supabase.from("users").upsert(
-    {
-      id: userId,
-      display_name: displayName,
-    },
-    {
-      // Only insert if not exists — do NOT overwrite existing profile data
-      onConflict: "id",
-      ignoreDuplicates: true,
-    },
-  );
-
-  if (error) {
-    console.error("[Auth] Failed to ensure user profile row:", error.message);
-  }
-}
+// ─── Profile Row ─────────────────────────────────────────────────────
+//
+// There is no ensureUserProfile here any more. The profile row and the
+// welcome bonus are created together by the on_auth_user_created trigger
+// (migration 008), inside one transaction. Doing it client-side meant the
+// welcome bonus could be re-farmed by clearing app storage, and the client
+// no longer has INSERT rights on `users` regardless.
 
 // ─── Social Logins (Linking) ─────────────────────────────────────────
 
@@ -317,7 +295,6 @@ export async function signOutAndStartNewAnonSession(): Promise<{
 
     const userId = data.user.id;
     useUserStore.getState().setUserId(userId);
-    await ensureUserProfile(userId);
     await loginToRevenueCat(userId);
     await useUserStore.getState().syncFromSupabase(userId);
     return { error: null };

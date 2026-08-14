@@ -36,6 +36,7 @@ import {
 import { supabase } from "../../services/supabaseClient";
 import { usePuzzleStore } from "../../stores/puzzleStore";
 import { useUserStore } from "../../stores/userStore";
+import { claimDailyBonus } from "../../services/economyService";
 import { formatCompactNumber } from "../../utils/formatNumber";
 
 function PulseDot() {
@@ -61,7 +62,6 @@ function PulseDot() {
 
 export default function HomeScreen() {
   const profile = useUserStore((state) => state.profile);
-  const claimDailyBonus = useUserStore((state) => state.claimDailyBonus);
   const activePuzzle = usePuzzleStore((state) => state.activePuzzle);
   const timer = usePuzzleStore((state) => state.timer);
   const [isCategoriesModalVisible, setIsCategoriesModalVisible] =
@@ -77,15 +77,28 @@ export default function HomeScreen() {
   const [collectionSummary, setCollectionSummary] =
     useState<CollectionSummary | null>(null);
 
-  // Claim daily login bonus on mount
+  // Claim the daily login bonus on mount. The server decides the amount and
+  // enforces once-per-UTC-day; the client just reports what it was told.
   useEffect(() => {
-    const bonus = claimDailyBonus();
-    if (bonus > 0) {
-      setDailyBonusBanner(bonus);
-      // Auto-dismiss after 4 seconds
-      const timer = setTimeout(() => setDailyBonusBanner(null), 4000);
-      return () => clearTimeout(timer);
-    }
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    (async () => {
+      try {
+        const result = await claimDailyBonus();
+        if (cancelled || result.already_claimed || result.bonus === 0) return;
+        useUserStore.getState().applyServerBalance(result.balance);
+        setDailyBonusBanner(result.bonus);
+        timer = setTimeout(() => setDailyBonusBanner(null), 4000);
+      } catch {
+        // Offline: the bonus is still there tomorrow. Nothing worth saying.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
   }, []);
 
   useEffect(() => {
@@ -108,19 +121,20 @@ export default function HomeScreen() {
     // Load initial count
     getDailyPlayerCount(dailyPuzzle.id).then(setDailyPlayerCount);
 
-    // Subscribe to new completions to increment live!
+    // Subscribe to the public aggregate. puzzle_completions is own-rows-only
+    // now, so it would never deliver another player's insert.
     const subscription = supabase
-      .channel("daily_completions")
+      .channel("daily_stats")
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "UPDATE",
           schema: "public",
-          table: "puzzle_completions",
+          table: "puzzle_stats",
           filter: `puzzle_id=eq.${dailyPuzzle.id}`,
         },
-        () => {
-          setDailyPlayerCount((prev) => prev + 1);
+        (payload: any) => {
+          setDailyPlayerCount(payload.new.players_completed);
         },
       )
       .subscribe();

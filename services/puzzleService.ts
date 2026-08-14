@@ -217,10 +217,13 @@ export async function fetchDailyChallenge(
  * Fetches the live count of unique players who have completed a specific daily challenge.
  */
 export async function getDailyPlayerCount(puzzleId: string): Promise<number> {
-  const { count, error } = await supabase
-    .from("puzzle_completions")
-    .select("*", { count: "exact", head: true })
-    .eq("puzzle_id", puzzleId);
+  // Reads the public aggregate rather than counting puzzle_completions, which
+  // is now restricted to own-rows-only. No user data is exposed either way.
+  const { data, error } = await supabase
+    .from("puzzle_stats")
+    .select("players_completed")
+    .eq("puzzle_id", puzzleId)
+    .maybeSingle();
 
   if (error) {
     console.warn(
@@ -230,7 +233,7 @@ export async function getDailyPlayerCount(puzzleId: string): Promise<number> {
     return 0;
   }
 
-  return count || 0;
+  return data?.players_completed ?? 0;
 }
 
 /**
@@ -721,44 +724,20 @@ export async function fetchDailyPuzzle(
 
 // ─── Completion recording ────────────────────────────────────────────
 
-/**
- * Records a puzzle completion to the server.
- * Uses upsert to handle duplicate submissions gracefully.
- *
- * Called when the player finishes a puzzle. If offline, the caller
- * should queue this and retry when connectivity is restored.
- */
-export async function recordCompletion(data: CompletionData): Promise<boolean> {
-  const { error } = await supabase.from("puzzle_completions").upsert(
-    {
-      user_id: data.userId,
-      puzzle_id: data.puzzleId,
-      score: data.score,
-      time_taken: data.timeTaken,
-      accuracy: data.accuracy,
-      hints_used: data.hintsUsed,
-      coins_earned: data.coinsEarned,
-      puzzle_date: data.puzzleDate,
-      category: data.category,
-      difficulty: data.difficulty,
-      grid_size: data.gridSize,
-      completed_at: new Date().toISOString(),
-    },
-    { onConflict: "user_id,puzzle_id" },
-  );
+// NOTE: recordCompletion has been removed.
+//
+// Completions are written exclusively by the submit_solve RPC, called from
+// the submit-solve Edge Function after it has verified the submitted grid
+// against the stored answer key. Migration 008 revokes INSERT and UPDATE on
+// puzzle_completions from `authenticated`, so a client-side write would now
+// fail at the database — and when it did work, it let any client post any
+// score it liked.
+//
+// To submit a solve, use submitSolve() in services/economyService.ts.
 
-  if (error) {
-    console.error(
-      "[puzzleService] Failed to record completion:",
-      error.message,
-    );
-    return false;
-  }
-
-  // Clear cache globally so the next screen fetch pulls fresh completion statuses
+/** Clears cached puzzle metadata so completion states refetch. */
+export function invalidatePuzzleCache(): void {
   puzzleCache.clear();
-
-  return true;
 }
 
 /**
@@ -860,11 +839,13 @@ export async function fetchLeaderboard(
   const cached = puzzleCache.get<LeaderboardEntry[]>(cacheKey);
   if (cached) return cached;
 
-  const { data, error } = await supabase
-    .from("leaderboard_view")
-    .select("user_id, display_name, total_score, puzzles_solved, streak, rank")
-    .order("rank", { ascending: true })
-    .limit(limit);
+  // A SECURITY DEFINER function with an explicit column list, so it cannot
+  // leak coins or last-played dates however the users table evolves. The old
+  // leaderboard_view was security_invoker and only worked because the users
+  // table was world-readable.
+  const { data, error } = await supabase.rpc("get_leaderboard", {
+    p_limit: limit,
+  });
 
   if (error || !data) {
     console.warn(
