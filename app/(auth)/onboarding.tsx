@@ -5,6 +5,7 @@ import Animated, { SlideInRight, SlideOutLeft } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button } from "../../components/ui/Button";
 import { theme } from "../../constants/theme";
+import { useSettingsStore } from "../../stores/settingsStore";
 
 const { width } = Dimensions.get("window");
 
@@ -33,6 +34,7 @@ export default function OnboardingScreen() {
     if (currentIndex < SLIDES.length - 1) {
       setCurrentIndex((prev) => prev + 1);
     } else {
+      useSettingsStore.getState().setHasCompletedOnboarding(true);
       router.replace("/(auth)/sign-in");
     }
   };

@@ -81,6 +81,12 @@ interface UserState {
    * Called after every puzzle completion and after profile edits.
    */
   syncToSupabase: () => Promise<void>;
+
+  /**
+   * Resets profile and the offline queue to initial values (e.g. before a new
+   * anonymous session after sign-out).
+   */
+  resetLocalProfile: () => void;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────
@@ -367,6 +373,12 @@ export const useUserStore = create<UserState>()(
           console.error("[UserStore] syncFromSupabase error:", err);
         }
       },
+
+      resetLocalProfile: () =>
+        set({
+          profile: { ...initialProfile },
+          pendingCompletions: [],
+        }),
 
       syncToSupabase: async () => {
         const { profile } = get();

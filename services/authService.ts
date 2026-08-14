@@ -11,15 +11,24 @@
 
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import { Session, User } from "@supabase/supabase-js";
+import Constants from "expo-constants";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as Crypto from "expo-crypto";
+import { usePuzzleStore } from "../stores/puzzleStore";
+import { useUserStore } from "../stores/userStore";
 import { supabase } from "./supabaseClient";
+import { loginToRevenueCat, logoutRevenueCat } from "./revenueCatService";
 
-// ─── Setup Google Sign-In ────────────────────────────────────────────
-// TODO: Replace with your actual Google Web Client ID from Google Cloud Console
+// ─── Google Sign-In — Web OAuth client (same Google Cloud project as Android/iOS) ─
+// For Android, also create an *Android* OAuth client with:
+//   package: com.cruxe.app  +  SHA-1 of your debug (or release) keystore
+//   https://react-native-google-signin.github.io/docs/troubleshooting
+const GOOGLE_WEB_CLIENT_ID =
+  process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ||
+  "1042059769347-31fuo35i64l5l0ap3tgt47t2v33k0t59.apps.googleusercontent.com";
+
 GoogleSignin.configure({
-  webClientId:
-    "1042059769347-31fuo35i64l5l0ap3tgt47t2v33k0t59.apps.googleusercontent.com",
+  webClientId: GOOGLE_WEB_CLIENT_ID,
   offlineAccess: true,
 });
 
@@ -97,18 +106,16 @@ export async function getCurrentUserId(): Promise<string | null> {
 }
 
 /**
- * Returns the current auth session synchronously from the last known state.
- * Use this in non-async contexts (e.g., store actions).
- * Falls back to null if auth is not initialised yet.
+ * Returns the current session (or null). Prefer this over a fake "sync" helper —
+ * the Supabase client has no safe synchronous session read in JS.
  */
-export function getSession(): Session | null {
-  // supabase-js v2 fires an onAuthStateChange; we read from cache here
-  // This is sync-safe because initAuth() is awaited before any store action fires
-  let cached: Session | null = null;
-  supabase.auth.getSession().then(({ data }) => {
-    cached = data?.session ?? null;
-  });
-  return cached;
+export async function getCurrentSession(): Promise<Session | null> {
+  const { data, error } = await supabase.auth.getSession();
+  if (error) {
+    console.warn("[Auth] getCurrentSession:", error.message);
+    return null;
+  }
+  return data.session ?? null;
 }
 
 /**
@@ -185,10 +192,11 @@ export async function linkAppleAccount(): Promise<{
       throw new Error("No identityToken returned from Apple Sign In");
     }
 
-    // Link the Apple identity to the existing anonymous user
+    // Link the Apple identity to the existing anonymous user (nonce must match the token)
     const { data, error } = await supabase.auth.linkIdentity({
       provider: "apple",
       token: credential.identityToken,
+      nonce: rawNonce,
     });
 
     if (error) throw error;
@@ -251,7 +259,71 @@ export async function linkGoogleAccount(): Promise<{
       console.log("[Auth] Google Sign-In canceled or already in progress");
       return { error: null }; // Silent cancel
     }
+    if (error?.code === "DEVELOPER_ERROR") {
+      const pkg = Constants.expoConfig?.android?.package ?? "com.cruxe.app";
+      console.warn(
+        `[Auth] DEVELOPER_ERROR: In Google Cloud → APIs & Services → Credentials, add an Android OAuth client for package "${pkg}" with your app signing SHA-1 (use scripts/print-android-debug-sha1.ps1 for debug).`,
+      );
+      return { error };
+    }
     console.error("[Auth] Google Sign-In error:", error);
     return { error };
+  }
+}
+
+// ─── Linked providers & sign-out ─────────────────────────────────────
+
+export interface LinkedProviders {
+  hasGoogle: boolean;
+  hasApple: boolean;
+}
+
+/**
+ * Returns which OIDC providers are linked on the current Supabase user.
+ */
+export async function getLinkedProviders(): Promise<LinkedProviders> {
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user?.identities) {
+    return { hasGoogle: false, hasApple: false };
+  }
+  const idents = data.user.identities;
+  return {
+    hasGoogle: idents.some((i) => i.provider === "google"),
+    hasApple: idents.some((i) => i.provider === "apple"),
+  };
+}
+
+/**
+ * Signs out of Supabase, clears local play state, and establishes a new
+ * anonymous session so the user can keep playing without a full reinstall.
+ */
+export async function signOutAndStartNewAnonSession(): Promise<{
+  error: string | null;
+}> {
+  try {
+    useUserStore.getState().resetLocalProfile();
+    usePuzzleStore.getState().clearActivePuzzle();
+
+    const { error: signOutErr } = await supabase.auth.signOut();
+    if (signOutErr) {
+      return { error: signOutErr.message };
+    }
+    await logoutRevenueCat();
+
+    const { data, error: anonError } = await supabase.auth.signInAnonymously();
+    if (anonError || !data.user) {
+      return { error: anonError?.message ?? "Could not start a new session" };
+    }
+
+    const userId = data.user.id;
+    useUserStore.getState().setUserId(userId);
+    await ensureUserProfile(userId);
+    await loginToRevenueCat(userId);
+    await useUserStore.getState().syncFromSupabase(userId);
+    return { error: null };
+  } catch (e) {
+    return {
+      error: e instanceof Error ? e.message : "Sign out failed",
+    };
   }
 }

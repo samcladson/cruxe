@@ -2,45 +2,134 @@ import { Platform } from "react-native";
 import Purchases, {
   CustomerInfo,
   LOG_LEVEL,
+  PURCHASES_ERROR_CODE,
   PurchasesOffering,
   PurchasesPackage,
 } from "react-native-purchases";
 
-// TODO: Replace with your actual RevenueCat Public API Keys
+/**
+ * Public SDK keys from the RevenueCat dashboard (Project → API keys).
+ * Set in `.env` as EXPO_PUBLIC_* so Metro embeds them at build time.
+ */
 const API_KEYS = {
-  apple: "appl_api_key_here",
-  google: "goog_api_key_here",
+  apple: process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY || "",
+  google: process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY || "",
 };
+
+let revenueCatReady = false;
+
+let offeringsConfigWarningLogged = false;
+
+function isOfferingsNotConfiguredError(error: unknown): boolean {
+  if (error == null || typeof error !== "object") return false;
+  const e = error as {
+    code?: string;
+    message?: string;
+    underlyingErrorMessage?: string;
+  };
+  if (e.code === PURCHASES_ERROR_CODE.CONFIGURATION_ERROR) {
+    return true;
+  }
+  const blob = [e.message, e.underlyingErrorMessage].filter(Boolean).join(" ");
+  return (
+    /Test Store/i.test(blob) && /no Test Store products/i.test(blob)
+  );
+}
+
+/**
+ * Downgrades the noisy "Test API key + empty offerings" log from ERROR to a single warn.
+ * Other SDK logs are forwarded to the console at the same level.
+ */
+function installRevenueCatLogHandler(): void {
+  Purchases.setLogHandler((logLevel, message) => {
+    const t = String(message);
+    if (
+      t.includes("Test Store") &&
+      (t.includes("no Test Store products") ||
+        (t.includes("ConfigurationError") && /offerings|product/i.test(t)))
+    ) {
+      if (!offeringsConfigWarningLogged) {
+        offeringsConfigWarningLogged = true;
+        console.warn(
+          "[RevenueCat] Test Store: add products to your current Offering in the RevenueCat dashboard, or ignore until configure: https://rev.cat/how-to-configure-offerings",
+        );
+      }
+      return;
+    }
+    switch (logLevel) {
+      case LOG_LEVEL.VERBOSE:
+      case LOG_LEVEL.DEBUG:
+        if (__DEV__) {
+          console.log("[RevenueCat]", t);
+        }
+        break;
+      case LOG_LEVEL.INFO:
+        console.log("[RevenueCat]", t);
+        break;
+      case LOG_LEVEL.WARN:
+        console.warn("[RevenueCat]", t);
+        break;
+      case LOG_LEVEL.ERROR:
+      default:
+        console.error("[RevenueCat]", t);
+        break;
+    }
+  });
+}
 
 /**
  * Initializes the RevenueCat SDK on app startup.
- * Logs API key warnings if using placeholders.
+ * Skips configuration when keys are missing (avoids 401 Invalid API Key spam in dev).
  */
 export async function initRevenueCat(): Promise<void> {
   try {
-    Purchases.setLogLevel(LOG_LEVEL.DEBUG);
+    Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.DEBUG : LOG_LEVEL.WARN);
 
     if (Platform.OS === "ios") {
+      if (!API_KEYS.apple) {
+        console.warn(
+          "[RevenueCat] Skipping: set EXPO_PUBLIC_REVENUECAT_IOS_API_KEY in .env",
+        );
+        revenueCatReady = false;
+        return;
+      }
       Purchases.configure({ apiKey: API_KEYS.apple });
-      if (API_KEYS.apple === "appl_api_key_here") {
-        console.warn("[RevenueCat] ⚠️ Using placeholder Apple API Key. Purchases will fail.");
-      }
-    } else if (Platform.OS === "android") {
-      Purchases.configure({ apiKey: API_KEYS.google });
-      if (API_KEYS.google === "goog_api_key_here") {
-        console.warn("[RevenueCat] ⚠️ Using placeholder Google API Key. Purchases will fail.");
-      }
+      revenueCatReady = true;
+      installRevenueCatLogHandler();
+      return;
     }
+    if (Platform.OS === "android") {
+      if (!API_KEYS.google) {
+        console.warn(
+          "[RevenueCat] Skipping: set EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY in .env",
+        );
+        revenueCatReady = false;
+        return;
+      }
+      Purchases.configure({ apiKey: API_KEYS.google });
+      revenueCatReady = true;
+      installRevenueCatLogHandler();
+      return;
+    }
+    revenueCatReady = false;
   } catch (error) {
     console.error("[RevenueCat] Initialization failed:", error);
+    revenueCatReady = false;
   }
 }
 
 /**
+ * Whether Purchases is configured and safe to call.
+ */
+export function isRevenueCatReady(): boolean {
+  return revenueCatReady;
+}
+
+/**
  * Logs the user into RevenueCat using their Supabase UUID.
- * This guarantees purchase history is tied to their account across devices.
  */
 export async function loginToRevenueCat(userId: string): Promise<void> {
+  if (!revenueCatReady) return;
   try {
     await Purchases.logIn(userId);
     console.log(`[RevenueCat] Logged in user: ${userId}`);
@@ -50,10 +139,23 @@ export async function loginToRevenueCat(userId: string): Promise<void> {
 }
 
 /**
+ * Resets the RevenueCat customer to an anonymous user (e.g. after sign-out).
+ */
+export async function logoutRevenueCat(): Promise<void> {
+  if (!revenueCatReady) return;
+  try {
+    await Purchases.logOut();
+    console.log("[RevenueCat] Logged out (anonymous customer)");
+  } catch (error) {
+    console.error("[RevenueCat] Log out failed:", error);
+  }
+}
+
+/**
  * Fetches the current active Offering (configured in RevenueCat dashboard).
- * Usually contains the Starter, Pro, Elite, and Expert coin packs.
  */
 export async function fetchCurrentOffering(): Promise<PurchasesOffering | null> {
+  if (!revenueCatReady) return null;
   try {
     const offerings = await Purchases.getOfferings();
     if (offerings.current !== null) {
@@ -61,6 +163,15 @@ export async function fetchCurrentOffering(): Promise<PurchasesOffering | null> 
     }
     return null;
   } catch (error) {
+    if (isOfferingsNotConfiguredError(error)) {
+      if (!offeringsConfigWarningLogged) {
+        offeringsConfigWarningLogged = true;
+        console.warn(
+          "[RevenueCat] Offerings not configured for Test Store yet. Add products: https://rev.cat/how-to-configure-offerings",
+        );
+      }
+      return null;
+    }
     console.error("[RevenueCat] Failed to fetch offerings:", error);
     return null;
   }
@@ -74,6 +185,14 @@ export async function purchasePackage(rcPackage: PurchasesPackage): Promise<{
   error?: Error;
   userCancelled: boolean;
 }> {
+  if (!revenueCatReady) {
+    return {
+      userCancelled: false,
+      error: new Error(
+        "IAP is not configured. Set EXPO_PUBLIC_REVENUECAT_*_API_KEY in .env and rebuild.",
+      ),
+    };
+  }
   try {
     const { customerInfo } = await Purchases.purchasePackage(rcPackage);
     return { customerInfo, userCancelled: false };
@@ -92,6 +211,13 @@ export async function restorePurchases(): Promise<{
   customerInfo?: CustomerInfo;
   error?: Error;
 }> {
+  if (!revenueCatReady) {
+    return {
+      error: new Error(
+        "IAP is not configured. Set EXPO_PUBLIC_REVENUECAT_*_API_KEY in .env and rebuild.",
+      ),
+    };
+  }
   try {
     const customerInfo = await Purchases.restorePurchases();
     return { customerInfo };

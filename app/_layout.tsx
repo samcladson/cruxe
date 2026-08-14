@@ -97,11 +97,18 @@ function RootLayoutNav() {
       }
 
       // Stay subscribed to token refreshes and future sign-in upgrades
-      unsubscribe = onAuthStateChange(async (user) => {
+      // Defer async work: Supabase auth holds a lock during this callback; awaiting
+      // other auth calls here can deadlock.
+      unsubscribe = onAuthStateChange((user) => {
         if (user?.id && user.id !== useUserStore.getState().profile.id) {
-          setUserId(user.id);
-          await loginToRevenueCat(user.id);
-          await syncFromSupabase(user.id);
+          const uid = user.id;
+          setTimeout(() => {
+            setUserId(uid);
+            void (async () => {
+              await loginToRevenueCat(uid);
+              await useUserStore.getState().syncFromSupabase(uid);
+            })();
+          }, 0);
         }
       });
     };

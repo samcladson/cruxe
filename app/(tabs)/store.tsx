@@ -180,10 +180,13 @@ export default function StoreScreen() {
             })}
           </View>
         ) : (
-          <View style={{ alignItems: "center", marginTop: 40 }}>
+          <View style={{ alignItems: "center", marginTop: 40, paddingHorizontal: 8 }}>
             <MaterialIcons name="storefront" size={48} color="rgba(255,255,255,0.1)" />
-            <Text style={{ color: theme.colors.textMuted, marginTop: 16, textAlign: "center" }}>
-              Store is currently unavailable.{"\n"}Check your connection or API keys.
+            <Text style={{ color: theme.colors.textMuted, marginTop: 16, textAlign: "center", lineHeight: 22 }}>
+              No coin packs to show yet. If you use a RevenueCat Test Store API key, add
+              Test Store products to your current offering in the dashboard (see rev.cat/how-to-configure-offerings).
+              {"\n\n"}
+              Otherwise check your network and EXPO_PUBLIC_REVENUECAT_*_API_KEY in .env.
             </Text>
           </View>
         )}

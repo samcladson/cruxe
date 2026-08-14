@@ -1,5 +1,6 @@
+import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import { 
   Alert,
   Platform,
@@ -18,13 +19,33 @@ import { theme } from "../../constants/theme"; // Keep theme imported as it's us
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useUserStore } from "../../stores/userStore";
 import { formatCompactNumber } from "../../utils/formatNumber";
-import { linkAppleAccount, linkGoogleAccount } from "../../services/authService";
+import {
+  getLinkedProviders,
+  linkAppleAccount,
+  linkGoogleAccount,
+  signOutAndStartNewAnonSession,
+} from "../../services/authService";
 import * as Haptics from "expo-haptics";
 
 export default function ProfileScreen() {
   const profile = useUserStore((state) => state.profile);
   const settings = useSettingsStore();
   const [isLinking, setIsLinking] = useState(false);
+  const [linked, setLinked] = useState({
+    hasGoogle: false,
+    hasApple: false,
+  });
+
+  const refreshLinked = useCallback(async () => {
+    const l = await getLinkedProviders();
+    setLinked(l);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshLinked();
+    }, [refreshLinked]),
+  );
 
   const triggerHaptic = () => {
     if (settings.hapticsEnabled) {
@@ -40,6 +61,7 @@ export default function ProfileScreen() {
     if (error) {
       Alert.alert("Link Failed", error.message);
     } else if (user) {
+      void refreshLinked();
       Alert.alert("Success", "Your account is now securely linked to Apple!");
     }
   };
@@ -52,8 +74,37 @@ export default function ProfileScreen() {
     if (error) {
       Alert.alert("Link Failed", error.message);
     } else if (user) {
+      void refreshLinked();
       Alert.alert("Success", "Your account is now securely linked to Google!");
     }
+  };
+
+  const handleSignOut = () => {
+    triggerHaptic();
+    Alert.alert(
+      "Sign out",
+      "Your local progress on this device will reset and you’ll go to the sign-in screen. You can link Google/Apple again or continue as guest.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Sign out",
+          style: "destructive",
+          onPress: () => {
+            void (async () => {
+              setIsLinking(true);
+              const { error } = await signOutAndStartNewAnonSession();
+              setIsLinking(false);
+              if (error) {
+                Alert.alert("Sign out failed", error);
+              } else {
+                void refreshLinked();
+                router.replace("/(auth)/sign-in");
+              }
+            })();
+          },
+        },
+      ],
+    );
   };
 
   const formatCategoryTitle = (catKey: string) => {
@@ -180,34 +231,116 @@ export default function ProfileScreen() {
         <View style={styles.settingsGroup}>
           {Platform.OS === "ios" && (
             <>
-              <TouchableOpacity style={styles.settingRow} onPress={handleAppleLink} disabled={isLinking}>
+              <TouchableOpacity
+                style={styles.settingRow}
+                onPress={handleAppleLink}
+                disabled={isLinking || linked.hasApple}
+              >
                 <View style={styles.settingInfo}>
                   <View style={styles.settingIconWrap}>
-                    <Ionicons name="logo-apple" size={18} color={theme.colors.textPrimary} />
+                    <Ionicons
+                      name="logo-apple"
+                      size={18}
+                      color={theme.colors.textPrimary}
+                    />
                   </View>
-                  <Text style={styles.settingText}>Sign in with Apple</Text>
+                  <View>
+                    <Text style={styles.settingText}>Sign in with Apple</Text>
+                    {linked.hasApple && (
+                      <Text style={styles.connectedLabel}>Connected</Text>
+                    )}
+                  </View>
                 </View>
                 {isLinking ? (
-                  <ActivityIndicator size="small" color={theme.colors.accentGold} />
+                  <ActivityIndicator
+                    size="small"
+                    color={theme.colors.accentGold}
+                  />
+                ) : linked.hasApple ? (
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={22}
+                    color={theme.colors.accentGreen}
+                  />
                 ) : (
-                  <MaterialIcons name="chevron-right" size={24} color={theme.colors.textMuted} />
+                  <MaterialIcons
+                    name="chevron-right"
+                    size={24}
+                    color={theme.colors.textMuted}
+                  />
                 )}
               </TouchableOpacity>
               <View style={styles.settingDivider} />
             </>
           )}
 
-          <TouchableOpacity style={styles.settingRow} onPress={handleGoogleLink} disabled={isLinking}>
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={handleGoogleLink}
+            disabled={isLinking || linked.hasGoogle}
+          >
             <View style={styles.settingInfo}>
               <View style={styles.settingIconWrap}>
-                <Ionicons name="logo-google" size={18} color={theme.colors.textPrimary} />
+                <Ionicons
+                  name="logo-google"
+                  size={18}
+                  color={theme.colors.textPrimary}
+                />
               </View>
-              <Text style={styles.settingText}>Sign in with Google</Text>
+              <View>
+                <Text style={styles.settingText}>Sign in with Google</Text>
+                {linked.hasGoogle && (
+                  <Text style={styles.connectedLabel}>Connected</Text>
+                )}
+              </View>
             </View>
             {isLinking && Platform.OS !== "ios" ? (
               <ActivityIndicator size="small" color={theme.colors.accentGold} />
+            ) : linked.hasGoogle ? (
+              <Ionicons
+                name="checkmark-circle"
+                size={22}
+                color={theme.colors.accentGreen}
+              />
             ) : (
-              <MaterialIcons name="chevron-right" size={24} color={theme.colors.textMuted} />
+              <MaterialIcons
+                name="chevron-right"
+                size={24}
+                color={theme.colors.textMuted}
+              />
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.settingDivider} />
+
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={handleSignOut}
+            disabled={isLinking}
+          >
+            <View style={styles.settingInfo}>
+              <View style={styles.settingIconWrap}>
+                <MaterialIcons
+                  name="logout"
+                  size={18}
+                  color={theme.colors.accentRed}
+                />
+              </View>
+              <Text style={[styles.settingText, { color: theme.colors.textPrimary }]}>
+                Sign out
+              </Text>
+            </View>
+            {isLinking ? (
+              <ActivityIndicator
+                size="small"
+                color={theme.colors.accentGold}
+              />
+            ) : (
+              <MaterialIcons
+                name="chevron-right"
+                size={24}
+                color={theme.colors.textMuted}
+              />
             )}
           </TouchableOpacity>
         </View>
@@ -511,6 +644,12 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.body.fontFamily,
     fontSize: 16,
     color: theme.colors.textPrimary,
+  },
+  connectedLabel: {
+    fontFamily: theme.typography.caption.fontFamily,
+    fontSize: 12,
+    color: theme.colors.accentGreen,
+    marginTop: 2,
   },
   footer: {
     marginTop: 40,
