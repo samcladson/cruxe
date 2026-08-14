@@ -2,6 +2,10 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
+    // The modules under supabase/functions/_shared are imported by BOTH the
+    // Deno Edge Functions and the Metro client. Deno requires explicit .ts
+    // extensions on relative imports; this lets tsc accept them too.
+    "allowImportingTsExtensions": true,
     "paths": {
       "@/*": ["./*"]
     }

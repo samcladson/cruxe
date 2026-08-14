@@ -1,4 +1,4 @@
-import { Difficulty, GridSize, ScoringConfig } from "./economyTypes";
+import { Difficulty, GridSize, ScoringConfig } from "./economyTypes.ts";
 
 export interface ScoreParams {
   difficulty: Difficulty;
