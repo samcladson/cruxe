@@ -72,22 +72,38 @@ export async function deleteTestUser(db: SupabaseClient, id: string) {
   await db.auth.admin.deleteUser(id);
 }
 
-/** Picks any existing puzzle of the given difficulty for tests to reference. */
+/**
+ * Picks an existing puzzle of the given difficulty for tests to reference.
+ *
+ * Prefers a row that has a stored grid, because legacy rows (generated before
+ * grid construction moved server-side) have no `clues` array — which would
+ * make the reveal_word clamp test pass trivially instead of meaningfully.
+ */
 export async function anyPuzzleId(
   db: SupabaseClient,
   difficulty = "medium",
 ): Promise<string> {
-  const { data, error } = await db
+  const { data } = await db
     .from("daily_puzzles")
-    .select("id")
+    .select("id, puzzle_data")
     .eq("difficulty", difficulty)
-    .limit(1)
-    .maybeSingle();
-  if (error || !data) {
+    .order("puzzle_date", { ascending: false })
+    .limit(50);
+
+  if (!data || data.length === 0) {
     throw new Error(
       `No ${difficulty} puzzle in the test database. ` +
         "Run scripts/generate-daily-puzzles-free.ts against it first.",
     );
   }
-  return data.id;
+
+  const withGrid = data.find((r: any) => r.puzzle_data?.grid);
+  if (!withGrid) {
+    console.warn(
+      `[integration] No ${difficulty} puzzle has a stored grid yet; ` +
+        "falling back to a legacy row. The reveal_word clamp assertion " +
+        "will be weak until the generator has run with grid support.",
+    );
+  }
+  return (withGrid ?? data[0]).id;
 }
