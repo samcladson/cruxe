@@ -14,10 +14,18 @@ export interface HintChargeResult {
   cost: number;
   replayed: boolean;
 }
-export interface EntryFeeResult {
+export interface EnterPuzzleResult {
+  cost: number;
+  was_free: boolean;
   balance: number;
-  fee: number;
+  free_plays_remaining: number;
   replayed: boolean;
+}
+
+export interface PlayStatus {
+  free_plays_remaining: number;
+  free_plays_per_day: number;
+  resets_at: string;
 }
 export interface DailyBonusResult {
   bonus: number;
@@ -47,7 +55,7 @@ export interface SolveResult {
 /** Turns a Postgres error into something worth showing a player. */
 function rpcError(context: string, error: { message: string }): Error {
   const known: Record<string, string> = {
-    insufficient_coins: "You don't have enough coins.",
+    insufficient_coins: "You don't have enough coins for that.",
     not_authenticated: "Please sign in again.",
     puzzle_not_found: "That puzzle is no longer available.",
     unknown_hint_type: "That hint isn't available.",
@@ -64,24 +72,36 @@ export async function spendOnHint(
   puzzleId: string,
   hintType: "reveal_letter" | "reveal_word" | "check_errors",
   actionId: string,
-  letterCount = 1,
 ): Promise<HintChargeResult> {
   const { data, error } = await supabase.rpc("spend_on_hint", {
     p_puzzle_id: puzzleId,
     p_hint_type: hintType,
     p_action_id: actionId,
-    p_letter_count: letterCount,
   });
   if (error) throw rpcError("Hint", error);
   return data as HintChargeResult;
 }
 
-export async function payEntryFee(puzzleId: string): Promise<EntryFeeResult> {
-  const { data, error } = await supabase.rpc("pay_entry_fee", {
+/**
+ * Claims entry to a puzzle. Free while the daily allowance lasts, free
+ * forever for the daily challenge and for any puzzle already started, and
+ * charged at the overflow rate otherwise. The server decides which — the
+ * client never sends or checks a price.
+ */
+export async function enterPuzzle(
+  puzzleId: string,
+): Promise<EnterPuzzleResult> {
+  const { data, error } = await supabase.rpc("enter_puzzle", {
     p_puzzle_id: puzzleId,
   });
-  if (error) throw rpcError("Entry fee", error);
-  return data as EntryFeeResult;
+  if (error) throw rpcError("Entry", error);
+  return data as EnterPuzzleResult;
+}
+
+export async function getPlayStatus(): Promise<PlayStatus> {
+  const { data, error } = await supabase.rpc("get_play_status");
+  if (error) throw rpcError("Play status", error);
+  return data as PlayStatus;
 }
 
 export async function claimDailyBonus(): Promise<DailyBonusResult> {

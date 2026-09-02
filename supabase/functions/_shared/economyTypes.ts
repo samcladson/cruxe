@@ -15,7 +15,8 @@ export interface ScoringConfig {
 
 export interface HintPrices {
   reveal_letter: number;
-  reveal_word_per_letter: number;
+  /** Flat price for a whole word, replacing the old per-letter charge. */
+  reveal_word_flat: number;
   check_errors: number;
   free_checks_count: number;
 }

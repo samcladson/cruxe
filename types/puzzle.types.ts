@@ -11,12 +11,9 @@ export enum Difficulty {
   EXPERT = "expert",
 }
 
-export const ENTRY_FEES: Record<Difficulty, number> = {
-  [Difficulty.EASY]: 5,
-  [Difficulty.MEDIUM]: 15,
-  [Difficulty.HARD]: 30,
-  [Difficulty.EXPERT]: 60,
-};
+// Entry prices are NOT defined here. They live in the economy_config table
+// as `overflow_fees`, and apply only once a player's free daily allowance is
+// spent. A bundled copy would silently drift from what the server charges.
 export type GridSize = 6 | 8 | 10 | 12;
 export type Direction = "across" | "down" | "reverse_across" | "reverse_down";
 

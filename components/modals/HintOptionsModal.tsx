@@ -20,7 +20,6 @@ import {
   canRevealLetter,
   canRevealWord,
   CHECK_ERRORS_COST,
-  getUnrevealedLetterCount,
   REVEAL_LETTER_COST,
 } from "../../services/hintEngine";
 import { loadHintPrices, spendOnHint } from "../../services/economyService";
@@ -67,7 +66,9 @@ export function HintOptionsModal({ visible, onClose }: HintOptionsModalProps) {
   }, []);
 
   const letterPrice = prices?.reveal_letter ?? REVEAL_LETTER_COST;
-  const wordPricePerLetter = prices?.reveal_word_per_letter ?? REVEAL_LETTER_COST;
+  // Flat, not per-letter. The old 30-per-letter pricing meant an 8-letter
+  // answer cost 240 and a 12-letter one 360 - a wall nobody paid.
+  const wordPrice = prices?.reveal_word_flat ?? 120;
   const checkPrice = prices?.check_errors ?? CHECK_ERRORS_COST;
 
   const activeClue = getActiveClue();
@@ -77,15 +78,6 @@ export function HintOptionsModal({ visible, onClose }: HintOptionsModalProps) {
     if (!activePuzzle || !activeClue) return [];
     return buildWordPreview(activePuzzle.grid, activeClue);
   }, [activePuzzle, activeClue]);
-
-  /** How many letters a reveal-word would uncover. Sent to the server, which
-   *  clamps it to the clue's real length before charging. */
-  const unrevealedLetters = useMemo(() => {
-    if (!activePuzzle || !activeClue) return 0;
-    return getUnrevealedLetterCount(activePuzzle.grid, activeClue);
-  }, [activePuzzle, activeClue]);
-
-  const revealWordCost = unrevealedLetters * wordPricePerLetter;
 
   /** Check errors: free while free checks remain, priced afterwards */
   const checkErrorsCost = checksRemaining > 0 ? 0 : checkPrice;
@@ -100,14 +92,13 @@ export function HintOptionsModal({ visible, onClose }: HintOptionsModalProps) {
 
   // Affordability
   const canAffordLetter = canAffordHint(letterPrice, coins);
-  const canAffordWord = canAffordHint(revealWordCost, coins);
+  const canAffordWord = canAffordHint(wordPrice, coins);
   const canAffordCheck =
     checkErrorsCost === 0 || canAffordHint(checkErrorsCost, coins);
 
   // Combined flags — `busy` blocks a double-tap firing two charges
   const letterEnabled = letterAvailable && canAffordLetter && !busy;
-  const wordEnabled =
-    wordAvailable && canAffordWord && revealWordCost > 0 && !busy;
+  const wordEnabled = wordAvailable && canAffordWord && !busy;
   const checkEnabled = canAffordCheck && !busy;
 
   // ─── Handlers ─────────────────────────────────────────────────
@@ -123,14 +114,12 @@ export function HintOptionsModal({ visible, onClose }: HintOptionsModalProps) {
    */
   const charge = async (
     hintType: "reveal_letter" | "reveal_word" | "check_errors",
-    letterCount: number,
   ) => {
     if (!activePuzzle) throw new Error("no_puzzle");
     const result = await spendOnHint(
       activePuzzle.id,
       hintType,
       Crypto.randomUUID(),
-      letterCount,
     );
     useUserStore.getState().applyServerBalance(result.balance);
     track("hint_used", { hintType, cost: result.cost });
@@ -141,7 +130,7 @@ export function HintOptionsModal({ visible, onClose }: HintOptionsModalProps) {
     if (!letterEnabled) return;
     setBusy(true);
     try {
-      await charge("reveal_letter", 1);
+      await charge("reveal_letter");
       revealLetter();
       SFX.hint();
       onClose();
@@ -156,7 +145,7 @@ export function HintOptionsModal({ visible, onClose }: HintOptionsModalProps) {
     if (!wordEnabled) return;
     setBusy(true);
     try {
-      await charge("reveal_word", unrevealedLetters);
+      await charge("reveal_word");
       revealWord();
       SFX.hint();
       onClose();
@@ -171,7 +160,7 @@ export function HintOptionsModal({ visible, onClose }: HintOptionsModalProps) {
     if (!checkEnabled) return;
     setBusy(true);
     try {
-      await charge("check_errors", 0);
+      await charge("check_errors");
       checkErrors();
       decrementCheck();
       SFX.error();
@@ -392,7 +381,7 @@ export function HintOptionsModal({ visible, onClose }: HintOptionsModalProps) {
                     !wordEnabled && styles.priceTextDisabled,
                   ]}
                 >
-                  {revealWordCost}
+                  {wordPrice}
                 </Text>
                 <MaterialIcons
                   name="monetization-on"

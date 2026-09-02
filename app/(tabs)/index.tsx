@@ -36,7 +36,11 @@ import {
 import { supabase } from "../../services/supabaseClient";
 import { usePuzzleStore } from "../../stores/puzzleStore";
 import { useUserStore } from "../../stores/userStore";
-import { claimDailyBonus } from "../../services/economyService";
+import {
+  claimDailyBonus,
+  getPlayStatus,
+  PlayStatus,
+} from "../../services/economyService";
 import { track } from "../../services/analyticsService";
 import { formatCompactNumber } from "../../utils/formatNumber";
 
@@ -77,6 +81,13 @@ export default function HomeScreen() {
 
   const [collectionSummary, setCollectionSummary] =
     useState<CollectionSummary | null>(null);
+
+  const [playStatus, setPlayStatus] = useState<PlayStatus | null>(null);
+  useEffect(() => {
+    getPlayStatus()
+      .then(setPlayStatus)
+      .catch(() => setPlayStatus(null));
+  }, [profile.id]);
 
   // Claim the daily login bonus on mount. The server decides the amount and
   // enforces once-per-UTC-day; the client just reports what it was told.
@@ -215,6 +226,17 @@ export default function HomeScreen() {
                 {formatCompactNumber(profile.coins)}
               </Text>
             </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statGroup}>
+              <MaterialIcons
+                name="bolt"
+                size={18}
+                color={theme.colors.accentGold}
+              />
+              <Text style={styles.statText}>
+                {playStatus ? playStatus.free_plays_remaining : "–"}
+              </Text>
+            </View>
           </View>
         </View>
       </View>
@@ -241,6 +263,22 @@ export default function HomeScreen() {
               <MaterialIcons name="close" size={16} color={theme.colors.textMuted} />
             </TouchableOpacity>
           </Animated.View>
+        )}
+
+        {/* A completion, not a wall. This framing is the difference between
+            a good review and a bad one. */}
+        {playStatus?.free_plays_remaining === 0 && (
+          <View style={styles.setCompleteBanner}>
+            <MaterialIcons
+              name="check-circle"
+              size={20}
+              color={theme.colors.accentGold}
+            />
+            <Text style={styles.setCompleteText}>
+              You&apos;ve finished today&apos;s set — new puzzles at midnight.
+              Keep going any time by spending coins.
+            </Text>
+          </View>
         )}
 
         {/* Resume In-Progress Puzzle Card */}
@@ -1057,6 +1095,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: theme.colors.textPrimary,
     fontWeight: "bold",
+  },
+  setCompleteBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "rgba(238, 205, 43, 0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(238, 205, 43, 0.2)",
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+  },
+  setCompleteText: {
+    flex: 1,
+    fontFamily: theme.typography.body.fontFamily,
+    fontSize: 13,
+    color: theme.colors.textSecondary,
+    lineHeight: 18,
   },
   bonusBanner: {
     flexDirection: "row",

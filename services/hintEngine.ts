@@ -166,21 +166,8 @@ export function getUnrevealedLetterCount(
   }).length;
 }
 
-/**
- * Computes the coin cost for revealing an entire word.
- * Cost = REVEAL_LETTER_COST × number of unrevealed letters.
- * Returns 0 if the entire word is already complete.
- *
- * @param grid - The puzzle grid
- * @param clue - The active clue
- * @returns Total coin cost
- */
-export function getRevealWordCost(
-  grid: GridCell[][],
-  clue: CrosswordClue,
-): number {
-  return REVEAL_LETTER_COST * getUnrevealedLetterCount(grid, clue);
-}
+// getRevealWordCost has been removed. Revealing a word is now a flat price
+// from economy_config, not a multiple of the letter price.
 
 /**
  * Returns the cost for a Check Errors action, accounting for free checks.
