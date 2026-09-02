@@ -7,7 +7,8 @@ name: Publish legal pages
 # design specs and implementation plans that should not be a public website.
 # Deploying via Actions serves exactly the folder we name and nothing else.
 #
-# One-time setup: repo → Settings → Pages → Source → **GitHub Actions**.
+# No manual setup needed: configure-pages runs with `enablement: true`, so
+# the first run creates the Pages site and sets its source to Actions itself.
 #
 # Result: https://<owner>.github.io/<repo>/ with privacy.html, terms.html and
 # account-deletion.html alongside it. Play requires public URLs for the
@@ -46,6 +47,14 @@ jobs:
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
+        with:
+          # Creates and enables the Pages site if it does not exist yet,
+          # rather than failing with "Get Pages site failed / Not Found".
+          # Without this the workflow cannot run until someone has already
+          # switched the source to GitHub Actions by hand - and switching it
+          # by hand is the step people get stuck on, because that screen
+          # offers no folder picker and looks unfinished.
+          enablement: true
 
       - name: Upload web/ as the site
         uses: actions/upload-pages-artifact@v3
