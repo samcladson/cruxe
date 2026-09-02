@@ -111,6 +111,15 @@ export default function ProfileScreen() {
   };
 
   /**
+   * Runs the first-run tutorial again. The tutorial screen stashes and
+   * restores any puzzle already in progress, so this is safe mid-solve.
+   */
+  const handleReplayTutorial = () => {
+    triggerHaptic();
+    router.push("/(auth)/tutorial");
+  };
+
+  /**
    * Permanent account deletion — required by Apple guideline 5.1.1(v) and
    * Google Play policy. The consequences are stated plainly rather than
    * buried, because coins are genuinely forfeited and not refundable.
@@ -382,6 +391,31 @@ export default function ProfileScreen() {
                 color={theme.colors.textMuted}
               />
             )}
+          </TouchableOpacity>
+
+          <View style={styles.settingDivider} />
+
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={handleReplayTutorial}
+            accessibilityRole="button"
+            accessibilityLabel="Replay the tutorial"
+          >
+            <View style={styles.settingInfo}>
+              <View style={styles.settingIconWrap}>
+                <MaterialIcons
+                  name="school"
+                  size={18}
+                  color={theme.colors.accentGold}
+                />
+              </View>
+              <Text style={styles.settingText}>Replay tutorial</Text>
+            </View>
+            <MaterialIcons
+              name="chevron-right"
+              size={24}
+              color={theme.colors.textMuted}
+            />
           </TouchableOpacity>
 
           <View style={styles.settingDivider} />

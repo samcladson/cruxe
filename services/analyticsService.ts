@@ -14,6 +14,7 @@ import * as Sentry from "@sentry/react-native";
 export type AnalyticsEvent =
   | "onboarding_started"
   | "onboarding_completed"
+  | "tutorial_skipped"
   | "first_solve"
   | "puzzle_started"
   | "puzzle_completed"

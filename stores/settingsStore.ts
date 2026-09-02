@@ -6,12 +6,24 @@ interface SettingsState {
   hapticsEnabled: boolean;
   soundEnabled: boolean;
   theme: "dark" | "light" | "system";
-  /** false until the user finishes the onboarding flow (new installs). */
+  /**
+   * false until the user finishes the first run (welcome + tutorial).
+   * Set once at the end, whether they solved the tutorial or skipped it —
+   * skipping is a choice, and re-prompting would be nagging.
+   */
   hasCompletedOnboarding: boolean;
+  /**
+   * Cruxe has clues that read right-to-left and bottom-to-top, which is not
+   * how crosswords normally work. This gates a one-time explanation, fired
+   * the first time a reverse clue is selected — in the tutorial or in a real
+   * puzzle, whichever comes first.
+   */
+  hasSeenReverseHint: boolean;
   setHaptics: (enabled: boolean) => void;
   setSound: (enabled: boolean) => void;
   setTheme: (theme: "dark" | "light" | "system") => void;
   setHasCompletedOnboarding: (done: boolean) => void;
+  setHasSeenReverseHint: (seen: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -21,10 +33,12 @@ export const useSettingsStore = create<SettingsState>()(
       soundEnabled: true,
       theme: "dark", // Obsidian UI defaults to dark
       hasCompletedOnboarding: false,
+      hasSeenReverseHint: false,
       setHaptics: (enabled) => set({ hapticsEnabled: enabled }),
       setSound: (enabled) => set({ soundEnabled: enabled }),
       setTheme: (theme) => set({ theme }),
       setHasCompletedOnboarding: (done) => set({ hasCompletedOnboarding: done }),
+      setHasSeenReverseHint: (seen) => set({ hasSeenReverseHint: seen }),
     }),
     {
       name: "settings-storage",

@@ -23,7 +23,7 @@ export default function Index() {
   }
 
   if (!hasCompletedOnboarding) {
-    return <Redirect href="/(auth)/onboarding" />;
+    return <Redirect href="/(auth)/welcome" />;
   }
   return <Redirect href="/(tabs)" />;
 }
