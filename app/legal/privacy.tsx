@@ -19,7 +19,7 @@ export default function PrivacyPolicyScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={styles.lastUpdated}>Last Updated: March 2026</Text>
+        <Text style={styles.lastUpdated}>Last Updated: September 2026</Text>
         
         <Text style={styles.paragraph}>
           Welcome to Cruxe. Your privacy is important to us. This Privacy Policy explains how we collect, use, and protect your information when you use our mobile application.
@@ -54,6 +54,7 @@ export default function PrivacyPolicyScreen() {
           <Text style={styles.bullet}>• <Text style={styles.bold}>Supabase:</Text> For secure authentication and database hosting.</Text>
           <Text style={styles.bullet}>• <Text style={styles.bold}>RevenueCat:</Text> To securely process and validate your in-app coin purchases. RevenueCat retains purchase history associated with your anonymous or linked account identifier.</Text>
           <Text style={styles.bullet}>• <Text style={styles.bold}>Google/Apple Sign-In:</Text> For authenticating your identity if you choose to link an account.</Text>
+          <Text style={styles.bullet}>• <Text style={styles.bold}>Sentry:</Text> For crash reporting and performance diagnostics. Reports include device model, OS version, and an anonymous account identifier so we can correlate one user&apos;s crashes. We do not send your device name, puzzle answers, or authentication tokens.</Text>
         </View>
 
         <Text style={styles.sectionTitle}>4. Data Security & Deletion</Text>
