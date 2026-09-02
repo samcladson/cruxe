@@ -35,6 +35,7 @@ jobs:
         run: npm ci
 
       - name: Generate puzzles (3-day buffer for timezone coverage)
+        id: generate
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -63,3 +64,39 @@ jobs:
               npx tsx scripts/generate-daily-puzzles-free.ts "${DATE}"
             done
           fi
+
+      # The generator now exits non-zero when fewer than 70% of puzzles are
+      # produced, so a mostly-failed run turns the Action red. This step is the
+      # backstop: it asks the database directly, so a bug in the generator's
+      # own accounting cannot hide an empty day.
+      #
+      # Runs even when generation failed, because "how bad is it" is exactly
+      # what you want to know when it did.
+      - name: Verify today's puzzles exist
+        if: always()
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -euo pipefail
+          DATE=$(date -u +%Y-%m-%d)
+
+          # PostgREST returns the row count in the Content-Range header as
+          # "0-0/<total>" when asked with Prefer: count=exact.
+          RANGE=$(curl -sS -o /dev/null -D - \
+            "${SUPABASE_URL}/rest/v1/daily_puzzles?puzzle_date=eq.${DATE}&select=id" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Prefer: count=exact" \
+            -H "Range: 0-0" \
+            | tr -d '\r' | awk -F'/' '/[Cc]ontent-[Rr]ange/ {print $2}')
+
+          COUNT=${RANGE:-0}
+          echo "Puzzles in database for ${DATE}: ${COUNT}"
+
+          if [ "${COUNT}" -lt 5 ]; then
+            echo "::error title=No puzzles for today::Only ${COUNT} puzzles exist for ${DATE}. Players will silently be served an older day's set. Check the generate step for Gemini quota (20/day) or API key problems."
+            exit 1
+          fi
+
+          echo "::notice title=Puzzles ready::${COUNT} puzzles available for ${DATE}."

@@ -22,6 +22,44 @@ import { buildPuzzle } from "../services/crosswordEngine";
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Retries a Gemini call on rate limits and transient server errors.
+ *
+ * The free tier allows 5 requests per minute, so a burst reliably 429s. That
+ * used to lose the puzzle outright; waiting a few seconds converts a lost
+ * puzzle into a slow one. Non-retryable failures (a bad prompt, an auth
+ * error) still fail immediately rather than burning the daily quota.
+ */
+async function withRetry<T>(
+  label: string,
+  fn: () => Promise<T>,
+  attempts = 3,
+): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (!(err as any)?.retryable || i === attempts - 1) throw err;
+      const wait = 15000 * (i + 1); // 15s, then 30s - clears a 5 RPM window
+      console.warn(
+        `   Retrying ${label} in ${wait / 1000}s (${i + 1}/${attempts - 1}): ` +
+          `${(err as Error).message.substring(0, 80)}`,
+      );
+      await delay(wait);
+    }
+  }
+  throw lastErr;
+}
+
+/**
+ * A run that produces almost nothing is a failure, even though it produced
+ * something. Below this fraction of the planned puzzles, exit non-zero so the
+ * Action goes red and you find out from GitHub rather than from an empty app.
+ */
+const MIN_SUCCESS_RATIO = 0.7;
+
 // ═══════════════════════════════════════════════════════════════════
 // TYPES
 // ═══════════════════════════════════════════════════════════════════
@@ -219,9 +257,16 @@ Return a JSON array of exactly ${wordCount} objects. No markdown, no extra text.
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(
+    // 429 is the free tier's 5-requests-per-minute limit and is entirely
+    // expected during a burst; 5xx is transient. Both were previously fatal
+    // for that puzzle, turning a moment's throttling into missing content.
+    // The caller retries these with backoff.
+    const retryable = response.status === 429 || response.status >= 500;
+    const err = new Error(
       `Gemini API error (${response.status}): ${errorText.substring(0, 200)}`,
     );
+    (err as any).retryable = retryable;
+    throw err;
   }
 
   const data = await response.json();
@@ -255,13 +300,28 @@ Return a JSON array of exactly ${wordCount} objects. No markdown, no extra text.
     if (!rawWord || typeof rawWord !== "string") continue;
     
     const word = rawWord.toUpperCase().replace(/[^A-Z]/g, "");
-    if (word.length >= 3 && word.length <= maxLength && typeof item.clue === "string") {
-      extractedWords.push({
-        word,
-        clue: item.clue,
-        isHint: Boolean(item.isHint),
-      });
+    if (word.length < 3 || word.length > maxLength) continue;
+    if (typeof item.clue !== "string" || item.clue.trim().length < 3) continue;
+
+    // A clue that contains its own answer gives the puzzle away. LLMs do this
+    // often enough that it is worth rejecting rather than shipping.
+    if (item.clue.toUpperCase().includes(word)) {
+      console.warn(`   ⚠ Dropped "${word}" - the clue contains the answer`);
+      continue;
     }
+
+    // Duplicate answers break the grid: two clues would resolve to the same
+    // cells and the puzzle becomes unsolvable as written.
+    if (extractedWords.some((w) => w.word === word)) {
+      console.warn(`   ⚠ Dropped duplicate answer "${word}"`);
+      continue;
+    }
+
+    extractedWords.push({
+      word,
+      clue: item.clue.trim(),
+      isHint: Boolean(item.isHint),
+    });
   }
 
   if (extractedWords.length === 0) {
@@ -449,12 +509,14 @@ async function main() {
         : spec.category;
 
       // Generate words via Gemini (targetDate injected for freshness context)
-      const words = await generatePuzzleWords(
-        geminiCategory,
-        spec.difficulty,
-        spec.gridSize,
-        geminiKey,
-        targetDate,
+      const words = await withRetry(label, () =>
+        generatePuzzleWords(
+          geminiCategory,
+          spec.difficulty,
+          spec.gridSize,
+          geminiKey,
+          targetDate,
+        ),
       );
       if (words.length < 3)
         throw new Error(`Only ${words.length} words returned`);
@@ -578,7 +640,32 @@ async function main() {
     `\n${errors === 0 ? "✅ All puzzles generated successfully!" : `⚠️ Completed with ${errors} errors`}\n`,
   );
 
-  process.exit(errors > 0 && generated === 0 ? 1 : 0);
+  // Verify against what is actually in the database, not just what this run
+  // believes it wrote. A silent insert failure would otherwise pass unnoticed.
+  const { count: storedToday } = await supabase
+    .from("daily_puzzles")
+    .select("*", { count: "exact", head: true })
+    .eq("puzzle_date", targetDate);
+
+  console.log(`   In database for ${targetDate}: ${storedToday ?? 0}`);
+
+  const planned = generated + errors;
+  const ratio = planned === 0 ? 1 : generated / planned;
+  const healthy = ratio >= MIN_SUCCESS_RATIO && (storedToday ?? 0) > 0;
+
+  if (!healthy) {
+    console.error(
+      `FAILED: only ${generated}/${planned} puzzles generated ` +
+        `(${Math.round(ratio * 100)}%, threshold ${MIN_SUCCESS_RATIO * 100}%).
+` +
+        `   Failing the job so this surfaces in GitHub Actions rather than as
+` +
+        `   an app that quietly serves yesterday's puzzles.`,
+    );
+    process.exit(1);
+  }
+
+  process.exit(0);
 }
 
 main().catch((err) => {
