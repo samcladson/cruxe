@@ -90,9 +90,11 @@ because in-app products cannot be created without it.
 
 - [x] Pages written: `web/index.html`, `privacy.html`, `terms.html`,
       `account-deletion.html`
-- [ ] **Publish them.** GitHub → repo → Settings → Pages → Deploy from
-      branch → `master` → folder `/web`. The URLs become
-      `https://samcladson.github.io/cruxe/` and `.../privacy.html` etc.
+- [ ] **Publish them.** GitHub → repo → Settings → Pages → Source →
+      **GitHub Actions** (not "Deploy from a branch" — that only offers root
+      or /docs, and /docs holds design specs that should not be public).
+      The `Publish legal pages` workflow then serves `web/` on every change
+      and prints the exact URLs in its run summary.
 - [ ] Paste the privacy URL into the store listing, and the deletion URL
       into the Data safety form
 - [ ] Complete the Data safety form using `docs/store/play-data-safety.md`

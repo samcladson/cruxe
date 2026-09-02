@@ -1,0 +1,64 @@
+name: Publish legal pages
+
+# Publishes web/ to GitHub Pages.
+#
+# "Deploy from a branch" only offers root or /docs as the source folder, and
+# neither works here: root would serve the whole repository, and /docs holds
+# design specs and implementation plans that should not be a public website.
+# Deploying via Actions serves exactly the folder we name and nothing else.
+#
+# One-time setup: repo → Settings → Pages → Source → **GitHub Actions**.
+#
+# Result: https://<owner>.github.io/<repo>/ with privacy.html, terms.html and
+# account-deletion.html alongside it. Play requires public URLs for the
+# privacy policy and the account-deletion route.
+
+on:
+  push:
+    branches: [master]
+    # Only redeploy when the pages themselves change - app commits should not
+    # trigger a site deployment.
+    paths:
+      - "web/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never run two deployments at once, but let a queued one finish rather than
+# cancelling it - a half-published policy page is worse than a slow one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload web/ as the site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./web
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Report the URLs to paste into Play Console
+        run: |
+          BASE="${{ steps.deployment.outputs.page_url }}"
+          echo "::notice title=Privacy policy::${BASE}privacy.html"
+          echo "::notice title=Account deletion::${BASE}account-deletion.html"
+          echo "::notice title=Terms::${BASE}terms.html"
