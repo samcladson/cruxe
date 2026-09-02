@@ -6,6 +6,7 @@ import {
   getActiveClue as resolveActiveClue,
 } from "../services/hintEngine";
 import { CrosswordClue, Direction, Puzzle } from "../types/puzzle.types";
+import { findClueId } from "../utils/clueId";
 
 /**
  * puzzleStore.ts — Global state for the active crossword puzzle session.
@@ -28,6 +29,16 @@ interface PuzzleState {
   selectCell: (row: number, col: number) => void;
   toggleDirection: () => void;
   setCellValue: (row: number, col: number, value: string) => void;
+  /**
+   * Moves the cursor without touching direction.
+   *
+   * selectCell re-derives direction from the target cell, which is right for
+   * a tap but wrong while typing: crossing a square that also belongs to a
+   * perpendicular word would silently rotate the axis mid-word.
+   */
+  moveCursorTo: (row: number, col: number) => void;
+  /** Sets the axis explicitly, used when handing off to the next clue. */
+  setDirection: (direction: Direction) => void;
   clearCell: (row: number, col: number) => void;
   clearWord: () => void;
   incrementTimer: () => void;
@@ -90,9 +101,7 @@ export const usePuzzleStore = create<PuzzleState>()(
         } else {
           // Ensure Direction Lock: Set direction to the first valid one for the tapped cell
           let newDirection = selectedDirection;
-          let targetClueId = cell.clueIds.find((id) =>
-            id.includes(selectedDirection),
-          );
+          let targetClueId = findClueId(cell.clueIds, selectedDirection);
 
           if (!targetClueId && cell.clueIds.length > 0) {
             targetClueId = cell.clueIds[0];
@@ -125,9 +134,7 @@ export const usePuzzleStore = create<PuzzleState>()(
 
         // Determine what the active clue actually is (accounting for fallback logic in the UI)
         let actualCurrentDir = selectedDirection;
-        let targetClueId = cell.clueIds.find((id) =>
-          id.includes(selectedDirection),
-        );
+        let targetClueId = findClueId(cell.clueIds, selectedDirection);
 
         // If the global direction isn't in this cell, the UI fell back to the first clue.
         if (!targetClueId) {
@@ -146,6 +153,10 @@ export const usePuzzleStore = create<PuzzleState>()(
 
         set({ selectedDirection: availableDirs[nextIdx] });
       },
+
+      moveCursorTo: (row, col) => set({ selectedCell: { row, col } }),
+
+      setDirection: (direction) => set({ selectedDirection: direction }),
 
       setCellValue: (row, col, value) => {
         set((state) => {

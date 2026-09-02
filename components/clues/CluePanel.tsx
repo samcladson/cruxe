@@ -11,6 +11,7 @@ import {
 import { theme } from "../../constants/theme";
 import { usePuzzleStore } from "../../stores/puzzleStore";
 import { CrosswordClue, Direction } from "../../types/puzzle.types";
+import { findClueId } from "../../utils/clueId";
 
 interface ClueItemProps {
   clue: CrosswordClue;
@@ -75,9 +76,7 @@ export function CluePanel() {
   const getActiveClueId = () => {
     if (!selectedCell) return null;
     const currentCell = activePuzzle.grid[selectedCell.row][selectedCell.col];
-    let targetId = currentCell.clueIds.find((id) =>
-      id.includes(selectedDirection),
-    );
+    let targetId = findClueId(currentCell.clueIds, selectedDirection);
     if (!targetId && currentCell.clueIds.length > 0)
       targetId = currentCell.clueIds[0];
     return targetId;

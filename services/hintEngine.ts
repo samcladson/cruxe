@@ -12,6 +12,7 @@ import {
     GridCell,
     Puzzle,
 } from "../types/puzzle.types";
+import { findClueId } from "../utils/clueId";
 
 // ═══════════════════════════════════════════════════════════════════
 // HINT TYPE DEFINITIONS
@@ -66,7 +67,7 @@ export function getActiveClue(
   if (!cell || cell.isBlocked) return null;
 
   // Try to find a clue matching the selected direction first
-  const preferredId = cell.clueIds.find((id) => id.includes(selectedDirection));
+  const preferredId = findClueId(cell.clueIds, selectedDirection);
   const targetId = preferredId || cell.clueIds[0];
 
   if (!targetId) return null;

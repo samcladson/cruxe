@@ -7,6 +7,7 @@ import { theme } from "../../constants/theme";
 import { usePuzzleStore } from "../../stores/puzzleStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { Direction } from "../../types/puzzle.types";
+import { findClueId } from "../../utils/clueId";
 
 interface ActiveClueBarProps {
   /** Callback fired when the lightbulb hint button is pressed */
@@ -57,9 +58,7 @@ export function ActiveClueBar({ onHintPress }: ActiveClueBarProps) {
   const currentCell = activePuzzle.grid[selectedCell.row][selectedCell.col];
   if (currentCell.isBlocked || currentCell.clueIds.length === 0) return null;
 
-  let targetClueId = currentCell.clueIds.find((id) =>
-    id.includes(selectedDirection),
-  );
+  let targetClueId = findClueId(currentCell.clueIds, selectedDirection);
   if (!targetClueId) {
     targetClueId = currentCell.clueIds[0];
   }

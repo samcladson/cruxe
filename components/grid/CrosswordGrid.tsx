@@ -3,6 +3,7 @@ import { Dimensions, StyleSheet, TextInput, View } from "react-native";
 import { SFX } from "../../services/soundService";
 import { usePuzzleStore } from "../../stores/puzzleStore";
 import { GridCell } from "./GridCell";
+import { resolveClueId } from "../../utils/clueId";
 
 const { width } = Dimensions.get("window");
 
@@ -45,12 +46,8 @@ export function CrosswordGrid() {
     const currentCell = activePuzzle.grid[row][col];
     if (currentCell.isBlocked || currentCell.clueIds.length === 0) return [];
 
-    let targetClueId = currentCell.clueIds.find((id) =>
-      id.includes(selectedDirection),
-    );
-    if (!targetClueId) {
-      targetClueId = currentCell.clueIds[0];
-    }
+    const targetClueId = resolveClueId(currentCell.clueIds, selectedDirection);
+    if (!targetClueId) return [];
 
     const activeWordCells: { row: number; col: number }[] = [];
     activePuzzle.grid.forEach((r) =>
@@ -125,12 +122,8 @@ export function CrosswordGrid() {
     const currentCell = currentActivePuzzle.grid[row][col];
     if (currentCell.isBlocked || currentCell.clueIds.length === 0) return;
 
-    let targetClueId = currentCell.clueIds.find((id) =>
-      id.includes(currentDirection),
-    );
-    if (!targetClueId) {
-      targetClueId = currentCell.clueIds[0];
-    }
+    const targetClueId = resolveClueId(currentCell.clueIds, currentDirection);
+    if (!targetClueId) return;
 
     const currentActiveWordCells: {
       row: number;
@@ -188,8 +181,71 @@ export function CrosswordGrid() {
 
     if (nextIndex >= 0 && nextIndex < currentActiveWordCells.length) {
       const nextCell = currentActiveWordCells[nextIndex];
-      state.selectCell(nextCell.row, nextCell.col);
+      // moveCursorTo, NOT selectCell: selectCell re-derives direction from
+      // the target square, so crossing an intersection would rotate the axis
+      // mid-word. The axis stays locked until the player toggles it.
+      state.moveCursorTo(nextCell.row, nextCell.col);
+      return;
     }
+
+    // Ran off the end of the word. Rather than stopping dead, hand off to the
+    // next clue that still needs letters - that hand-off is what makes the
+    // grid feel continuous instead of like a series of separate inputs.
+    if (step > 0) {
+      advanceToNextClue(targetClueId!);
+    }
+  };
+
+  /**
+   * Selects the first empty square of the next clue that still has one,
+   * wrapping around. Sets the axis to that clue's own direction.
+   */
+  const advanceToNextClue = (fromClueId: string) => {
+    const state = usePuzzleStore.getState();
+    const puzzle = state.activePuzzle;
+    if (!puzzle) return;
+
+    const order = puzzle.clues;
+    const startIdx = order.findIndex((c) => c.id === fromClueId);
+    if (startIdx === -1) return;
+
+    for (let i = 1; i <= order.length; i++) {
+      const clue = order[(startIdx + i) % order.length];
+
+      const cells: { row: number; col: number }[] = [];
+      puzzle.grid.forEach((r) =>
+        r.forEach((c) => {
+          if (c.clueIds.includes(clue.id)) cells.push({ row: c.row, col: c.col });
+        }),
+      );
+
+      cells.sort((a, b) => {
+        switch (clue.direction) {
+          case "across":
+            return a.col - b.col;
+          case "reverse_across":
+            return b.col - a.col;
+          case "down":
+            return a.row - b.row;
+          case "reverse_down":
+            return b.row - a.row;
+          default:
+            return 0;
+        }
+      });
+
+      const firstEmpty = cells.find((p) => {
+        const cell = puzzle.grid[p.row][p.col];
+        return !cell.isPreFilled && !cell.userInput;
+      });
+
+      if (firstEmpty) {
+        state.setDirection(clue.direction);
+        state.moveCursorTo(firstEmpty.row, firstEmpty.col);
+        return;
+      }
+    }
+    // Every clue is full. Leave the cursor where it is; completion handles it.
   };
 
   return (
