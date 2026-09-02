@@ -1,7 +1,8 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import {
   ActivityIndicator,
   Alert,
@@ -95,39 +96,63 @@ export default function HomeScreen() {
   const [repairing, setRepairing] = useState(false);
 
   const [playStatus, setPlayStatus] = useState<PlayStatus | null>(null);
-  useEffect(() => {
-    getPlayStatus()
-      .then(setPlayStatus)
-      .catch(() => setPlayStatus(null));
-  }, [profile.id]);
+
+  /**
+   * On focus rather than on mount. Two reasons:
+   *
+   * 1. A returning user's profile.id is already restored from storage, so a
+   *    mount-only effect can fire before Supabase has restored the session,
+   *    fail with not_authenticated, and never retry - leaving the free-play
+   *    count permanently blank for that session.
+   * 2. Free plays change as you play. Coming back from a puzzle should show
+   *    the new count, not the one from app start.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      getPlayStatus()
+        .then((st) => {
+          if (!cancelled) setPlayStatus(st);
+        })
+        .catch(() => {
+          /* Offline or session not ready. Retried on next focus. */
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, [profile.id]),
+  );
 
   /**
    * Streak state drives both the repair prompt and the evening warning.
    * Rescheduling here means the warning self-corrects: play today, and the
    * next time this screen loads it is cancelled.
    */
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const st = await getStreakStatus();
-        if (cancelled) return;
-        setStreak(st);
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        try {
+          const st = await getStreakStatus();
+          if (cancelled) return;
+          setStreak(st);
 
-        const wantWarning = useSettingsStore.getState().streakWarningEnabled;
-        if (wantWarning && !st.played_today && st.current_streak > 0) {
-          await scheduleStreakWarning(st.current_streak);
-        } else {
-          await cancelStreakWarning();
+          const wantWarning = useSettingsStore.getState().streakWarningEnabled;
+          if (wantWarning && !st.played_today && st.current_streak > 0) {
+            await scheduleStreakWarning(st.current_streak);
+          } else {
+            await cancelStreakWarning();
+          }
+        } catch {
+          // Offline, or migrations 014/015 not applied yet. The repair
+          // prompt simply does not appear; nothing else is affected.
         }
-      } catch {
-        // Offline. The prompt simply does not appear.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [profile.id, profile.currentStreak]);
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [profile.id, profile.currentStreak]),
+  );
 
   const handleRepair = async () => {
     if (repairing) return;
@@ -253,7 +278,7 @@ export default function HomeScreen() {
         <View style={styles.topBar}>
           <View style={styles.brandRow}>
             <PulseDot />
-            <Text style={styles.brandText}>
+            <Text style={styles.brandText} numberOfLines={1}>
               WELCOME,{" "}
               {profile.displayName
                 ? profile.displayName.toUpperCase()
@@ -284,17 +309,21 @@ export default function HomeScreen() {
                 {formatCompactNumber(profile.coins)}
               </Text>
             </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statGroup}>
-              <MaterialIcons
-                name="bolt"
-                size={18}
-                color={theme.colors.accentGold}
-              />
-              <Text style={styles.statText}>
-                {playStatus ? playStatus.free_plays_remaining : "–"}
-              </Text>
-            </View>
+            {playStatus && (
+              <>
+                <View style={styles.statDivider} />
+                <View style={styles.statGroup}>
+                  <MaterialIcons
+                    name="bolt"
+                    size={18}
+                    color={theme.colors.accentGold}
+                  />
+                  <Text style={styles.statText}>
+                    {playStatus.free_plays_remaining}
+                  </Text>
+                </View>
+              </>
+            )}
           </View>
         </View>
       </View>
@@ -847,6 +876,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+    // Take the leftover width and truncate, rather than colliding with the
+    // pill. Without flex/minWidth a long display name overlaps it.
+    flex: 1,
+    minWidth: 0,
+    marginRight: 12,
   },
   pulseDot: {
     width: 8,
@@ -855,6 +889,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.accentGold,
   },
   brandText: {
+    flexShrink: 1,
     fontFamily: theme.typography.cellLetter.fontFamily,
     fontSize: 10,
     fontWeight: "bold",
@@ -866,12 +901,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: theme.colors.bgSecondary,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 100,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.05)",
-    gap: 12,
+    gap: 9,
+    // Three chips now. Keep the intrinsic width; the greeting yields instead.
+    flexShrink: 0,
   },
   statGroup: {
     flexDirection: "row",
