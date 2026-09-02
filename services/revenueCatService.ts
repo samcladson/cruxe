@@ -6,6 +6,7 @@ import Purchases, {
   PurchasesOffering,
   PurchasesPackage,
 } from "react-native-purchases";
+import { reportError } from "./errorReporting";
 
 /**
  * Public SDK keys from the RevenueCat dashboard (Project → API keys).
@@ -114,6 +115,8 @@ export async function initRevenueCat(): Promise<void> {
     revenueCatReady = false;
   } catch (error) {
     console.error("[RevenueCat] Initialization failed:", error);
+    // Every purchase in the app is now impossible; never let this be silent.
+    reportError("purchases", error);
     revenueCatReady = false;
   }
 }
@@ -200,6 +203,9 @@ export async function purchasePackage(rcPackage: PurchasesPackage): Promise<{
     if (error.userCancelled) {
       return { userCancelled: true };
     }
+    // A player who tried to pay and could not — the highest-signal failure
+    // in the app. Cancellation above is a normal choice, not an error.
+    reportError("purchases", error, { code: String(error?.code ?? "unknown") });
     return { error, userCancelled: false };
   }
 }
@@ -222,6 +228,7 @@ export async function restorePurchases(): Promise<{
     const customerInfo = await Purchases.restorePurchases();
     return { customerInfo };
   } catch (error: any) {
+    reportError("purchases", error, { op: "restore" });
     return { error };
   }
 }

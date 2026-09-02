@@ -16,6 +16,7 @@ import * as AppleAuthentication from "expo-apple-authentication";
 import * as Crypto from "expo-crypto";
 import { usePuzzleStore } from "../stores/puzzleStore";
 import { useUserStore } from "../stores/userStore";
+import { reportError } from "./errorReporting";
 import { supabase } from "./supabaseClient";
 import { loginToRevenueCat, logoutRevenueCat } from "./revenueCatService";
 
@@ -121,6 +122,9 @@ export async function initAuth(): Promise<AuthState> {
     };
   } catch (err) {
     console.error("[Auth] initAuth failed unexpectedly:", err);
+    // Degrading to local-only is deliberate, but it should never happen
+    // quietly — every fresh install depends on this path succeeding.
+    reportError("auth", err);
     return { user: null, session: null, isInitialised: true };
   }
 }

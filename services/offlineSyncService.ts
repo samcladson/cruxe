@@ -11,6 +11,7 @@
 
 import { useUserStore } from "../stores/userStore";
 import { submitSolve } from "./economyService";
+import { reportError } from "./errorReporting";
 
 /**
  * Attempts to re-submit every queued solve.
@@ -50,6 +51,9 @@ export async function drainPendingSolves(): Promise<number> {
         `[OfflineSync] Retry failed for ${pending.puzzleId}:`,
         err instanceof Error ? err.message : err,
       );
+      // Stays queued for the next attempt, but a solve that keeps failing is
+      // unpaid progress the player can see — worth an issue, not just a log.
+      reportError("sync", err, { puzzleId: pending.puzzleId });
     }
   }
 
