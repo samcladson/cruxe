@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Modal,
   ScrollView,
   StatusBar,
@@ -39,8 +40,16 @@ import { useUserStore } from "../../stores/userStore";
 import {
   claimDailyBonus,
   getPlayStatus,
+  getStreakStatus,
   PlayStatus,
+  repairStreak,
+  StreakStatus,
 } from "../../services/economyService";
+import {
+  cancelStreakWarning,
+  scheduleStreakWarning,
+} from "../../services/notificationService";
+import { useSettingsStore } from "../../stores/settingsStore";
 import { track } from "../../services/analyticsService";
 import { formatCompactNumber } from "../../utils/formatNumber";
 
@@ -82,12 +91,58 @@ export default function HomeScreen() {
   const [collectionSummary, setCollectionSummary] =
     useState<CollectionSummary | null>(null);
 
+  const [streak, setStreak] = useState<StreakStatus | null>(null);
+  const [repairing, setRepairing] = useState(false);
+
   const [playStatus, setPlayStatus] = useState<PlayStatus | null>(null);
   useEffect(() => {
     getPlayStatus()
       .then(setPlayStatus)
       .catch(() => setPlayStatus(null));
   }, [profile.id]);
+
+  /**
+   * Streak state drives both the repair prompt and the evening warning.
+   * Rescheduling here means the warning self-corrects: play today, and the
+   * next time this screen loads it is cancelled.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const st = await getStreakStatus();
+        if (cancelled) return;
+        setStreak(st);
+
+        const wantWarning = useSettingsStore.getState().streakWarningEnabled;
+        if (wantWarning && !st.played_today && st.current_streak > 0) {
+          await scheduleStreakWarning(st.current_streak);
+        } else {
+          await cancelStreakWarning();
+        }
+      } catch {
+        // Offline. The prompt simply does not appear.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [profile.id, profile.currentStreak]);
+
+  const handleRepair = async () => {
+    if (repairing) return;
+    setRepairing(true);
+    try {
+      const result = await repairStreak();
+      useUserStore.getState().applyServerBalance(result.balance);
+      await useUserStore.getState().refreshBalance();
+      setStreak(await getStreakStatus());
+    } catch (e: any) {
+      Alert.alert("Couldn't restore streak", e.message);
+    } finally {
+      setRepairing(false);
+    }
+  };
 
   // Claim the daily login bonus on mount. The server decides the amount and
   // enforces once-per-UTC-day; the client just reports what it was told.
@@ -266,6 +321,41 @@ export default function HomeScreen() {
               <MaterialIcons name="close" size={16} color={theme.colors.textMuted} />
             </TouchableOpacity>
           </Animated.View>
+        )}
+
+        {streak?.can_repair && (
+          <View style={styles.repairBanner}>
+            <MaterialIcons
+              name="local-fire-department"
+              size={22}
+              color="#F59E0B"
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.repairTitle}>
+                Your {streak.restores_to - 1} day streak broke
+              </Text>
+              <Text style={styles.repairBody}>
+                {streak.repair_is_free
+                  ? "Restore it — your free repair this month."
+                  : `Restore it for ${streak.repair_cost} coins.`}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.repairBtn}
+              onPress={handleRepair}
+              disabled={repairing}
+              accessibilityRole="button"
+              accessibilityLabel={
+                streak.repair_is_free
+                  ? "Restore my streak, free"
+                  : `Restore my streak for ${streak.repair_cost} coins`
+              }
+            >
+              <Text style={styles.repairBtnText}>
+                {repairing ? "..." : "Restore"}
+              </Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         {/* A completion, not a wall. This framing is the difference between
@@ -1098,6 +1188,42 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: theme.colors.textPrimary,
     fontWeight: "bold",
+  },
+  repairBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: "rgba(245, 158, 11, 0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(245, 158, 11, 0.3)",
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+  },
+  repairTitle: {
+    fontFamily: theme.typography.subheading.fontFamily,
+    fontSize: 14,
+    color: theme.colors.textPrimary,
+    fontWeight: "600",
+  },
+  repairBody: {
+    fontFamily: theme.typography.body.fontFamily,
+    fontSize: 12,
+    color: theme.colors.textSecondary,
+    marginTop: 2,
+  },
+  repairBtn: {
+    backgroundColor: "#F59E0B",
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 100,
+  },
+  repairBtnText: {
+    fontFamily: theme.typography.cellLetter.fontFamily,
+    fontSize: 12,
+    fontWeight: "bold",
+    color: "#1a1200",
+    letterSpacing: 1,
   },
   setCompleteBanner: {
     flexDirection: "row",

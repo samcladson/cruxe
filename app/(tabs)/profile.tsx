@@ -29,6 +29,12 @@ import {
   signOutAndStartNewAnonSession,
 } from "../../services/authService";
 import * as Haptics from "expo-haptics";
+import {
+  cancelDailyReminder,
+  cancelStreakWarning,
+  requestPermission,
+  scheduleDailyReminder,
+} from "../../services/notificationService";
 
 export default function ProfileScreen() {
   const profile = useUserStore((state) => state.profile);
@@ -108,6 +114,48 @@ export default function ProfileScreen() {
         },
       ],
     );
+  };
+
+  /**
+   * Permission is requested here, at the moment the user asks for a
+   * reminder — never on first launch. A prompt before the player knows what
+   * the app is gets denied, and on Android a denial is close to permanent.
+   */
+  const handleDailyReminder = async (enabled: boolean) => {
+    triggerHaptic();
+    if (!enabled) {
+      settings.setDailyReminder(false);
+      await cancelDailyReminder();
+      return;
+    }
+    const granted = await requestPermission();
+    if (!granted) {
+      Alert.alert(
+        "Notifications are off",
+        "Turn them on for Cruxe in your device settings to get reminders.",
+      );
+      return;
+    }
+    settings.setDailyReminder(true);
+    await scheduleDailyReminder(settings.dailyReminderHour, 0);
+  };
+
+  const handleStreakWarning = async (enabled: boolean) => {
+    triggerHaptic();
+    if (!enabled) {
+      settings.setStreakWarning(false);
+      await cancelStreakWarning();
+      return;
+    }
+    const granted = await requestPermission();
+    if (!granted) {
+      Alert.alert(
+        "Notifications are off",
+        "Turn them on for Cruxe in your device settings to get reminders.",
+      );
+      return;
+    }
+    settings.setStreakWarning(true);
   };
 
   /**
@@ -460,6 +508,66 @@ export default function ProfileScreen() {
             <View style={styles.settingInfo}>
               <View style={styles.settingIconWrap}>
                 <Ionicons
+                  name="notifications"
+                  size={18}
+                  color={theme.colors.textPrimary}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.settingText}>Daily reminder</Text>
+                <Text style={styles.settingSubtext}>
+                  {settings.dailyReminderHour}:00, when new puzzles land
+                </Text>
+              </View>
+            </View>
+            <Switch
+              value={settings.dailyReminderEnabled}
+              onValueChange={handleDailyReminder}
+              accessibilityLabel="Daily puzzle reminder"
+              trackColor={{
+                true: theme.colors.accentGold,
+                false: "rgba(255,255,255,0.1)",
+              }}
+              thumbColor="#fff"
+            />
+          </View>
+
+          <View style={styles.settingDivider} />
+
+          <View style={styles.settingRow}>
+            <View style={styles.settingInfo}>
+              <View style={styles.settingIconWrap}>
+                <Ionicons
+                  name="flame"
+                  size={18}
+                  color={theme.colors.textPrimary}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.settingText}>Streak warning</Text>
+                <Text style={styles.settingSubtext}>
+                  Only if your streak is at risk tonight
+                </Text>
+              </View>
+            </View>
+            <Switch
+              value={settings.streakWarningEnabled}
+              onValueChange={handleStreakWarning}
+              accessibilityLabel="Warn me when my streak is at risk"
+              trackColor={{
+                true: theme.colors.accentGold,
+                false: "rgba(255,255,255,0.1)",
+              }}
+              thumbColor="#fff"
+            />
+          </View>
+
+          <View style={styles.settingDivider} />
+
+          <View style={styles.settingRow}>
+            <View style={styles.settingInfo}>
+              <View style={styles.settingIconWrap}>
+                <Ionicons
                   name="volume-high"
                   size={18}
                   color={theme.colors.textPrimary}
@@ -740,6 +848,12 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.05)",
     alignItems: "center",
     justifyContent: "center",
+  },
+  settingSubtext: {
+    fontFamily: theme.typography.body.fontFamily,
+    fontSize: 11,
+    color: theme.colors.textMuted,
+    marginTop: 2,
   },
   settingText: {
     fontFamily: theme.typography.body.fontFamily,

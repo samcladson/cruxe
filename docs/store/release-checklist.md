@@ -86,6 +86,9 @@ Run against a real build, not the dev client.
 - [ ] Daily challenge is free and does not consume a free play
 - [ ] Delete account removes the row and returns to sign-in
 - [ ] Sentry receives a release-build crash with breadcrumbs attached
+- [ ] Turning on the daily reminder prompts for permission and fires
+- [ ] Break a streak (set `last_played_date` back two days), confirm the
+      repair prompt appears and the first repair each month is free
 - [ ] TalkBack: the grid is navigable and squares are announced with position
 
 ## 7. Release
@@ -101,11 +104,11 @@ Run against a real build, not the dev client.
 
 Deliberate, recorded so they are decisions rather than oversights.
 
-- **No push notifications.** Deferred with the rest of the retention work
-  until there are users to retain and funnel data showing where they leave.
-- **No streak repair.** The daily bonus curve is steep — day 14 pays 150 and
-  one missed day drops it to 30. Repair is the first thing to build after
-  launch.
+- **No *push* notifications.** Local reminders (daily, and a streak warning)
+  ship; server-initiated push is deferred until there is something only a
+  server could say — a friend passing you, a league ending. Neither exists.
+- **No achievements or leagues.** Deferred with the rest of the retention
+  work until funnel data shows where players actually leave.
 - **Accessibility is partial.** Grid, shared components, and primary actions
   are labelled; secondary screens are not, and dynamic type is unsupported
   because every font size is a fixed number.

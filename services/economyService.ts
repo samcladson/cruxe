@@ -58,6 +58,9 @@ function rpcError(context: string, error: { message: string }): Error {
     insufficient_coins: "You don't have enough coins for that.",
     not_authenticated: "Please sign in again.",
     puzzle_not_found: "That puzzle is no longer available.",
+    no_streak_to_repair: "There's no broken streak to restore.",
+    repair_window_expired:
+      "That streak is too old to restore now — but a new one starts today.",
     unknown_hint_type: "That hint isn't available.",
     display_name_length: "Name must be 2–20 characters.",
     display_name_charset:
@@ -102,6 +105,34 @@ export async function getPlayStatus(): Promise<PlayStatus> {
   const { data, error } = await supabase.rpc("get_play_status");
   if (error) throw rpcError("Play status", error);
   return data as PlayStatus;
+}
+
+export interface StreakStatus {
+  current_streak: number;
+  longest_streak: number;
+  played_today: boolean;
+  can_repair: boolean;
+  repair_cost: number;
+  repair_is_free: boolean;
+  restores_to: number;
+  broken_on: string | null;
+}
+
+export async function getStreakStatus(): Promise<StreakStatus> {
+  const { data, error } = await supabase.rpc("get_streak_status");
+  if (error) throw rpcError("Streak status", error);
+  return data as StreakStatus;
+}
+
+/** Restores a streak broken within the grace window. Free once a month. */
+export async function repairStreak(): Promise<{
+  streak: number;
+  cost: number;
+  balance: number;
+}> {
+  const { data, error } = await supabase.rpc("repair_streak");
+  if (error) throw rpcError("Streak repair", error);
+  return data as { streak: number; cost: number; balance: number };
 }
 
 export async function claimDailyBonus(): Promise<DailyBonusResult> {

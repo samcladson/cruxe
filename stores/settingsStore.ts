@@ -19,11 +19,20 @@ interface SettingsState {
    * puzzle, whichever comes first.
    */
   hasSeenReverseHint: boolean;
+  /** Daily "new puzzles" reminder. Off until the user turns it on — we never
+   *  ask for notification permission before they have asked for a reminder. */
+  dailyReminderEnabled: boolean;
+  /** Local hour (0-23) for the daily reminder. */
+  dailyReminderHour: number;
+  /** Warn in the evening when an unplayed day would break the streak. */
+  streakWarningEnabled: boolean;
   setHaptics: (enabled: boolean) => void;
   setSound: (enabled: boolean) => void;
   setTheme: (theme: "dark" | "light" | "system") => void;
   setHasCompletedOnboarding: (done: boolean) => void;
   setHasSeenReverseHint: (seen: boolean) => void;
+  setDailyReminder: (enabled: boolean, hour?: number) => void;
+  setStreakWarning: (enabled: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -37,11 +46,20 @@ export const useSettingsStore = create<SettingsState>()(
       theme: "dark",
       hasCompletedOnboarding: false,
       hasSeenReverseHint: false,
+      dailyReminderEnabled: false,
+      dailyReminderHour: 19,
+      streakWarningEnabled: false,
       setHaptics: (enabled) => set({ hapticsEnabled: enabled }),
       setSound: (enabled) => set({ soundEnabled: enabled }),
       setTheme: (theme) => set({ theme }),
       setHasCompletedOnboarding: (done) => set({ hasCompletedOnboarding: done }),
       setHasSeenReverseHint: (seen) => set({ hasSeenReverseHint: seen }),
+      setDailyReminder: (enabled, hour) =>
+        set((st) => ({
+          dailyReminderEnabled: enabled,
+          dailyReminderHour: hour ?? st.dailyReminderHour,
+        })),
+      setStreakWarning: (enabled) => set({ streakWarningEnabled: enabled }),
     }),
     {
       name: "settings-storage",
