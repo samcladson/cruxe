@@ -17,6 +17,22 @@ Ordered by dependency: each section unblocks the next. Items marked
 Nothing below section 3 can be finished until the payments profile clears,
 because in-app products cannot be created without it.
 
+## 1b. Outstanding engineering
+
+- [ ] **Disable Supabase CAPTCHA** (Authentication → Settings). It blocks
+      anonymous sign-in, which breaks sign-out, account deletion, and every
+      fresh install. Incompatible with anonymous-first auth.
+- [ ] **Run migrations 014 then 015**, in that order — Postgres refuses to
+      use a new enum value in the transaction that adds it. Until then streak
+      repair is inert (the app degrades quietly, by design).
+- [ ] **Resolve Google Sign-In.** Currently failing with
+      `invalid claim: missing sub claim` — the app now logs the token's shape,
+      `iss` and `aud` on failure. Check that `aud` matches the web client id
+      in use, and that Supabase → Authentication → Providers → Google is
+      enabled with that id under Authorized Client IDs.
+- [ ] Re-run `npx jest __tests__/integration` after 014/015 (40 tests, plus
+      any added for streak repair)
+
 ## 2. Build
 
 - [x] `eas.json` production profile: app-bundle, `autoIncrement`
@@ -95,12 +111,17 @@ Run against a real build, not the dev client.
 - [ ] Hint with insufficient coins is refused **and reveals nothing**
 - [ ] Three free plays, then the fourth charges
 - [ ] Daily challenge is free and does not consume a free play
-- [ ] Delete account removes the row and returns to sign-in
+- [ ] Delete account removes the row, cancels notifications, and the next
+      launch shows welcome → tutorial as a fresh install
 - [ ] Sentry receives a release-build crash with breadcrumbs attached
 - [ ] Turning on the daily reminder prompts for permission and fires
 - [ ] Break a streak (set `last_played_date` back two days), confirm the
       repair prompt appears and the first repair each month is free
 - [ ] TalkBack: the grid is navigable and squares are announced with position
+- [ ] **Typing stays on one axis.** Type through an intersection — the
+      highlight must not jump to the crossing word. Backspace back through it
+      — same. Finishing a word hands off to the next clue.
+- [ ] Google Sign-In links an account without losing anonymous progress
 
 ## 7. Release
 
