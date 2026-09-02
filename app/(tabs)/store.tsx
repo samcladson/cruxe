@@ -197,7 +197,10 @@ export default function StoreScreen() {
         {/* Balance Card */}
         <View style={styles.balanceWrapper}>
           <View style={styles.balanceGlow} />
-          <View style={styles.balanceCard}>
+          <View
+          style={styles.balanceCard}
+          accessibilityLabel={`Balance: ${coins.toLocaleString()} coins`}
+        >
             <LinearGradient
               colors={["rgba(238, 205, 43, 0.15)", "transparent"]}
               start={{ x: 0, y: 0 }}
@@ -246,6 +249,13 @@ export default function StoreScreen() {
                   activeOpacity={0.8}
                   onPress={() => handlePurchase(pkg)}
                   disabled={purchasing}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    coinAmount > 0
+                      ? `Buy ${coinAmount.toLocaleString()} coins for ${pkg.product.priceString}${isPopular ? ", most popular" : ""}`
+                      : `Buy pack for ${pkg.product.priceString}`
+                  }
+                  accessibilityState={{ disabled: purchasing }}
                 >
                   {isPopular && (
                     <View style={styles.popularBadge}>
@@ -295,6 +305,9 @@ export default function StoreScreen() {
           style={styles.restoreButton}
           onPress={handleRestore}
           disabled={purchasing}
+          accessibilityRole="button"
+          accessibilityLabel="Restore previous purchases"
+          accessibilityState={{ disabled: purchasing }}
         >
           <Text style={styles.restoreText}>RESTORE PURCHASES</Text>
         </TouchableOpacity>

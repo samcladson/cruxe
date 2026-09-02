@@ -51,7 +51,8 @@ because in-app products cannot be created without it.
 
 ## 4. Store listing
 
-- [ ] App name, short description (80 chars), full description (4000)
+- [x] App name, short description, full description, "what's new"
+      — all written in `docs/store/listing-copy.md`, paste-ready
 - [ ] **Feature graphic** 1024×500
 - [ ] **Screenshots** — at least 2, phone. Worth capturing: the daily
       challenge card, a partly-solved grid, the results screen with a grade,
@@ -64,10 +65,13 @@ because in-app products cannot be created without it.
 
 ## 5. Policy and compliance
 
-- [ ] Host `web/account-deletion.html` at a public URL
-      *(GitHub Pages is fine; Play requires a deletion route reachable from
-      outside the app)*
-- [ ] Host a privacy policy at a public URL and add it to the listing
+- [x] Pages written: `web/index.html`, `privacy.html`, `terms.html`,
+      `account-deletion.html`
+- [ ] **Publish them.** GitHub → repo → Settings → Pages → Deploy from
+      branch → `master` → folder `/web`. The URLs become
+      `https://samcladson.github.io/cruxe/` and `.../privacy.html` etc.
+- [ ] Paste the privacy URL into the store listing, and the deletion URL
+      into the Data safety form
 - [ ] Complete the Data safety form using `docs/store/play-data-safety.md`
 - [ ] Confirm the hosted privacy policy and `app/legal/privacy.tsx` name the
       same processors: Supabase, RevenueCat, Google/Apple Sign-In, Sentry

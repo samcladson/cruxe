@@ -106,7 +106,12 @@ export default function SignInScreen() {
               </TouchableOpacity>
             )}
 
-            <TouchableOpacity style={styles.guestButton} onPress={handleGuestSignIn}>
+            <TouchableOpacity
+              style={styles.guestButton}
+              onPress={handleGuestSignIn}
+              accessibilityRole="button"
+              accessibilityLabel="Continue as a guest without an account"
+            >
               <Text style={styles.guestText}>Continue as Guest</Text>
             </TouchableOpacity>
           </>

@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cruxe</title>
+    <style>
+      :root {
+        --bg: #0a0a0a;
+        --card: #141414;
+        --text: #f8f8f6;
+        --muted: #a1a1a1;
+        --gold: #eecd2b;
+        --border: rgba(255, 255, 255, 0.08);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 3rem 1.25rem 4rem;
+        background: var(--bg);
+        color: var(--text);
+        font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Helvetica, Arial, sans-serif;
+      }
+      main { max-width: 34rem; margin: 0 auto; }
+      .wordmark {
+        font-size: 0.8rem;
+        letter-spacing: 0.4em;
+        color: var(--gold);
+        font-weight: 700;
+      }
+      h1 { font-size: 2rem; margin: 1rem 0 0.5rem; letter-spacing: -0.02em; }
+      p.sub { color: var(--muted); margin: 0 0 2.5rem; }
+      a.row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 1.1rem 1.35rem;
+        margin-bottom: 0.75rem;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        color: var(--text);
+        text-decoration: none;
+      }
+      a.row:hover { border-color: rgba(238, 205, 43, 0.35); }
+      a.row span.chev { color: var(--muted); }
+      footer {
+        margin-top: 3rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 0.875rem;
+      }
+      footer a { color: var(--gold); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="wordmark">CRUXE</div>
+      <h1>The elite crossword</h1>
+      <p class="sub">A new set of handcrafted puzzles every day.</p>
+
+      <a class="row" href="./privacy.html">
+        <span>Privacy Policy</span><span class="chev">&rsaquo;</span>
+      </a>
+      <a class="row" href="./terms.html">
+        <span>Terms of Service</span><span class="chev">&rsaquo;</span>
+      </a>
+      <a class="row" href="./account-deletion.html">
+        <span>Delete your account</span><span class="chev">&rsaquo;</span>
+      </a>
+
+      <footer>
+        Support: <a href="mailto:samcladson08@gmail.com">samcladson08@gmail.com</a>
+      </footer>
+    </main>
+  </body>
+</html>
