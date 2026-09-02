@@ -79,6 +79,18 @@ export async function initAuth(): Promise<AuthState> {
 
     if (anonError || !anonData.user) {
       console.error("[Auth] Anonymous sign-in failed:", anonError?.message);
+      if (anonError?.message?.toLowerCase().includes("captcha")) {
+        // Supabase CAPTCHA protection covers the signup endpoint, and
+        // signInAnonymously IS a signup. With it enabled, no new user can
+        // ever get a session - the app silently degrades to local-only and
+        // nothing saves. Anonymous-first auth and CAPTCHA are incompatible.
+        console.error(
+          "[Auth] CAPTCHA is enabled on this Supabase project. It blocks " +
+            "anonymous sign-in, so no new install can create an account. " +
+            "Disable it under Authentication > Settings, or every fresh " +
+            "install will be broken.",
+        );
+      }
       return { user: null, session: null, isInitialised: true };
     }
 
@@ -290,7 +302,16 @@ export async function signOutAndStartNewAnonSession(): Promise<{
 
     const { data, error: anonError } = await supabase.auth.signInAnonymously();
     if (anonError || !data.user) {
-      return { error: anonError?.message ?? "Could not start a new session" };
+      const msg = anonError?.message ?? "";
+      if (msg.toLowerCase().includes("captcha")) {
+        return {
+          error:
+            "Couldn't start a new session. CAPTCHA protection is blocking " +
+            "anonymous sign-in on this project — it needs to be disabled in " +
+            "Supabase Authentication settings.",
+        };
+      }
+      return { error: msg || "Could not start a new session" };
     }
 
     const userId = data.user.id;

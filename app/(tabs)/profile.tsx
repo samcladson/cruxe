@@ -513,7 +513,7 @@ export default function ProfileScreen() {
                   color={theme.colors.textPrimary}
                 />
               </View>
-              <View style={{ flex: 1 }}>
+              <View style={styles.settingTextWrap}>
                 <Text style={styles.settingText}>Daily reminder</Text>
                 <Text style={styles.settingSubtext}>
                   {settings.dailyReminderHour}:00, when new puzzles land
@@ -543,7 +543,7 @@ export default function ProfileScreen() {
                   color={theme.colors.textPrimary}
                 />
               </View>
-              <View style={{ flex: 1 }}>
+              <View style={styles.settingTextWrap}>
                 <Text style={styles.settingText}>Streak warning</Text>
                 <Text style={styles.settingSubtext}>
                   Only if your streak is at risk tonight
@@ -840,6 +840,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
+    // Take the available width so the trailing control stays on screen.
+    // Without this a row with a subtitle overflows and pushes it out.
+    flex: 1,
+    minWidth: 0,
   },
   settingIconWrap: {
     width: 32,
@@ -849,6 +853,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  settingTextWrap: { flex: 1, minWidth: 0 },
   settingSubtext: {
     fontFamily: theme.typography.body.fontFamily,
     fontSize: 11,
