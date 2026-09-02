@@ -21,6 +21,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { lettersFromGrid } from "../supabase/functions/_shared/grid.ts";
+import { sessionForUser } from "./lib/adminAuth";
 
 const URL = process.env.SUPABASE_URL;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -82,13 +83,11 @@ async function main() {
       .single();
     console.log(`Welcome bonus credited by trigger: ${before?.coins} coins`);
 
-    // ── 4. Sign in to get a real JWT ───────────────────────────────
-    const user = createClient(URL!, ANON_KEY!, {
-      auth: { persistSession: false },
-    });
-    const { data: session, error: signInErr } =
-      await user.auth.signInWithPassword({ email, password: PASSWORD });
-    if (signInErr) throw signInErr;
+    // ── 4. Get a real JWT ──────────────────────────────────────────
+    // Not signInWithPassword: CAPTCHA protection covers that endpoint.
+    const user = await sessionForUser(admin, URL!, ANON_KEY!, email);
+    const { data: session } = await user.auth.getSession();
+    if (!session.session) throw new Error("no session after verifyOtp");
 
     // ── 5. Submit the solve ────────────────────────────────────────
     const res = await fetch(`${URL}/functions/v1/submit-solve`, {

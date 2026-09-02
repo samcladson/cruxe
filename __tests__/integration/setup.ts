@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { sessionForUser } from "../../scripts/lib/adminAuth";
 
 const url = process.env.SUPABASE_TEST_URL;
 const key = process.env.SUPABASE_TEST_SERVICE_ROLE_KEY;
@@ -46,14 +47,8 @@ export async function createTestUser(db: SupabaseClient): Promise<string> {
 
 /**
  * Creates a user and returns an anon-key client already signed in as them.
- *
- * Deliberately avoids signInWithPassword: CAPTCHA protection is enabled on
- * this project (it stops scripted anonymous-account minting), and captcha
- * covers the password grant endpoint. Instead we mint a magic-link token with
- * the admin API — service_role bypasses captcha — and redeem it through
- * verifyOtp, which consumes a token rather than issuing one and so is not
- * captcha-gated. Production auth is unaffected; this is a test-harness
- * concern only.
+ * Session comes from scripts/lib/adminAuth, which works around the project's
+ * CAPTCHA protection without weakening it.
  */
 export async function createSignedInUser(
   db: SupabaseClient,
@@ -66,26 +61,7 @@ export async function createSignedInUser(
   });
   if (error) throw error;
 
-  const { data: link, error: linkErr } = await db.auth.admin.generateLink({
-    type: "magiclink",
-    email,
-  });
-  if (linkErr) throw linkErr;
-
-  const hashedToken = (link as any)?.properties?.hashed_token;
-  if (!hashedToken) {
-    throw new Error("generateLink returned no hashed_token");
-  }
-
-  const client = createClient(url!, anon!, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  const { error: verifyErr } = await client.auth.verifyOtp({
-    token_hash: hashedToken,
-    type: "magiclink",
-  });
-  if (verifyErr) throw verifyErr;
-
+  const client = await sessionForUser(db, url!, anon!, email);
   return { userId: data.user!.id, client };
 }
 
