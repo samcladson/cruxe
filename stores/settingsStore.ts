@@ -33,6 +33,14 @@ interface SettingsState {
   setHasSeenReverseHint: (seen: boolean) => void;
   setDailyReminder: (enabled: boolean, hour?: number) => void;
   setStreakWarning: (enabled: boolean) => void;
+  /**
+   * Returns the app to its first-run state after account deletion.
+   *
+   * Deliberately does NOT touch sound, haptics or theme: those are device
+   * preferences the person set for themselves, not account data, and
+   * silently undoing them would be surprising.
+   */
+  resetFirstRun: () => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -60,6 +68,15 @@ export const useSettingsStore = create<SettingsState>()(
           dailyReminderHour: hour ?? st.dailyReminderHour,
         })),
       setStreakWarning: (enabled) => set({ streakWarningEnabled: enabled }),
+      resetFirstRun: () =>
+        set({
+          hasCompletedOnboarding: false,
+          hasSeenReverseHint: false,
+          // Reminders belonged to the deleted account. Leaving a toggle on
+          // while its notifications are cancelled would be a lie.
+          dailyReminderEnabled: false,
+          streakWarningEnabled: false,
+        }),
     }),
     {
       name: "settings-storage",

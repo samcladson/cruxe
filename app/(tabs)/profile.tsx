@@ -30,6 +30,7 @@ import {
 } from "../../services/authService";
 import * as Haptics from "expo-haptics";
 import {
+  cancelAll,
   cancelDailyReminder,
   cancelStreakWarning,
   requestPermission,
@@ -102,6 +103,10 @@ export default function ProfileScreen() {
             void (async () => {
               setIsLinking(true);
               const { error } = await signOutAndStartNewAnonSession();
+              // The streak that warning referred to is no longer this
+              // session's. Onboarding flags stay - signing out is not the
+              // same as starting over.
+              await cancelStreakWarning();
               setIsLinking(false);
               if (error) {
                 Alert.alert("Sign out failed", error);
@@ -189,9 +194,18 @@ export default function ProfileScreen() {
               try {
                 await deleteAccount();
                 await supabase.auth.signOut();
+
+                // Everything tied to the account goes, not just the server
+                // row. Without this the next launch skips onboarding and
+                // scheduled reminders keep firing about a streak that no
+                // longer exists.
+                await cancelAll();
                 useUserStore.getState().resetLocalProfile();
                 usePuzzleStore.getState().clearActivePuzzle();
-                router.replace("/(auth)/sign-in");
+                useSettingsStore.getState().resetFirstRun();
+
+                // Genuinely fresh: welcome and tutorial, as a new install.
+                router.replace("/(auth)/welcome");
               } catch (e: any) {
                 Alert.alert("Could not delete account", e.message);
               } finally {
