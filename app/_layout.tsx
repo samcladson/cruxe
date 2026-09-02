@@ -2,7 +2,12 @@ import * as Sentry from "@sentry/react-native";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { DarkTheme, ThemeProvider } from "@react-navigation/native";
 import { useFonts } from "expo-font";
-import { Stack } from "expo-router";
+import {
+  ErrorBoundary as RouterErrorBoundary,
+  ErrorBoundaryProps,
+  Stack,
+  useNavigationContainerRef,
+} from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import "react-native-reanimated";
@@ -18,26 +23,45 @@ import {
 } from "@expo-google-fonts/manrope";
 import { AppState, AppStateStatus } from "react-native";
 import { initAuth, onAuthStateChange } from "../services/authService";
+import { reportError } from "../services/errorReporting";
 import { drainPendingSolves } from "../services/offlineSyncService";
 import { initRevenueCat, loginToRevenueCat } from "../services/revenueCatService";
 import { preloadSounds } from "../services/soundService";
 import { useUserStore } from "../stores/userStore";
 
-export {
-  // Catch any errors thrown by the Layout component.
-  ErrorBoundary,
-} from "expo-router";
+/**
+ * Catch any errors thrown while rendering a route.
+ *
+ * expo-router's own ErrorBoundary renders a fallback and reports nothing, so
+ * a render crash would show "Something went wrong" and never leave the device.
+ * Report first, then hand off to the stock screen for the retry affordance.
+ */
+export function ErrorBoundary(props: ErrorBoundaryProps) {
+  useEffect(() => {
+    reportError("render", props.error);
+  }, [props.error]);
+
+  return <RouterErrorBoundary {...props} />;
+}
 
 export const unstable_settings = {
   // Ensure that reloading on `/modal` keeps a back button present.
   initialRouteName: "(tabs)",
 };
 
+// Records screen transitions as breadcrumbs and navigation transactions.
+// Without this, `tracesSampleRate` below only ever produces app-start spans
+// and a crash arrives with no trail of where the player had been.
+const navigationIntegration = Sentry.reactNavigationIntegration({
+  enableTimeToInitialDisplay: true,
+});
+
 // Crash reporting. Disabled in development so local stack traces stay local
 // and the issue stream reflects real users only.
 Sentry.init({
   dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
   enabled: !__DEV__ && Boolean(process.env.EXPO_PUBLIC_SENTRY_DSN),
+  integrations: [navigationIntegration],
   tracesSampleRate: 0.2,
   // Puzzle content and auth tokens must never leave the device. The device
   // name is dropped because users often put their real name in it.
@@ -80,6 +104,15 @@ function RootLayoutNav() {
   const colorScheme = useColorScheme();
   const { activePuzzle, clearActivePuzzle } = usePuzzleStore();
   const { setUserId, syncFromSupabase } = useUserStore();
+
+  // Hand the router's container to Sentry once it exists, so screen changes
+  // start showing up as breadcrumbs on every subsequent report.
+  const navigationRef = useNavigationContainerRef();
+  useEffect(() => {
+    if (navigationRef?.current) {
+      navigationIntegration.registerNavigationContainer(navigationRef);
+    }
+  }, [navigationRef]);
 
   /**
    * Bootstrap authentication on app mount.
@@ -130,7 +163,9 @@ function RootLayoutNav() {
       });
     };
 
-    bootstrap();
+    // An unhandled rejection here would leave the app in local-only mode with
+    // no trace of why, so the whole bootstrap reports rather than vanishing.
+    bootstrap().catch((err) => reportError("auth", err));
     return () => unsubscribe?.();
   }, []);
 
@@ -142,9 +177,12 @@ function RootLayoutNav() {
   useEffect(() => {
     const handleAppStateChange = (nextState: AppStateStatus) => {
       if (nextState === "active") {
-        drainPendingSolves().catch((err) =>
-          console.warn("[Layout] Offline drain error:", err),
-        );
+        drainPendingSolves().catch((err) => {
+          console.warn("[Layout] Offline drain error:", err);
+          // A solve that never drains is a player whose progress silently
+          // vanished — the one sync failure always worth an issue.
+          reportError("sync", err);
+        });
       }
     };
     const sub = AppState.addEventListener("change", handleAppStateChange);

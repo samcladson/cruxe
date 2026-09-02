@@ -38,8 +38,9 @@ because in-app products cannot be created without it.
 - [x] `eas.json` production profile: app-bundle, `autoIncrement`
 - [x] `app.json`: `versionCode`, dark splash and adaptive-icon backgrounds
 - [x] `RECORD_AUDIO` blocked — `expo-av` declares it, the app never records
-- [ ] `EXPO_PUBLIC_SENTRY_DSN` present in the EAS build environment
-- [ ] `SENTRY_AUTH_TOKEN` set as an EAS **secret** (not in `.env` — it is a
+- [x] `EXPO_PUBLIC_SENTRY_DSN` present in the EAS build environment
+      *(set in `production` and `preview`; profiles bound via `environment` in `eas.json`)*
+- [x] `SENTRY_AUTH_TOKEN` set as an EAS **secret** (not in `.env` — it is a
       write credential) so sourcemaps upload and stack traces are readable
 - [ ] `npx eas build --platform android --profile production` succeeds
 - [ ] **Register the release SHA-1 with Google.** Local debug builds and EAS
