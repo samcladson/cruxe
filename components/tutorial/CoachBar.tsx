@@ -56,34 +56,34 @@ export function deriveCoachState(
   const ratio = total === 0 ? 0 : correct / total;
 
   if (ratio >= 1) {
-    return { message: "That's it — nicely done." };
+    return { message: "That's the lot. Nicely done." };
   }
   if (!selectedCell) {
     return {
-      message: "Tap any square to begin.",
-      detail: "The clue for it appears just below the grid.",
+      message: "Pick a square. Any square.",
+      detail: "Its clue appears just below the grid.",
     };
   }
   if (correct === 0) {
     return {
-      message: "Type a letter.",
-      detail: "Tap the same square again to switch between across and down.",
+      message: "Now type.",
+      detail: "Tap the same square again to flip between across and down.",
     };
   }
   if (!hasTouchedReverse) {
     return {
-      message: "Some clues here read backwards.",
-      detail: "Watch the arrow on the clue — it tells you which way to fill.",
+      message: "Here's the twist — some answers run backwards.",
+      detail: "The arrow on the clue always tells you which way to fill.",
     };
   }
   if (idle) {
     return {
-      message: "Stuck? Tap the bulb for a letter.",
-      detail: "Free in the tutorial. In real puzzles hints cost coins.",
+      message: "Stuck? The bulb owes you a letter.",
+      detail: "Free here. In real puzzles, hints cost coins.",
     };
   }
   if (ratio >= 0.8) {
-    return { message: "Almost there." };
+    return { message: "Nearly." };
   }
   return { message: "Keep going." };
 }

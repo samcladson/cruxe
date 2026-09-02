@@ -9,17 +9,20 @@ import { track } from "../../services/analyticsService";
 import { useSettingsStore } from "../../stores/settingsStore";
 
 /**
- * WelcomeScreen — one brand beat, then straight into solving.
+ * WelcomeScreen — one brand beat before the player touches a grid.
  *
- * This replaces a three-slide carousel of marketing copy. Three screens of
- * prose before the player touches a grid is the classic onboarding leak, and
- * the funnel events here (onboarding_started -> first_solve) exist to measure
- * exactly that drop.
+ * Replaces a three-slide carousel of marketing copy. Three screens of prose
+ * before any interaction is the classic onboarding leak, and the funnel
+ * events here (onboarding_started -> first_solve) measure exactly that drop.
  *
- * One screen is kept rather than none: the app is positioned as a premium
- * product, and opening straight onto a puzzle with no framing reads as cheap
- * rather than confident.
+ * One screen rather than none: opening straight onto a puzzle with no framing
+ * reads as cheap rather than confident, which is the opposite of how this app
+ * presents itself everywhere else.
  */
+
+/** The wordmark, set as crossword cells. The product explaining itself. */
+const WORDMARK = ["C", "R", "U", "X", "E"];
+
 export default function WelcomeScreen() {
   useEffect(() => {
     track("onboarding_started");
@@ -39,28 +42,46 @@ export default function WelcomeScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
-        <Animated.View entering={FadeIn.duration(600)} style={styles.hero}>
-          <Text style={styles.wordmark}>CRUXE</Text>
-          <View style={styles.rule} />
-          <Text style={styles.title}>The Elite{"\n"}Crossword</Text>
-          <Text style={styles.subtitle}>
-            A new set of puzzles every day, from History to Technology.
-            Beautifully made, properly difficult.
-          </Text>
-        </Animated.View>
+        <View style={styles.hero}>
+          <Animated.View
+            entering={FadeIn.duration(700)}
+            style={styles.wordmarkRow}
+            accessibilityRole="header"
+            accessibilityLabel="Cruxe"
+          >
+            {WORDMARK.map((letter, i) => (
+              <Animated.View
+                key={letter}
+                entering={FadeInDown.delay(i * 90).duration(500)}
+                style={[styles.cell, i === 0 && styles.cellAccent]}
+              >
+                <Text style={[styles.cellText, i === 0 && styles.cellTextAccent]}>
+                  {letter}
+                </Text>
+              </Animated.View>
+            ))}
+          </Animated.View>
+
+          <Animated.View entering={FadeInDown.delay(600).duration(600)}>
+            <Text style={styles.title}>The Elite{"\n"}Crossword</Text>
+            <Text style={styles.subtitle}>
+              A new set every day. Made properly, and not especially forgiving.
+            </Text>
+          </Animated.View>
+        </View>
 
         <Animated.View
-          entering={FadeInDown.delay(400).duration(500)}
+          entering={FadeInDown.delay(900).duration(500)}
           style={styles.footer}
         >
-          <Button title="Start solving" onPress={start} />
+          <Button title="Show me" onPress={start} />
           <TouchableOpacity
             onPress={skip}
             style={styles.skipButton}
             accessibilityRole="button"
-            accessibilityLabel="Skip the tutorial and go to the app"
+            accessibilityLabel="Skip the walkthrough and go straight to the app"
           >
-            <Text style={styles.skipText}>I've done this before — skip</Text>
+            <Text style={styles.skipText}>I&apos;ve done this before</Text>
           </TouchableOpacity>
         </Animated.View>
       </View>
@@ -68,28 +89,40 @@ export default function WelcomeScreen() {
   );
 }
 
+const CELL = 46;
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.bgPrimary },
   content: { flex: 1, justifyContent: "space-between", padding: 32 },
   hero: { flex: 1, justifyContent: "center" },
-  wordmark: {
+
+  wordmarkRow: { flexDirection: "row", gap: 6, marginBottom: 40 },
+  cell: {
+    width: CELL,
+    height: CELL,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: theme.colors.bgSecondary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cellAccent: {
+    borderColor: theme.colors.accentGold,
+    backgroundColor: "rgba(238, 205, 43, 0.1)",
+  },
+  cellText: {
     fontFamily: theme.typography.cellLetter.fontFamily,
-    fontSize: 13,
-    letterSpacing: 6,
-    color: theme.colors.accentGold,
+    fontSize: 22,
     fontWeight: "bold",
+    color: theme.colors.textPrimary,
   },
-  rule: {
-    width: 40,
-    height: 1,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    marginTop: 20,
-    marginBottom: 24,
-  },
+  cellTextAccent: { color: theme.colors.accentGold },
+
   title: {
     fontFamily: theme.typography.display.fontFamily,
-    fontSize: 44,
-    lineHeight: 50,
+    fontSize: 42,
+    lineHeight: 48,
     color: theme.colors.textPrimary,
   },
   subtitle: {
@@ -97,9 +130,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 25,
     color: theme.colors.textSecondary,
-    marginTop: 20,
+    marginTop: 18,
     maxWidth: 320,
   },
+
   footer: { gap: 4 },
   skipButton: { alignItems: "center", paddingVertical: 16 },
   skipText: {

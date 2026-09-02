@@ -44,6 +44,10 @@ export default function TutorialScreen() {
   const { activePuzzle, selectedCell, setActivePuzzle, revealLetter } =
     usePuzzleStore();
 
+  /** The beat between the brand screen and the grid. Without it the player
+   *  is simply dropped into a puzzle, which reads as a game starting rather
+   *  than a walkthrough beginning. */
+  const [introVisible, setIntroVisible] = useState(true);
   const [coachVisible, setCoachVisible] = useState(true);
   const [hasTouchedReverse, setHasTouchedReverse] = useState(false);
   const [solved, setSolved] = useState(false);
@@ -140,14 +144,17 @@ export default function TutorialScreen() {
             entering={FadeInUp.delay(200).duration(500)}
             style={styles.celebrateTitle}
           >
-            You solved it.
+            That&apos;s the warm-up.
           </Animated.Text>
           <Animated.Text
             entering={FadeInUp.delay(350).duration(500)}
             style={styles.celebrateBody}
           >
-            That was the warm-up. Today's real puzzles are waiting — and you've
-            got 300 coins to spend on hints.
+            Every answer was about crosswords. The real ones are less
+            self-absorbed, and quite a lot harder.
+            {"\n\n"}
+            A fresh set lands every day at midnight. You have 300 coins to
+            spend on hints when they do.
           </Animated.Text>
 
           <Animated.View
@@ -170,6 +177,45 @@ export default function TutorialScreen() {
             <Text style={styles.laterNote}>
               You can link an account any time from your profile.
             </Text>
+          </Animated.View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ── Framing beat ─────────────────────────────────────────────────
+  if (introVisible) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View style={styles.intro}>
+          <Animated.View entering={FadeIn.duration(500)}>
+            <Text style={styles.introKicker}>FIRST</Text>
+            <Text style={styles.introTitle}>A warm-up</Text>
+          </Animated.View>
+
+          <Animated.View entering={FadeInUp.delay(250).duration(500)}>
+            <Text style={styles.introBody}>
+              Five words, and every answer is about crosswords.
+            </Text>
+            <Text style={styles.introBody}>
+              Take your time — nothing here is scored, and hints are free.
+            </Text>
+          </Animated.View>
+
+          <Animated.View
+            entering={FadeInUp.delay(500).duration(500)}
+            style={styles.introFooter}
+          >
+            <Button title="Begin" onPress={() => setIntroVisible(false)} />
+            <TouchableOpacity
+              onPress={skip}
+              style={styles.laterButton}
+              accessibilityRole="button"
+              accessibilityLabel="Skip the walkthrough"
+            >
+              <Text style={styles.skipText}>Skip the walkthrough</Text>
+            </TouchableOpacity>
           </Animated.View>
         </View>
       </SafeAreaView>
@@ -244,6 +290,34 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "rgba(255,255,255,0.08)",
   },
+  intro: {
+    flex: 1,
+    justifyContent: "center",
+    padding: 32,
+  },
+  introKicker: {
+    fontFamily: theme.typography.cellLetter.fontFamily,
+    fontSize: 11,
+    letterSpacing: 4,
+    color: theme.colors.accentGold,
+    fontWeight: "bold",
+    marginBottom: 10,
+  },
+  introTitle: {
+    fontFamily: theme.typography.display.fontFamily,
+    fontSize: 40,
+    color: theme.colors.textPrimary,
+    marginBottom: 24,
+  },
+  introBody: {
+    fontFamily: theme.typography.body.fontFamily,
+    fontSize: 16,
+    lineHeight: 25,
+    color: theme.colors.textSecondary,
+    marginBottom: 10,
+    maxWidth: 330,
+  },
+  introFooter: { marginTop: 40 },
   celebrate: {
     flex: 1,
     alignItems: "center",
