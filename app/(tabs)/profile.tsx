@@ -228,29 +228,29 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <View style={styles.header}>
-        <View style={styles.avatarGlow}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {(profile?.displayName || "Player").charAt(0)}
-            </Text>
-          </View>
-        </View>
-        <Text style={styles.name}>{profile?.displayName || "Player"}</Text>
-        <View style={styles.badgePill}>
-          <MaterialIcons
-            name="stars"
-            size={14}
-            color={theme.colors.accentGold}
-          />
-          <Text style={styles.subtitle}>Cruxe Member</Text>
-        </View>
-      </View>
-
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
+        <View style={styles.header}>
+          <View style={styles.avatarGlow}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>
+                {(profile?.displayName || "Player").charAt(0)}
+              </Text>
+            </View>
+          </View>
+          <Text style={styles.name}>{profile?.displayName || "Player"}</Text>
+          <View style={styles.badgePill}>
+            <MaterialIcons
+              name="stars"
+              size={14}
+              color={theme.colors.accentGold}
+            />
+            <Text style={styles.subtitle}>Cruxe Member</Text>
+          </View>
+        </View>
+
         {/* Statistics Section */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Performance</Text>
