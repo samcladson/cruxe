@@ -46,7 +46,7 @@
       [
         "@sentry/react-native/expo",
         {
-          "organization": "REPLACE_WITH_SENTRY_ORG_SLUG",
+          "organization": "sam-cladson",
           "project": "cruxe"
         }
       ]
