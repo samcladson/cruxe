@@ -13,6 +13,16 @@ function utcDaysAgo(days: number): string {
   return d.toISOString().split("T")[0];
 }
 
+/**
+ * Today, UTC. Used for fixtures that must fall inside the current calendar
+ * month: free repairs are counted per month, so "3 days ago" silently lands
+ * in the previous month for the first days of any month and the fixture
+ * stops representing what it claims.
+ */
+function utcToday(): string {
+  return new Date().toISOString().split("T")[0];
+}
+
 describeIntegration("streak repair", () => {
   let admin: SupabaseClient;
   let user: SupabaseClient;
@@ -81,10 +91,11 @@ describeIntegration("streak repair", () => {
   });
 
   it("charges for a second repair in the same month", async () => {
-    // A repair already used this month.
+    // A repair already used this month. Must be dated inside the current
+    // month, not merely "recent".
     await admin.from("streak_repairs").insert({
       user_id: userId,
-      repaired_on: utcDaysAgo(3),
+      repaired_on: utcToday(),
       restored_to: 5,
       cost: 0,
     });
@@ -103,7 +114,7 @@ describeIntegration("streak repair", () => {
   it("refuses a paid repair the player cannot afford", async () => {
     await admin.from("streak_repairs").insert({
       user_id: userId,
-      repaired_on: utcDaysAgo(1),
+      repaired_on: utcToday(),
       restored_to: 4,
       cost: 0,
     });

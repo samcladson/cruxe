@@ -42,10 +42,24 @@ export async function sessionForUser(
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const { error: verifyErr } = await client.auth.verifyOtp({
+  // Supabase rate-limits the verify endpoint per IP. A suite that signs in
+  // once per test hits that ceiling long before it runs out of assertions,
+  // and the failure looks like a broken test rather than a throttle.
+  let verifyErr = (await client.auth.verifyOtp({
     token_hash: hashedToken,
     type: "magiclink",
-  });
+  })).error;
+
+  for (let attempt = 1; verifyErr && attempt <= 4; attempt++) {
+    if (!/rate limit/i.test(verifyErr.message)) break;
+    const wait = 2000 * attempt;
+    await new Promise((r) => setTimeout(r, wait));
+    verifyErr = (await client.auth.verifyOtp({
+      token_hash: hashedToken,
+      type: "magiclink",
+    })).error;
+  }
+
   if (verifyErr) throw verifyErr;
 
   return client;
