@@ -26,6 +26,13 @@ because in-app products cannot be created without it.
 - [ ] `SENTRY_AUTH_TOKEN` set as an EAS **secret** (not in `.env` — it is a
       write credential) so sourcemaps upload and stack traces are readable
 - [ ] `npx eas build --platform android --profile production` succeeds
+- [ ] **Register the release SHA-1 with Google.** Local debug builds and EAS
+      release builds are signed with *different* keys. Google Sign-In fails
+      with `DEVELOPER_ERROR` for any package + SHA-1 pair that is not
+      registered, so the release key needs its own Android OAuth client.
+      Get it with `npx eas credentials` (Android → keystore), and if Play App
+      Signing is enabled, also add the SHA-1 Play shows under
+      Setup → App integrity.
 - [ ] Install the resulting AAB/APK and complete a full run-through
       (see section 6)
 
