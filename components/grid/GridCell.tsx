@@ -56,6 +56,35 @@ export const GridCell = React.memo(
       }
     }, [cell.userInput, flashScale]);
 
+    /**
+     * What a screen reader announces for this square.
+     *
+     * A crossword is a spatial puzzle, so position has to be spoken — "row 3,
+     * column 5" — or the grid is unnavigable without sight. Clue numbers are
+     * included because they are how the player ties a square to a clue, and
+     * the letter is described as entered or empty rather than just read out,
+     * so silence is never ambiguous.
+     */
+    const a11yLabel = React.useMemo(() => {
+      const pos = `Row ${cell.row + 1}, column ${cell.col + 1}`;
+      if (cell.isBlocked) return `${pos}, blocked square`;
+
+      const numbers = cell.clueNumbers?.length
+        ? `, starts clue ${cell.clueNumbers.join(" and ")}`
+        : "";
+      if (cell.isPreFilled) return `${pos}${numbers}, given letter ${cell.letter}`;
+      if (cell.userInput) return `${pos}${numbers}, contains ${cell.userInput}`;
+      return `${pos}${numbers}, empty`;
+    }, [
+      cell.row,
+      cell.col,
+      cell.isBlocked,
+      cell.isPreFilled,
+      cell.letter,
+      cell.userInput,
+      cell.clueNumbers,
+    ]);
+
     const animatedScaleStyle = useAnimatedStyle(() => ({
       transform: [{ scale: flashScale.value }],
     }));
@@ -91,6 +120,18 @@ export const GridCell = React.memo(
 
     return (
       <AnimatedPressable
+        // Blocked squares are skipped by the screen reader. Stepping through
+        // eighteen dead cells to reach the next letter makes the grid
+        // unusable; the clue panel conveys the layout instead.
+        accessible={!cell.isBlocked}
+        accessibilityRole="button"
+        accessibilityLabel={a11yLabel}
+        accessibilityState={{ selected: isSelected, disabled: cell.isBlocked }}
+        accessibilityHint={
+          isSelected
+            ? "Double tap to switch between across and down"
+            : "Double tap to select this square"
+        }
         style={[
           styles.cellBase,
           styles.cellActive,

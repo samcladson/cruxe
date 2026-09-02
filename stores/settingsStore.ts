@@ -31,7 +31,10 @@ export const useSettingsStore = create<SettingsState>()(
     (set) => ({
       hapticsEnabled: true,
       soundEnabled: true,
-      theme: "dark", // Obsidian UI defaults to dark
+      // Dark-only for now. The palette in constants/theme.ts has no light
+      // variant, and app.json declares "dark" to match - a light option here
+      // would be a setting that visibly does nothing.
+      theme: "dark",
       hasCompletedOnboarding: false,
       hasSeenReverseHint: false,
       setHaptics: (enabled) => set({ hapticsEnabled: enabled }),

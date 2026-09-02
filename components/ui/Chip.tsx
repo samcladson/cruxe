@@ -53,7 +53,8 @@ export function Chip({
 
   if (onPress) {
     return (
-      <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
+      <TouchableOpacity
+      accessibilityRole="button" onPress={onPress} activeOpacity={0.7}>
         {content}
       </TouchableOpacity>
     );

@@ -186,7 +186,12 @@ export function HintOptionsModal({ visible, onClose }: HintOptionsModalProps) {
         >
           {/* Header with back arrow */}
           <View style={styles.header}>
-            <TouchableOpacity onPress={onClose} style={styles.backBtn}>
+            <TouchableOpacity
+              onPress={onClose}
+              style={styles.backBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Close hints and return to the puzzle"
+            >
               <MaterialIcons
                 name="arrow-back"
                 size={22}
@@ -264,6 +269,9 @@ export function HintOptionsModal({ visible, onClose }: HintOptionsModalProps) {
               ]}
               disabled={!letterEnabled}
               onPress={handleRevealLetter}
+            accessibilityRole="button"
+            accessibilityLabel={`Reveal one letter for ${letterPrice} coins`}
+            accessibilityState={{ disabled: !letterEnabled, busy }}
               activeOpacity={0.7}
             >
               <View style={styles.optionLeft}>
@@ -332,6 +340,9 @@ export function HintOptionsModal({ visible, onClose }: HintOptionsModalProps) {
               style={[styles.optionCard, !wordEnabled && styles.optionDisabled]}
               disabled={!wordEnabled}
               onPress={handleRevealWord}
+            accessibilityRole="button"
+            accessibilityLabel={`Reveal the whole word for ${wordPrice} coins`}
+            accessibilityState={{ disabled: !wordEnabled, busy }}
               activeOpacity={0.7}
             >
               <View style={styles.optionLeft}>
@@ -403,6 +414,13 @@ export function HintOptionsModal({ visible, onClose }: HintOptionsModalProps) {
               ]}
               disabled={!checkEnabled}
               onPress={handleCheckErrors}
+            accessibilityRole="button"
+            accessibilityLabel={
+              checkErrorsCost === 0
+                ? "Check for mistakes, free"
+                : `Check for mistakes for ${checkErrorsCost} coins`
+            }
+            accessibilityState={{ disabled: !checkEnabled, busy }}
               activeOpacity={0.7}
             >
               <View style={styles.optionLeft}>

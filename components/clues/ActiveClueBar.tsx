@@ -117,6 +117,9 @@ export function ActiveClueBar({ onHintPress }: ActiveClueBarProps) {
         style={styles.card}
         onPress={onToggle}
         activeOpacity={0.8}
+        accessibilityRole="button"
+        accessibilityLabel={`Clue ${clueObj.number} ${dirLabel}: ${clueObj.clue}`}
+        accessibilityHint="Double tap to switch direction"
       >
         <View style={styles.content}>
           <View style={styles.topRow}>
@@ -141,6 +144,8 @@ export function ActiveClueBar({ onHintPress }: ActiveClueBarProps) {
 
         <TouchableOpacity
           style={styles.bulbBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Open hints"
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             onHintPress?.();

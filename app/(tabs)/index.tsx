@@ -206,7 +206,10 @@ export default function HomeScreen() {
             </Text>
           </View>
 
-          <View style={styles.statsPill}>
+          <View
+            style={styles.statsPill}
+            accessibilityLabel={`${profile.currentStreak} day streak, ${profile.coins} coins, ${playStatus?.free_plays_remaining ?? 0} free plays left today`}
+          >
             <View style={styles.statGroup}>
               <MaterialIcons
                 name="local-fire-department"

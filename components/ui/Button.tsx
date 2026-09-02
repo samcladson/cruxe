@@ -44,6 +44,9 @@ export function Button({
 
   return (
     <TouchableOpacity
+      accessibilityRole="button"
+      accessibilityLabel={props.accessibilityLabel ?? title}
+      accessibilityState={{ disabled: !!disabled || isLoading, busy: isLoading }}
       style={[
         styles.button,
         isPrimary && styles.primary,
