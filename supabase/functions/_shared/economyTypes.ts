@@ -11,6 +11,13 @@ export interface ScoringConfig {
   minimumScore: Record<Difficulty, number>;
   /** Ordered fastest-first. Ratio is actualTime / expectedTime. */
   timeMultipliers: { maxRatio: number; multiplier: number }[];
+  /**
+   * Grade cutoffs as a ratio of finalScore to PAR — a solve at the expected
+   * pace with no hints. Grading against par rather than the theoretical
+   * maximum is what lets an unhurried, unaided solve earn an A; the old
+   * denominator assumed blazing speed, so on-pace perfection capped at B.
+   */
+  gradeThresholds: { s: number; a: number; b: number; c: number };
 }
 
 export interface HintPrices {

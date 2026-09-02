@@ -25,7 +25,10 @@ export interface ScoreBreakdown {
 export const DEFAULT_SCORING_CONFIG: ScoringConfig = {
   difficultyBase: { easy: 80, medium: 180, hard: 320, expert: 500 },
   gridMultiplier: { 6: 0.7, 8: 0.85, 10: 1.0, 12: 1.2 },
-  timeFactor: { easy: 3.0, medium: 4.5, hard: 7.0, expert: 10.0 },
+  // Expected time is gridSize^2 x factor. The old values parred a medium
+  // 10x10 at 450s - a strong solver's time treated as average, which made
+  // most honest solves read as "slow".
+  timeFactor: { easy: 4.0, medium: 6.5, hard: 9.5, expert: 13.0 },
   hintPenaltyPerLetter: 8,
   minimumScore: { easy: 5, medium: 10, hard: 20, expert: 40 },
   timeMultipliers: [
@@ -36,6 +39,7 @@ export const DEFAULT_SCORING_CONFIG: ScoringConfig = {
     { maxRatio: 1.75, multiplier: 0.7 },
     { maxRatio: Infinity, multiplier: 0.55 },
   ],
+  gradeThresholds: { s: 1.25, a: 1.0, b: 0.8, c: 0.6 },
 };
 
 function resolveTimeMultiplier(ratio: number, cfg: ScoringConfig): number {
@@ -45,17 +49,39 @@ function resolveTimeMultiplier(ratio: number, cfg: ScoringConfig): number {
   return cfg.timeMultipliers[cfg.timeMultipliers.length - 1].multiplier;
 }
 
+/**
+ * Grades a solve against PAR — an on-pace, hint-free solve — rather than
+ * against the theoretical maximum, which assumed blazing speed and so
+ * structurally capped an unhurried perfect solve at B.
+ *
+ * Note that accuracy is always exactly 1 here: submit-solve rejects an
+ * incomplete grid outright, so any solve that reaches scoring is correct.
+ * Grade therefore reflects only speed and hint use.
+ *
+ * A hint-free solve never drops below B however slow it was. Solving a
+ * puzzle unaided is the thing the game is about; taking your time over it
+ * is not a failure. It also makes hints the main way a grade falls, so the
+ * cost of a hint is felt rather than merely paid.
+ */
 function resolveGrade(
   finalScore: number,
-  theoreticalMax: number,
+  par: number,
+  hintsUsed: number,
+  cfg: ScoringConfig,
 ): ScoreBreakdown["grade"] {
-  if (theoreticalMax <= 0) return "C";
-  const ratio = finalScore / theoreticalMax;
-  if (ratio >= 0.9) return "S";
-  if (ratio >= 0.75) return "A";
-  if (ratio >= 0.55) return "B";
-  if (ratio >= 0.35) return "C";
-  return "D";
+  if (par <= 0) return "C";
+  const ratio = finalScore / par;
+  const t = cfg.gradeThresholds;
+
+  let grade: ScoreBreakdown["grade"];
+  if (ratio >= t.s) grade = "S";
+  else if (ratio >= t.a) grade = "A";
+  else if (ratio >= t.b) grade = "B";
+  else if (ratio >= t.c) grade = "C";
+  else grade = "D";
+
+  if (hintsUsed === 0 && (grade === "C" || grade === "D")) return "B";
+  return grade;
 }
 
 export function getTheoreticalMax(
@@ -101,6 +127,7 @@ export function calculateScore(
     timeMultiplier,
     hintPenalty,
     finalScore,
-    grade: resolveGrade(finalScore, theoreticalMax),
+    // par = base: on the expected pace, perfectly, with no hints.
+    grade: resolveGrade(finalScore, base, hintsUsed, cfg),
   };
 }
