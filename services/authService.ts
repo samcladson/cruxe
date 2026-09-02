@@ -23,9 +23,28 @@ import { loginToRevenueCat, logoutRevenueCat } from "./revenueCatService";
 // For Android, also create an *Android* OAuth client with:
 //   package: com.cruxe.app  +  SHA-1 of your debug (or release) keystore
 //   https://react-native-google-signin.github.io/docs/troubleshooting
+/**
+ * The WEB client id — not the Android one. Google Sign-In on Android
+ * authenticates with the web client and uses the Android client only to
+ * verify the package name and signing key.
+ *
+ * The fallback below is a convenience that has hidden a real failure mode:
+ * if it belongs to a different Google Cloud project than your Android OAuth
+ * clients, every sign-in fails with DEVELOPER_ERROR and nothing says why.
+ * Set the env var explicitly.
+ */
 const GOOGLE_WEB_CLIENT_ID =
   process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ||
   "1042059769347-31fuo35i64l5l0ap3tgt47t2v33k0t59.apps.googleusercontent.com";
+
+if (!process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID) {
+  console.warn(
+    "[Auth] EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID is not set — using the " +
+      `hardcoded fallback (project ${GOOGLE_WEB_CLIENT_ID.split("-")[0]}). ` +
+      "Your Android OAuth clients must live in that same Google Cloud " +
+      "project or sign-in fails with DEVELOPER_ERROR.",
+  );
+}
 
 GoogleSignin.configure({
   webClientId: GOOGLE_WEB_CLIENT_ID,
@@ -251,8 +270,21 @@ export async function linkGoogleAccount(): Promise<{
     }
     if (error?.code === "DEVELOPER_ERROR") {
       const pkg = Constants.expoConfig?.android?.package ?? "com.cruxe.app";
+      const project = GOOGLE_WEB_CLIENT_ID.split("-")[0];
       console.warn(
-        `[Auth] DEVELOPER_ERROR: In Google Cloud → APIs & Services → Credentials, add an Android OAuth client for package "${pkg}" with your app signing SHA-1 (use scripts/print-android-debug-sha1.ps1 for debug).`,
+        [
+          "[Auth] DEVELOPER_ERROR means Google does not recognise this",
+          "package + signing-key pair. Check, in order:",
+          `  1. An Android OAuth client exists for package "${pkg}" with the`,
+          "     SHA-1 of the key signing THIS build. Get it with",
+          "     scripts/print-android-debug-sha1.cmd. Note that",
+          "     'expo prebuild --clean' regenerates the debug keystore and",
+          "     therefore changes the SHA-1.",
+          "  2. That Android client is in the SAME Google Cloud project as",
+          `     the web client in use (project ${project}).`,
+          "  3. Release builds are signed with a different key again, and",
+          "     need their own Android OAuth client.",
+        ].join("\n"),
       );
       return { error };
     }
