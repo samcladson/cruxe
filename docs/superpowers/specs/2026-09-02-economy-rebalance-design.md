@@ -221,11 +221,13 @@ Logic, in one transaction:
 - The `p_letter_count` parameter is **dropped** from the signature.
 - `reveal_word` charges `hint_prices.reveal_word_flat`.
 - `hint_events.letters_revealed` is still written, because `submit-solve`
-  derives the hint penalty from it. For a word reveal the server cannot know
-  how many letters were actually uncovered, so it records the clue's full
-  length, read from the stored puzzle's `clues` array. This makes the penalty
-  slightly harsher than before on partially-filled words — accepted, because it
-  removes the client's ability to influence its own penalty.
+  derives the hint penalty from it. The server cannot know which clue a word
+  reveal uncovered, and asking the client would reintroduce the exposure this
+  change exists to close — a tampered client would always name the shortest
+  clue. So a word reveal is recorded as a fixed
+  `reveal_word_flat / reveal_letter` letters (120 / 30 = 4): you are penalised
+  exactly the number of letters you paid for. Deriving it from the two prices
+  keeps the two consistent automatically if either is retuned.
 
 ### 7.3 `claim_daily_bonus`
 
