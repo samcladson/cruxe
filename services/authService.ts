@@ -222,6 +222,40 @@ export async function linkAppleAccount(): Promise<{
   }
 }
 
+
+/**
+ * Describes an ID token without logging it.
+ *
+ * "invalid claim: missing sub claim" from GoTrue means the string we sent was
+ * not a decodable ID token. The usual culprits are a serverAuthCode (opaque,
+ * not a JWT) sent by mistake, or a token whose audience belongs to a
+ * different OAuth client than the one configured. Both are invisible unless
+ * you look, and neither is safe to diagnose by printing the token.
+ */
+function describeIdToken(token: string): string {
+  const parts = token.split(".");
+  if (parts.length !== 3) {
+    return `not a JWT: ${parts.length} segment(s), length ${token.length}. ` +
+      "This is usually a serverAuthCode rather than an ID token.";
+  }
+  try {
+    const json = JSON.parse(
+      Buffer.from(
+        parts[1].replace(/-/g, "+").replace(/_/g, "/"),
+        "base64",
+      ).toString("utf8"),
+    );
+    return [
+      `claims: ${Object.keys(json).sort().join(", ")}`,
+      `iss=${json.iss}`,
+      `aud=${json.aud}`,
+      `has sub: ${Boolean(json.sub)}`,
+    ].join(" | ");
+  } catch {
+    return "JWT-shaped but the payload would not decode.";
+  }
+}
+
 /**
  * Initiates native Google Sign-In and links it to the current Supabase session.
  */
@@ -256,7 +290,22 @@ export async function linkGoogleAccount(): Promise<{
       token: idToken,
     });
 
-    if (error) throw error;
+    if (error) {
+      // Claim errors mean the token itself was wrong, not the credentials.
+      // Say what we actually sent, or this is unfalsifiable guesswork.
+      if (/claim|token/i.test(error.message)) {
+        console.warn(
+          `[Auth] Supabase rejected the Google ID token: ${error.message}\n` +
+            `       ${describeIdToken(idToken)}\n` +
+            `       aud should equal the web client id in use ` +
+            `(${GOOGLE_WEB_CLIENT_ID}).\n` +
+            "       If it does, check Supabase Dashboard > Authentication >" +
+            " Providers > Google: the provider must be enabled and that same" +
+            " client id listed under Authorized Client IDs.",
+        );
+      }
+      throw error;
+    }
 
     console.log("[Auth] Successfully linked Google account");
     return { error: null, user: data.user };
