@@ -15,9 +15,14 @@ import { CATEGORIES } from "../../constants/categories";
 import { theme } from "../../constants/theme";
 import { fetchAllPuzzlesForToday, PuzzleMeta } from "../../services/puzzleService";
 import { useUserStore } from "../../stores/userStore";
-import { payEntryFee } from "../../services/economyService";
+import {
+  enterPuzzle,
+  getPlayStatus,
+  PlayStatus,
+} from "../../services/economyService";
+import { supabase } from "../../services/supabaseClient";
+import { Difficulty } from "../../types/puzzle.types";
 import { useSettingsStore } from "../../stores/settingsStore";
-import { Difficulty, ENTRY_FEES } from "../../types/puzzle.types";
 
 export default function CollectionScreen() {
   const [puzzles, setPuzzles] = useState<PuzzleMeta[]>([]);
@@ -29,6 +34,24 @@ export default function CollectionScreen() {
 
   const userProfile = useUserStore((state) => state.profile);
   const hapticsEnabled = useSettingsStore((state) => state.hapticsEnabled);
+
+  const [playStatus, setPlayStatus] = useState<PlayStatus | null>(null);
+  useEffect(() => {
+    getPlayStatus()
+      .then(setPlayStatus)
+      .catch(() => setPlayStatus(null));
+  }, []);
+
+  // Overflow prices come from the server; a bundled copy would drift.
+  const [overflowFees, setOverflowFees] = useState<Record<string, number>>({});
+  useEffect(() => {
+    supabase
+      .from("economy_config")
+      .select("value")
+      .eq("key", "overflow_fees")
+      .single()
+      .then(({ data }) => setOverflowFees(data?.value ?? {}));
+  }, []);
 
   const triggerHaptic = () => {
     if (hapticsEnabled) {
@@ -272,8 +295,9 @@ export default function CollectionScreen() {
                       // The server owns the price and the balance check. A
                       // failure must not start the puzzle.
                       try {
-                        const { balance } = await payEntryFee(puzzle.id);
+                        const { balance } = await enterPuzzle(puzzle.id);
                         useUserStore.getState().applyServerBalance(balance);
+                        setPlayStatus(await getPlayStatus());
                       } catch (e: any) {
                         Alert.alert("Can't start puzzle", e.message, [
                           { text: "OK", style: "default" },
@@ -316,7 +340,9 @@ export default function CollectionScreen() {
                             color: theme.colors.accentGold,
                           }}
                         >
-                          {ENTRY_FEES[puzzle.difficulty as Difficulty]}
+                          {playStatus && playStatus.free_plays_remaining > 0
+                            ? "Free"
+                            : (overflowFees[puzzle.difficulty] ?? 0)}
                         </Text>
                         <MaterialIcons
                           name="monetization-on"

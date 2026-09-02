@@ -12,7 +12,7 @@ import {
   fetchDailyPuzzle,
   fetchPuzzleById,
 } from "../../services/puzzleService";
-import { payEntryFee } from "../../services/economyService";
+import { enterPuzzle } from "../../services/economyService";
 import { usePuzzleStore } from "../../stores/puzzleStore";
 import { useUserStore } from "../../stores/userStore";
 import { Category, Difficulty, GridSize } from "../../types/puzzle.types";
@@ -89,11 +89,11 @@ export default function GenerateScreen() {
           return;
         }
 
-        // Charge only once we know which puzzle the player is getting. The
-        // server derives the fee from that puzzle's difficulty, and the
-        // charge is idempotent per (user, puzzle) so re-entering is free.
+        // Free while the daily allowance lasts; the server decides. Claiming
+        // entry only after the puzzle resolves means a puzzle that fails to
+        // load is never paid for, and re-entry is always free.
         try {
-          const { balance } = await payEntryFee(puzzle.id);
+          const { balance } = await enterPuzzle(puzzle.id);
           useUserStore.getState().applyServerBalance(balance);
         } catch (e: any) {
           if (mounted) {

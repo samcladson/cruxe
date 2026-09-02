@@ -35,13 +35,13 @@ describeIntegration("RLS lockdown", () => {
       .select("coins")
       .eq("id", userId)
       .single();
-    expect(data!.coins).toBe(200);
+    expect(data!.coins).toBe(300);
 
     const { data: led } = await admin
       .from("coin_ledger")
       .select("reason, delta")
       .eq("user_id", userId);
-    expect(led).toEqual([{ reason: "welcome_bonus", delta: 200 }]);
+    expect(led).toEqual([{ reason: "welcome_bonus", delta: 300 }]);
   });
 
   it("blocks writing your own coins", async () => {
@@ -51,7 +51,7 @@ describeIntegration("RLS lockdown", () => {
       .select("coins")
       .eq("id", userId)
       .single();
-    expect(data!.coins).toBe(200); // unchanged
+    expect(data!.coins).toBe(300); // unchanged
   });
 
   it("blocks reading another user's row", async () => {
