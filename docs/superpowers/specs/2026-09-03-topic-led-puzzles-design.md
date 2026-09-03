@@ -95,6 +95,17 @@ safety property: a malformed model response costs the facts, never the title.
 The failure mode is "a good puzzle without its extras", never a regression to
 `Medium Puzzle`.
 
+**Titles are short and precise: at most 30 characters, and they name the
+subject rather than describe it.** They are read at a glance in a scrolling
+list, on a phone, at a card width of roughly 300px — a title that wraps to
+three lines is not read at all. "The Apollo Programme" (20), "How Vaccines
+Work" (17), "The Silk Road" (13). Not "A Journey Through the History of the
+Apollo Space Programme". The standfirst is where the elaboration goes, and it
+is allowed two lines.
+
+The limit is enforced by a test rather than left to discipline, because the
+syllabus is long, hand-edited, and its entries are written months apart.
+
 ### Data model
 
 Three nullable columns on `daily_puzzles`:
@@ -212,8 +223,9 @@ tested directly:
   least-recently-used; falls back sanely when a category is exhausted;
   deterministic for a given date.
 - **Syllabus integrity** — ids unique, categories valid, no empty titles or
-  standfirsts, every entry has at least one angle. This is a test rather than
-  a convention because the syllabus is long and hand-edited.
+  standfirsts, every entry has at least one angle, and **every title within
+  30 characters**. This is a test rather than a convention because the
+  syllabus is long and hand-edited.
 - **`validateLesson`** — drops facts for words absent from the grid, tolerates
   a missing takeaway, never throws on malformed input.
 
