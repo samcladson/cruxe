@@ -6,7 +6,6 @@ import { useFocusEffect } from "@react-navigation/native";
 import {
   ActivityIndicator,
   Alert,
-  Modal,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -52,6 +51,7 @@ import {
 } from "../../services/notificationService";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { track } from "../../services/analyticsService";
+import { drainPendingSolves } from "../../services/offlineSyncService";
 import { formatCompactNumber } from "../../utils/formatNumber";
 
 function PulseDot() {
@@ -79,9 +79,6 @@ export default function HomeScreen() {
   const profile = useUserStore((state) => state.profile);
   const activePuzzle = usePuzzleStore((state) => state.activePuzzle);
   const timer = usePuzzleStore((state) => state.timer);
-  const [isCategoriesModalVisible, setIsCategoriesModalVisible] =
-    useState(false);
-  const [isActivityModalVisible, setIsActivityModalVisible] = useState(false);
   const [dailyBonusBanner, setDailyBonusBanner] = useState<number | null>(null);
 
   const [dailyPuzzle, setDailyPuzzle] = useState<PuzzleMeta | null>(null);
@@ -120,6 +117,25 @@ export default function HomeScreen() {
       return () => {
         cancelled = true;
       };
+    }, [profile.id]),
+  );
+
+  /**
+   * Retry any solve that could not reach the server.
+   *
+   * The queue previously drained only when the app returned to the
+   * foreground, so a player who finished a puzzle and stayed in the app sat
+   * on "pending sync" indefinitely — no retry ran until they backgrounded
+   * and reopened it. Coming back to this screen is the natural retry point:
+   * it is exactly where you land after a puzzle. A successful drain updates
+   * the balance and drops the read cache, which is what finally moves the
+   * coins, the activity list and the streak.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      drainPendingSolves().catch((err) => {
+        console.warn("[Home] Pending solve drain failed:", err);
+      });
     }, [profile.id]),
   );
 
@@ -240,15 +256,33 @@ export default function HomeScreen() {
     };
   }, [dailyPuzzle?.id]);
 
-  useEffect(() => {
-    async function loadActivity() {
-      setLoadingActivity(true);
-      const activity = await fetchRecentActivity(profile.id, 50);
-      setRecentActivity(activity);
-      setLoadingActivity(false);
-    }
-    loadActivity();
-  }, [profile.id]);
+  /**
+   * On focus, not on mount. Recent Activity is a list of things you just
+   * did — returning from a puzzle is exactly when it changes, and a
+   * mount-only effect meant the puzzle you had just solved was missing from
+   * it until the screen happened to remount.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+
+      (async () => {
+        setLoadingActivity(true);
+        try {
+          const activity = await fetchRecentActivity(profile.id, 50);
+          if (!cancelled) setRecentActivity(activity);
+        } catch (err) {
+          console.warn("[Home] Could not load recent activity:", err);
+        } finally {
+          if (!cancelled) setLoadingActivity(false);
+        }
+      })();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [profile.id]),
+  );
 
   const startDailyPuzzle = () => {
     if (dailyPuzzle) {
@@ -631,7 +665,9 @@ export default function HomeScreen() {
 
           <TouchableOpacity
             activeOpacity={0.8}
-            onPress={() => router.push("/collection" as any)}
+            // A tab route now, so navigate switches to it rather than
+            // pushing a second copy on top of the tab stack.
+            onPress={() => router.navigate("/collection")}
             style={styles.minimalistCTA}
           >
             <Text style={styles.minimalistCTAText}>EXPLORE COLLECTION</Text>
@@ -646,7 +682,11 @@ export default function HomeScreen() {
         {/* Recent Activity Section */}
         <View style={[styles.sectionHeader, { marginTop: 32 }]}>
           <Text style={styles.sectionTitle}>Recent Activity</Text>
-          <TouchableOpacity onPress={() => setIsActivityModalVisible(true)}>
+          <TouchableOpacity
+            onPress={() => router.push("/activity" as any)}
+            accessibilityRole="button"
+            accessibilityLabel="View all completed puzzles"
+          >
             <Text style={styles.sectionLink}>VIEW ALL</Text>
           </TouchableOpacity>
         </View>
@@ -683,9 +723,11 @@ export default function HomeScreen() {
                 <TouchableOpacity
                   key={activity.id}
                   style={styles.activityRow}
-                  onPress={() =>
-                    router.push(`/activity/${activity.puzzleId}` as any)
-                  }
+                  // activity.id is the puzzle_completions primary key, which
+                  // is what the review screen looks up. Passing puzzleId
+                  // here searched for a completion whose id was a puzzle id,
+                  // so every row landed on "could not load".
+                  onPress={() => router.push(`/activity/${activity.id}` as any)}
                 >
                   <View
                     style={[
@@ -730,127 +772,6 @@ export default function HomeScreen() {
 
       {/* Categories modal removed in V1 to focus strictly on Daily Edition */}
 
-      {/* Activity View All Modal */}
-      <Modal
-        visible={isActivityModalVisible}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setIsActivityModalVisible(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Activity History</Text>
-            <TouchableOpacity onPress={() => setIsActivityModalVisible(false)}>
-              <MaterialIcons
-                name="close"
-                size={24}
-                color={theme.colors.textPrimary}
-              />
-            </TouchableOpacity>
-          </View>
-          <ScrollView
-            contentContainerStyle={styles.modalContent}
-            showsVerticalScrollIndicator={false}
-          >
-            {Object.entries(
-              recentActivity.reduce(
-                (acc, curr) => {
-                  const dateStr = new Date(curr.completedAt).toLocaleDateString(
-                    "en-US",
-                    {
-                      month: "long",
-                      day: "numeric",
-                      year: "numeric",
-                    },
-                  );
-                  if (!acc[dateStr]) acc[dateStr] = [];
-                  acc[dateStr].push(curr);
-                  return acc;
-                },
-                {} as Record<string, typeof recentActivity>,
-              ),
-            ).map(([date, activities]) => (
-              <View key={date} style={{ marginBottom: 24 }}>
-                <Text
-                  style={{
-                    fontFamily: theme.typography.heading.fontFamily,
-                    fontSize: 14,
-                    color: theme.colors.textSecondary,
-                    marginBottom: 12,
-                    letterSpacing: 1,
-                  }}
-                >
-                  {date.toUpperCase()}
-                </Text>
-                <View style={styles.activityList}>
-                  {activities.map((activity) => {
-                    const categoryTitle =
-                      CATEGORIES[activity.category]?.title || "General";
-                    const difficultyTitle =
-                      activity.difficulty.charAt(0).toUpperCase() +
-                      activity.difficulty.slice(1);
-
-                    const mins = Math.floor(activity.timeTaken / 60);
-                    const secs = activity.timeTaken % 60;
-                    const timeFormatted = `${mins}:${secs.toString().padStart(2, "0")}`;
-
-                    return (
-                      <TouchableOpacity
-                        key={activity.id}
-                        style={styles.activityRow}
-                        onPress={() => {
-                          setIsActivityModalVisible(false);
-                          setTimeout(() => {
-                            router.push(
-                              `/activity/${activity.puzzleId}` as any,
-                            );
-                          }, 150);
-                        }}
-                      >
-                        <View
-                          style={[
-                            styles.activityIcon,
-                            { backgroundColor: "rgba(238, 205, 43, 0.1)" },
-                          ]}
-                        >
-                          <MaterialIcons
-                            name="check-circle"
-                            size={24}
-                            color={theme.colors.accentGold}
-                          />
-                        </View>
-                        <View style={styles.activityContent}>
-                          <Text style={styles.activityTitle}>
-                            {categoryTitle} • {difficultyTitle}
-                          </Text>
-                          <View style={styles.activityMeta}>
-                            <Text
-                              style={[
-                                styles.metaStrong,
-                                { color: theme.colors.accentGold },
-                              ]}
-                            >
-                              {Math.round(activity.accuracy * 100)}% Accuracy
-                            </Text>
-                            <Text style={styles.metaDot}>•</Text>
-                            <Text style={styles.metaTime}>{timeFormatted}</Text>
-                          </View>
-                        </View>
-                        <MaterialIcons
-                          name="chevron-right"
-                          size={20}
-                          color={theme.colors.textMuted}
-                        />
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-            ))}
-            <View style={{ height: 40 }} />
-          </ScrollView>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -1154,28 +1075,6 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.caption.fontFamily,
     fontSize: 12,
     color: theme.colors.textMuted,
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: theme.colors.bgPrimary,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 24,
-    paddingTop: 32,
-    paddingBottom: 24,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.05)",
-  },
-  modalTitle: {
-    fontFamily: theme.typography.display.fontFamily,
-    fontSize: 24,
-    color: theme.colors.textPrimary,
-  },
-  modalContent: {
-    padding: 24,
   },
   resumeCard: {
     flexDirection: "row",

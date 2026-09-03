@@ -11,9 +11,15 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { CATEGORIES } from "../../constants/categories";
 import { theme } from "../../constants/theme";
-import { fetchAllPuzzlesForToday, PuzzleMeta } from "../../services/puzzleService";
+import {
+  fetchAllPuzzlesForToday,
+  puzzleTitle,
+  PuzzleMeta,
+} from "../../services/puzzleService";
 import { useUserStore } from "../../stores/userStore";
 import {
   enterPuzzle,
@@ -90,14 +96,13 @@ export default function CollectionScreen() {
   const gridSizes: string[] = ["6x6", "8x8", "10x10", "12x12"];
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
+      <ScreenHeader
+        title="Today's Collection"
+        subtitle="Every puzzle published today"
+      />
+
       <ScrollView style={styles.scrollArea} showsVerticalScrollIndicator={false}>
-
-        {/* Title */}
-        <View style={styles.headerSection}>
-          <Text style={styles.screenTitle}>Today's Collection</Text>
-        </View>
-
         {/* Filters */}
         <View style={styles.filtersSection}>
           <Text style={styles.filterLabel}>DIFFICULTY</Text>
@@ -203,19 +208,28 @@ export default function CollectionScreen() {
                 <View key={puzzle.id} style={styles.card}>
                   {/* Top row: Category label + title + completion ring */}
                   <View style={styles.cardTopRow}>
-                    <View>
+                    {/* The subject leads; the classification becomes a
+                        kicker. Difficulty still has to be visible — it drives
+                        filtering, scoring and the free-play economy — it just
+                        stops being the headline. */}
+                    <View style={styles.cardHeading}>
                       <Text
                         style={
                           puzzle.isCompleted ? styles.cardDateActive : styles.cardDate
                         }
                       >
-                        {category?.title.toUpperCase() || "GENERAL"}
+                        {category?.title.toUpperCase() || "GENERAL"} •{" "}
+                        {puzzle.difficulty.toUpperCase()} • {puzzle.gridSize}×
+                        {puzzle.gridSize}
                       </Text>
-                      <Text style={styles.cardTitle}>
-                        {puzzle.difficulty.charAt(0).toUpperCase() +
-                          puzzle.difficulty.slice(1)}{" "}
-                        Puzzle
+                      <Text style={styles.cardTitle} numberOfLines={2}>
+                        {puzzleTitle(puzzle)}
                       </Text>
+                      {puzzle.standfirst ? (
+                        <Text style={styles.cardStandfirst} numberOfLines={2}>
+                          {puzzle.standfirst}
+                        </Text>
+                      ) : null}
                     </View>
                     {puzzle.isCompleted ? (
                       <View style={styles.progressRingBox}>
@@ -359,7 +373,7 @@ export default function CollectionScreen() {
           <View style={{ height: 40 }} />
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -367,22 +381,12 @@ export default function CollectionScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#1a1810",
+    backgroundColor: theme.colors.bgPrimary,
   },
   scrollArea: {
     flex: 1,
   },
   // --- Header ---
-  headerSection: {
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 24,
-  },
-  screenTitle: {
-    fontFamily: theme.typography.display.fontFamily,
-    fontSize: 28,
-    color: theme.colors.textPrimary,
-  },
   // --- Filters ---
   filtersSection: {
     paddingHorizontal: 24,
@@ -404,7 +408,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 5,
     borderRadius: 100,
-    backgroundColor: "#2c281b",
+    backgroundColor: theme.colors.bgSecondary,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
   },
@@ -420,18 +424,18 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.cellLetter.fontFamily,
     fontSize: 12,
     fontWeight: "bold",
-    color: "#c9c092",
+    color: theme.colors.textSecondary,
   },
   pillTextActive: {
-    color: "#1a1810",
+    color: theme.colors.bgPrimary,
   },
   // --- Puzzle List & Cards (identical to [id].tsx) ---
   puzzleList: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 24,
     gap: 12,
   },
   card: {
-    backgroundColor: "#2c281b",
+    backgroundColor: theme.colors.bgSecondary,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
@@ -458,6 +462,20 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     color: theme.colors.accentGold,
     marginBottom: 4,
+  },
+  cardHeading: {
+    // Takes the leftover width so a two-line title wraps instead of
+    // colliding with the completion ring.
+    flex: 1,
+    minWidth: 0,
+    marginRight: 12,
+  },
+  cardStandfirst: {
+    fontFamily: theme.typography.body.fontFamily,
+    fontSize: 12,
+    lineHeight: 17,
+    color: theme.colors.textMuted,
+    marginTop: 4,
   },
   cardTitle: {
     fontFamily: theme.typography.heading.fontFamily,
@@ -522,7 +540,7 @@ const styles = StyleSheet.create({
   metaMediumText: {
     fontFamily: theme.typography.body.fontFamily,
     fontSize: 12,
-    color: "#c9c092",
+    color: theme.colors.textSecondary,
   },
   cardActionBtn: {
     backgroundColor: "rgba(255,255,255,0.05)",

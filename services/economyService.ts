@@ -8,6 +8,7 @@
  */
 import { HintPrices } from "../supabase/functions/_shared/economyTypes.ts";
 import { supabase } from "./supabaseClient";
+import { FunctionCallError } from "../utils/functionErrors";
 
 export interface HintChargeResult {
   balance: number;
@@ -149,14 +150,82 @@ export async function setDisplayName(name: string): Promise<string> {
   return (data as { display_name: string }).display_name;
 }
 
+/**
+ * Turns a functions-js error into something that names the actual problem.
+ *
+ * Every non-2xx response arrives as the same sentence — "Edge Function
+ * returned a non-2xx status code" — with the real body tucked inside
+ * `error.context`, a Response nobody reads. That made a missing deployment
+ * and a server-side failure indistinguishable from each other, and from a
+ * dropped connection.
+ */
+async function describeFunctionError(
+  error: unknown,
+  fn: string,
+): Promise<FunctionCallError> {
+  const context = (error as { context?: unknown }).context as
+    | { status?: number; text?: () => Promise<string> }
+    | undefined;
+  const status = context?.status;
+
+  let body = "";
+  if (typeof context?.text === "function") {
+    try {
+      body = await context.text();
+    } catch {
+      /* Already consumed, or not a readable body. */
+    }
+  }
+
+  let serverMessage = "";
+  if (body) {
+    try {
+      const parsed = JSON.parse(body);
+      serverMessage =
+        typeof parsed?.error === "string" ? parsed.error : body.slice(0, 200);
+    } catch {
+      serverMessage = body.slice(0, 200);
+    }
+  }
+
+  if (status === 404) {
+    return new FunctionCallError(
+      `The "${fn}" Edge Function is not deployed on this Supabase project. ` +
+        `Deploy it with: npx supabase functions deploy ${fn}`,
+      status,
+      serverMessage,
+    );
+  }
+  if (status === 401 || status === 403) {
+    return new FunctionCallError(
+      `Not signed in, or the session has expired (${fn}: ${status}).`,
+      status,
+      serverMessage,
+    );
+  }
+  if (serverMessage) {
+    return new FunctionCallError(
+      `${fn} failed (${status ?? "no status"}): ${serverMessage}`,
+      status,
+      serverMessage,
+    );
+  }
+
+  const fallback = error instanceof Error ? error.message : String(error);
+  return new FunctionCallError(
+    status ? `${fn} failed with status ${status}.` : fallback,
+    status,
+  );
+}
+
 /** Invokes an Edge Function with the caller's session JWT attached. */
 async function invoke<T>(
   fn: string,
   body: Record<string, unknown> = {},
 ): Promise<T> {
   const { data, error } = await supabase.functions.invoke(fn, { body });
-  if (error) throw new Error(error.message);
-  if ((data as any)?.error) throw new Error((data as any).error);
+  if (error) throw await describeFunctionError(error, fn);
+  if ((data as any)?.error) throw new FunctionCallError((data as any).error);
   return data as T;
 }
 

@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { PurchasesOffering, PurchasesPackage } from "react-native-purchases";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { theme } from "../../constants/theme";
 import { fetchCurrentOffering, purchasePackage, restorePurchases } from "../../services/revenueCatService";
 import { syncPurchases } from "../../services/economyService";
@@ -190,6 +191,8 @@ export default function StoreScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <ScreenHeader title="Store" subtitle="Top up your coin balance" />
+
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -227,7 +230,7 @@ export default function StoreScreen() {
         </View>
 
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>COIN PACKS</Text>
+          <Text style={styles.sectionTitle}>Coin Packs</Text>
         </View>
 
         {loading ? (
@@ -333,8 +336,8 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 24,
+    paddingTop: 0,
     paddingBottom: 20,
-    paddingTop: 16,
   },
   balanceWrapper: {
     marginBottom: 32,
@@ -377,9 +380,8 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontFamily: theme.typography.heading.fontFamily,
-    fontSize: 16,
+    fontSize: 18,
     color: theme.colors.textPrimary,
-    letterSpacing: 1,
   },
   grid: {
     flexDirection: "row",

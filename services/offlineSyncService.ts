@@ -12,6 +12,8 @@
 import { useUserStore } from "../stores/userStore";
 import { submitSolve } from "./economyService";
 import { reportError } from "./errorReporting";
+import { isPermanentRejection } from "../utils/functionErrors";
+import { invalidatePuzzleCache } from "./puzzleService";
 
 /**
  * Attempts to re-submit every queued solve.
@@ -51,14 +53,32 @@ export async function drainPendingSolves(): Promise<number> {
         `[OfflineSync] Retry failed for ${pending.puzzleId}:`,
         err instanceof Error ? err.message : err,
       );
-      // Stays queued for the next attempt, but a solve that keeps failing is
-      // unpaid progress the player can see — worth an issue, not just a log.
+      // A solve that keeps failing is unpaid progress the player can see —
+      // worth an issue, not just a log.
       reportError("sync", err, { puzzleId: pending.puzzleId });
+
+      // A refusal will be refused again. Dropping it stops the queue
+      // retrying something unacceptable on every focus, and clears the
+      // "pending sync" state that would otherwise never resolve. Anything
+      // that might succeed later stays put.
+      if (isPermanentRejection(err)) {
+        console.warn(
+          `[OfflineSync] Dropping ${pending.puzzleId}: the server rejected ` +
+            "the submission itself, so retrying cannot help.",
+        );
+        dequeuePendingSolve(pending.puzzleId);
+      }
     }
   }
 
   if (flushed > 0) {
     await useUserStore.getState().refreshBalance();
+
+    // The completion rows these just created are invisible until the
+    // five-minute read cache is dropped. Without this a solve that reached
+    // the server late still looked missing from Recent Activity, and its
+    // puzzle still looked unplayed — the sync worked and nothing showed it.
+    invalidatePuzzleCache();
   }
 
   console.log(

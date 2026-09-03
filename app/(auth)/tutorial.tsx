@@ -23,7 +23,10 @@ import {
   TUTORIAL_REVERSE_CLUE_IDS,
 } from "../../constants/tutorialPuzzle";
 import { track } from "../../services/analyticsService";
-import { linkGoogleAccount } from "../../services/authService";
+import {
+  getLinkedProviders,
+  linkGoogleAccount,
+} from "../../services/authService";
 import { SFX } from "../../services/soundService";
 import { usePuzzleStore } from "../../stores/puzzleStore";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -44,14 +47,25 @@ export default function TutorialScreen() {
   const { activePuzzle, selectedCell, setActivePuzzle, revealLetter } =
     usePuzzleStore();
 
-  /** The beat between the brand screen and the grid. Without it the player
-   *  is simply dropped into a puzzle, which reads as a game starting rather
-   *  than a walkthrough beginning. */
-  const [introVisible, setIntroVisible] = useState(true);
+  // The framing beat that used to sit here is gone: the start screen now
+  // says what the warm-up is, and saying it twice made the app feel like it
+  // kept clearing its throat before letting anyone play.
   const [coachVisible, setCoachVisible] = useState(true);
   const [hasTouchedReverse, setHasTouchedReverse] = useState(false);
   const [solved, setSolved] = useState(false);
   const [linking, setLinking] = useState(false);
+
+  /**
+   * Whether an account is already linked. The start screen offers sign-in
+   * first now, so most players arrive here having already decided — asking
+   * again on the celebration screen would be nagging.
+   */
+  const [hasAccount, setHasAccount] = useState(false);
+  useEffect(() => {
+    void getLinkedProviders().then(({ hasGoogle, hasApple }) =>
+      setHasAccount(hasGoogle || hasApple),
+    );
+  }, []);
 
   /**
    * The grid renders from puzzleStore, so the tutorial has to put its puzzle
@@ -161,61 +175,28 @@ export default function TutorialScreen() {
             entering={FadeInUp.delay(550).duration(500)}
             style={styles.celebrateActions}
           >
-            <Button
-              title={linking ? "Connecting…" : "Save my progress"}
-              onPress={handleLink}
-              disabled={linking}
-            />
-            <TouchableOpacity
-              onPress={finish}
-              style={styles.laterButton}
-              accessibilityRole="button"
-              accessibilityLabel="Continue without signing in"
-            >
-              <Text style={styles.laterText}>Not now</Text>
-            </TouchableOpacity>
-            <Text style={styles.laterNote}>
-              You can link an account any time from your profile.
-            </Text>
-          </Animated.View>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  // ── Framing beat ─────────────────────────────────────────────────
-  if (introVisible) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <Stack.Screen options={{ headerShown: false }} />
-        <View style={styles.intro}>
-          <Animated.View entering={FadeIn.duration(500)}>
-            <Text style={styles.introKicker}>FIRST</Text>
-            <Text style={styles.introTitle}>A warm-up</Text>
-          </Animated.View>
-
-          <Animated.View entering={FadeInUp.delay(250).duration(500)}>
-            <Text style={styles.introBody}>
-              Five words, and every answer is about crosswords.
-            </Text>
-            <Text style={styles.introBody}>
-              Take your time — nothing here is scored, and hints are free.
-            </Text>
-          </Animated.View>
-
-          <Animated.View
-            entering={FadeInUp.delay(500).duration(500)}
-            style={styles.introFooter}
-          >
-            <Button title="Begin" onPress={() => setIntroVisible(false)} />
-            <TouchableOpacity
-              onPress={skip}
-              style={styles.laterButton}
-              accessibilityRole="button"
-              accessibilityLabel="Skip the walkthrough"
-            >
-              <Text style={styles.skipText}>Skip the walkthrough</Text>
-            </TouchableOpacity>
+            {hasAccount ? (
+              <Button title="Start playing" onPress={finish} />
+            ) : (
+              <>
+                <Button
+                  title={linking ? "Connecting…" : "Save my progress"}
+                  onPress={handleLink}
+                  disabled={linking}
+                />
+                <TouchableOpacity
+                  onPress={finish}
+                  style={styles.laterButton}
+                  accessibilityRole="button"
+                  accessibilityLabel="Continue without signing in"
+                >
+                  <Text style={styles.laterText}>Not now</Text>
+                </TouchableOpacity>
+                <Text style={styles.laterNote}>
+                  You can link an account any time from your profile.
+                </Text>
+              </>
+            )}
           </Animated.View>
         </View>
       </SafeAreaView>
@@ -290,34 +271,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "rgba(255,255,255,0.08)",
   },
-  intro: {
-    flex: 1,
-    justifyContent: "center",
-    padding: 32,
-  },
-  introKicker: {
-    fontFamily: theme.typography.cellLetter.fontFamily,
-    fontSize: 11,
-    letterSpacing: 4,
-    color: theme.colors.accentGold,
-    fontWeight: "bold",
-    marginBottom: 10,
-  },
-  introTitle: {
-    fontFamily: theme.typography.display.fontFamily,
-    fontSize: 40,
-    color: theme.colors.textPrimary,
-    marginBottom: 24,
-  },
-  introBody: {
-    fontFamily: theme.typography.body.fontFamily,
-    fontSize: 16,
-    lineHeight: 25,
-    color: theme.colors.textSecondary,
-    marginBottom: 10,
-    maxWidth: 330,
-  },
-  introFooter: { marginTop: 40 },
   celebrate: {
     flex: 1,
     alignItems: "center",

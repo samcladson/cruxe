@@ -56,6 +56,15 @@ export function verifySubmission<T extends StoredCell>(
     correctCells,
     totalCells,
     accuracy: totalCells === 0 ? 0 : correctCells / totalCells,
-    isComplete: correctCells === totalCells,
+    // "Complete" means the player filled every cell, not that they got every
+    // cell right. Requiring perfection here contradicted the rest of the
+    // system: the score formula multiplies by accuracy, puzzle_completions
+    // stores it, the app displays "% Accuracy", and the FINISH button exists
+    // to end a grid that has errors in it. A single wrong letter was refused
+    // with 422 and the solve went unrecorded and unpaid.
+    //
+    // A blank is the one thing that still means unfinished — the client
+    // sends a space for any cell left empty, and no answer letter is a space.
+    isComplete: !guess.includes(" "),
   };
 }

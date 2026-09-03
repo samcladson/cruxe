@@ -22,7 +22,11 @@ import {
   Manrope_700Bold,
 } from "@expo-google-fonts/manrope";
 import { AppState, AppStateStatus } from "react-native";
-import { initAuth, onAuthStateChange } from "../services/authService";
+import {
+  adoptProviderDisplayName,
+  initAuth,
+  onAuthStateChange,
+} from "../services/authService";
 import { reportError } from "../services/errorReporting";
 import { drainPendingSolves } from "../services/offlineSyncService";
 import { initRevenueCat, loginToRevenueCat } from "../services/revenueCatService";
@@ -141,6 +145,10 @@ function RootLayoutNav() {
         Sentry.setUser({ id: userId });
         await loginToRevenueCat(userId);
         await syncFromSupabase(userId);
+        // Backfills accounts that linked Google or Apple before the link
+        // path started carrying the name across. A no-op for everyone
+        // else, including anonymous players.
+        await adoptProviderDisplayName();
         console.log("[Layout] Auth bootstrap complete for user:", userId);
       } else {
         console.warn("[Layout] Auth unavailable — running in local-only mode");
@@ -150,6 +158,13 @@ function RootLayoutNav() {
       // Defer async work: Supabase auth holds a lock during this callback; awaiting
       // other auth calls here can deadlock.
       unsubscribe = onAuthStateChange((user) => {
+        // Crash reports follow the current identity, including when there
+        // isn't one. Setting this on every event rather than only on
+        // sign-out keeps it correct whatever order the events arrive in —
+        // a sign-out immediately followed by a new anonymous session used
+        // to leave the departed user's id attached to every later report.
+        Sentry.setUser(user?.id ? { id: user.id } : null);
+
         if (user?.id && user.id !== useUserStore.getState().profile.id) {
           const uid = user.id;
           setTimeout(() => {
@@ -157,6 +172,7 @@ function RootLayoutNav() {
             void (async () => {
               await loginToRevenueCat(uid);
               await useUserStore.getState().syncFromSupabase(uid);
+              await adoptProviderDisplayName();
             })();
           }, 0);
         }
@@ -219,30 +235,13 @@ function RootLayoutNav() {
   return (
     <SafeAreaProvider>
       <ThemeProvider value={CruxeTheme}>
-        <Stack>
+        <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(auth)" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen
-            name="collection/index"
-            options={{
-              headerShown: true,
-              headerTitle: "Today's Collection",
-              headerStyle: { backgroundColor: "#1a1810" },
-              headerTintColor: "#fff",
-              headerTitleStyle: { fontFamily: "Manrope_600SemiBold" },
-              headerBackTitle: "Home",
-            }}
-          />
-          <Stack.Screen
-            name="category/[id]"
-            options={{
-              headerShown: true,
-              headerTitle: "",
-              headerTransparent: true,
-              headerTintColor: "#fff",
-              headerBackTitle: "Home",
-            }}
-          />
+          {/* Every screen draws its own <ScreenHeader />, so the native
+              stack header stays off app-wide — two stacked titles was the
+              bug this replaced. */}
+          <Stack.Screen name="category/[id]" options={{ headerShown: false }} />
           <Stack.Screen
             name="legal/privacy"
             options={{

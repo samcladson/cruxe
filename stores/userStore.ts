@@ -91,6 +91,13 @@ interface UserState {
  */
 export const NO_BEST_TIME = Number.MAX_SAFE_INTEGER;
 
+/**
+ * The name the signup trigger gives every new account, because an anonymous
+ * user has no name to use. Anything else means the player has a real one —
+ * adopted from a social provider or chosen — and must not be overwritten.
+ */
+export const DEFAULT_DISPLAY_NAME = "Player";
+
 const initialCategoryStats: Record<Category, CategoryStat> = {
   general: { solved: 0, averageTime: 0, bestTime: NO_BEST_TIME, accuracy: 0 },
   history: { solved: 0, averageTime: 0, bestTime: NO_BEST_TIME, accuracy: 0 },
@@ -111,7 +118,7 @@ const initialCategoryStats: Record<Category, CategoryStat> = {
 
 const initialProfile: UserProfile = {
   id: "guest", // Replaced with real UUID after auth init
-  displayName: "Player",
+  displayName: DEFAULT_DISPLAY_NAME,
   avatarUrl: "",
   // Starts at zero. The welcome bonus is written by the auth trigger as a
   // ledger entry (migration 008); showing 200 here before the server has
@@ -137,10 +144,44 @@ export const useUserStore = create<UserState>()(
       pendingSolves: [],
 
       // ── Profile actions ─────────────────────────────────────────
+      /**
+       * Binds the store to an account.
+       *
+       * A *different* id means a different person, so everything held here
+       * is discarded rather than carried across. Without this, a switch left
+       * the previous account's coins, streak and category stats sitting under
+       * the new id: `syncFromSupabase` falls back to `state.profile.*` for
+       * every field the server does not return, and a row that does not exist
+       * yet returns nothing at all — so the old numbers survived and were
+       * then treated as this user's own.
+       *
+       * The same id is the ordinary case — a relaunch, a token refresh — and
+       * must keep the persisted profile untouched.
+       */
       setUserId: (id: string) =>
-        set((state) => ({
-          profile: { ...state.profile, id },
-        })),
+        set((state) => {
+          if (state.profile.id === id) {
+            return { profile: { ...state.profile, id } };
+          }
+
+          console.log(
+            "[UserStore] Account changed:",
+            state.profile.id,
+            "->",
+            id,
+            "— clearing the previous profile",
+          );
+          return {
+            profile: {
+              ...initialProfile,
+              id,
+              categoryStats: { ...initialCategoryStats },
+            },
+            // Queued solves belong to the account that earned them and can
+            // never be submitted under a different one.
+            pendingSolves: [],
+          };
+        }),
 
       setDisplayName: (name: string) =>
         set((state) => ({
@@ -252,9 +293,14 @@ export const useUserStore = create<UserState>()(
           }
 
           if (!data) {
-            // Row doesn't exist yet — local state is the truth, nothing to hydrate
+            // No row yet — normally the brief window before the signup
+            // trigger commits. Nothing to hydrate, and nothing stale can be
+            // left behind either: an account switch cleared the profile
+            // above, so what remains belongs to this user or is empty.
             console.log(
-              "[UserStore] No remote profile found, keeping local state",
+              "[UserStore] No remote profile found for",
+              userId,
+              "— leaving the profile empty until it exists",
             );
             return;
           }
@@ -321,11 +367,24 @@ export const useUserStore = create<UserState>()(
         }
       },
 
-      resetLocalProfile: () =>
+      resetLocalProfile: () => {
         set({
-          profile: { ...initialProfile },
+          profile: { ...initialProfile, categoryStats: { ...initialCategoryStats } },
           pendingSolves: [],
-        }),
+        });
+
+        // Drop the persisted copy as well, not just the in-memory state.
+        // A `set` schedules an async write, and anything that rehydrates
+        // before it lands — a fast refresh in development, a reload, a
+        // second store instance — would read the previous account's coins
+        // and streak straight back in. Clearing the entry outright means
+        // there is nothing left to resurrect.
+        try {
+          useUserStore.persist.clearStorage();
+        } catch (e) {
+          console.warn("[UserStore] Could not clear persisted storage:", e);
+        }
+      },
 
       // NOTE: there is no syncToSupabase. The client has no write access to
       // the `users` table (migration 008 revokes INSERT/UPDATE/DELETE), which

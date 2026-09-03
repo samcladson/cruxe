@@ -19,6 +19,9 @@ import { SuccessModal } from "../../components/modals/SuccessModal";
 import { theme } from "../../constants/theme";
 import { fetchCategoryPuzzles } from "../../services/puzzleService";
 import { submitSolve } from "../../services/economyService";
+import { invalidatePuzzleCache } from "../../services/puzzleService";
+import { reportError } from "../../services/errorReporting";
+import { isPermanentRejection } from "../../utils/functionErrors";
 import { track } from "../../services/analyticsService";
 import {
   calculateScore,
@@ -136,17 +139,42 @@ export default function GameScreen() {
         activePuzzle.totalWords,
       );
       await useUserStore.getState().refreshBalance();
+
+      // The activity list and the "completed" flags on every puzzle list are
+      // cached for five minutes. Without dropping that here, a puzzle you
+      // just solved stays missing from Recent Activity — and still shows as
+      // unplayed — for up to five minutes.
+      invalidatePuzzleCache();
     } catch (err) {
       // Offline or server unreachable. The solve is real; the reward is not
       // granted yet. Queue it and say so, rather than inventing coins that
       // the server might later disagree with.
-      console.warn("[GameScreen] Submission deferred:", err);
-      enqueuePendingSolve({
-        puzzleId: activePuzzle.id,
-        letters,
-        elapsedSeconds: timer,
-        queuedAt: new Date().toISOString(),
-      });
+      //
+      // Not every cause here is transient, though. "pending sync" reads as a
+      // network hiccup, and it looks identical when the Edge Function is
+      // undeployed or rejecting the submission outright — in which case the
+      // retry will fail forever and the player is quietly never paid. So the
+      // reason is logged in full and reported, rather than left as a warning
+      // nobody reads.
+      console.warn(
+        "[GameScreen] Submission failed:",
+        err instanceof Error ? err.message : err,
+      );
+      reportError("sync", err, { puzzleId: activePuzzle.id });
+
+      // Only queue what a retry could plausibly fix. The server refusing the
+      // submission itself — an incomplete grid, a puzzle it cannot verify —
+      // will refuse the identical payload every time, so queuing it left the
+      // player on "pending sync" forever while the queue retried something
+      // that could never succeed.
+      if (!isPermanentRejection(err)) {
+        enqueuePendingSolve({
+          puzzleId: activePuzzle.id,
+          letters,
+          elapsedSeconds: timer,
+          queuedAt: new Date().toISOString(),
+        });
+      }
       setRewardPending(true);
     }
 
@@ -243,17 +271,6 @@ export default function GameScreen() {
             <Text style={styles.timerText}>{formatTime(timer)}</Text>
           </View>
 
-          {/* <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>
-              {activePuzzle.category?.toUpperCase()} •{" "}
-              {activePuzzle.difficulty?.toUpperCase()}
-            </Text>
-            <Text style={styles.headerSubtitle}>
-              {activePuzzle.gridSize}×{activePuzzle.gridSize} •{" "}
-              {activePuzzle.totalWords} words
-            </Text>
-          </View> */}
-
           <View style={styles.headerRight}>
             <View style={styles.coinBadge}>
               <MaterialIcons
@@ -265,6 +282,16 @@ export default function GameScreen() {
             </View>
           </View>
         </View>
+
+{/* The subject, stated once and quietly. A player mid-solve needs to
+            remember what the puzzle is about; they do not need it shouted. */}
+        {activePuzzle.title ? (
+          <View style={styles.subjectBar}>
+            <Text style={styles.subjectText} numberOfLines={1}>
+              {activePuzzle.title}
+            </Text>
+          </View>
+        ) : null}
 
         {/* Top Active Clue Section */}
         <ActiveClueBar onHintPress={() => setShowHintModal(true)} />
@@ -345,6 +372,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
+  },
+  subjectBar: {
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+  },
+  subjectText: {
+    fontFamily: theme.typography.subheading.fontFamily,
+    fontSize: 13,
+    letterSpacing: 0.3,
+    color: theme.colors.textSecondary,
+    textAlign: "center",
   },
   headerTitle: {
     fontFamily: theme.typography.cellLetter.fontFamily,

@@ -54,9 +54,10 @@ function resolveTimeMultiplier(ratio: number, cfg: ScoringConfig): number {
  * against the theoretical maximum, which assumed blazing speed and so
  * structurally capped an unhurried perfect solve at B.
  *
- * Note that accuracy is always exactly 1 here: submit-solve rejects an
- * incomplete grid outright, so any solve that reaches scoring is correct.
- * Grade therefore reflects only speed and hint use.
+ * Accuracy is not always 1: submit-solve accepts any grid the player filled
+ * in and scores it on how much of it was right. Grade follows from
+ * finalScore, which already carries the accuracy multiplier, so a grid
+ * finished with mistakes grades below one finished without them.
  *
  * A hint-free solve never drops below B however slow it was. Solving a
  * puzzle unaided is the thing the game is about; taking your time over it

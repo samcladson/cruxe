@@ -5,6 +5,7 @@ import {
   Modal,
   Platform,
   StatusBar,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -136,6 +137,17 @@ export function SuccessModal({
   }));
 
   if (!activePuzzle) return null;
+
+  // Facts are keyed by answer word. Ordering them by the puzzle's own clue
+  // order rather than object order means they read in the sequence the
+  // player just solved them.
+  const facts = activePuzzle.lesson?.facts ?? {};
+  const factEntries = activePuzzle.clues
+    .map((clue) => [clue.answer, facts[clue.answer]] as const)
+    .filter((entry): entry is readonly [string, string] => Boolean(entry[1]));
+
+  const hasLesson =
+    Boolean(activePuzzle.lesson?.takeaway) || factEntries.length > 0;
 
   // ═══════════════════════════════════════════════════════════════════
   // PHASE 2: STREAK SCREEN
@@ -337,6 +349,44 @@ export function SuccessModal({
           </Animated.View>
         </View>
 
+        {/* ── What you learned ─────────────────────────────────────────
+            Shown only after solving, which is the whole point: the puzzle
+            stays a puzzle, and this is the reward for finishing it.
+            Scrolls independently so a long list of facts cannot push the
+            action buttons off the screen. */}
+        {hasLesson ? (
+          <Animated.View
+            entering={FadeInUp.delay(800).duration(400)}
+            style={styles.lessonSection}
+          >
+            <Text style={styles.lessonHeading}>
+              {activePuzzle.title ?? "What you learned"}
+            </Text>
+
+            {activePuzzle.lesson?.takeaway ? (
+              <Text style={styles.lessonTakeaway}>
+                {activePuzzle.lesson.takeaway}
+              </Text>
+            ) : null}
+
+            {factEntries.length > 0 ? (
+              <ScrollView
+                style={styles.lessonScroll}
+                contentContainerStyle={styles.lessonScrollContent}
+                showsVerticalScrollIndicator={false}
+                nestedScrollEnabled
+              >
+                {factEntries.map(([word, fact]) => (
+                  <View key={word} style={styles.factRow}>
+                    <Text style={styles.factWord}>{word}</Text>
+                    <Text style={styles.factText}>{fact}</Text>
+                  </View>
+                ))}
+              </ScrollView>
+            ) : null}
+          </Animated.View>
+        ) : null}
+
         {/* Action Buttons */}
         <Animated.View
           entering={FadeInUp.delay(900).duration(500).springify()}
@@ -448,6 +498,52 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.4)",
     fontWeight: "bold",
     letterSpacing: 1,
+  },
+  lessonSection: {
+    paddingHorizontal: 24,
+    paddingBottom: 8,
+    // Bounded so a long fact list scrolls inside the section rather than
+    // pushing the action buttons off the bottom of the screen.
+    maxHeight: 260,
+  },
+  lessonHeading: {
+    fontFamily: theme.typography.heading.fontFamily,
+    fontSize: 16,
+    color: theme.colors.textPrimary,
+    marginBottom: 8,
+  },
+  lessonTakeaway: {
+    fontFamily: theme.typography.body.fontFamily,
+    fontSize: 14,
+    lineHeight: 21,
+    color: theme.colors.textSecondary,
+    marginBottom: 12,
+  },
+  lessonScroll: {
+    flexGrow: 0,
+  },
+  lessonScrollContent: {
+    gap: 10,
+    paddingBottom: 4,
+  },
+  factRow: {
+    borderLeftWidth: 2,
+    borderLeftColor: "rgba(238, 205, 43, 0.35)",
+    paddingLeft: 10,
+  },
+  factWord: {
+    fontFamily: theme.typography.cellLetter.fontFamily,
+    fontSize: 12,
+    letterSpacing: 1,
+    fontWeight: "bold",
+    color: theme.colors.accentGold,
+  },
+  factText: {
+    fontFamily: theme.typography.body.fontFamily,
+    fontSize: 13,
+    lineHeight: 19,
+    color: theme.colors.textSecondary,
+    marginTop: 2,
   },
   extraStats: {
     backgroundColor: "rgba(255,255,255,0.03)",

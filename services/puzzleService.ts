@@ -64,6 +64,33 @@ export interface PuzzleMeta {
   score: number | null;
   accuracy: number | null;
   timeTaken: number | null;
+  /**
+   * The subject the puzzle is about, e.g. "The Apollo Programme".
+   *
+   * Null on puzzles generated before topics existed. Use `puzzleTitle()`
+   * rather than reading this directly, so those fall back consistently.
+   */
+  title: string | null;
+  /** One or two lines under the title. Null on pre-topic puzzles. */
+  standfirst: string | null;
+}
+
+/**
+ * What to show as a puzzle's name.
+ *
+ * Puzzles generated before the syllabus existed have no title, and there is
+ * no budget to backfill them — one Gemini request each, against a free tier
+ * already spending 19 of 20 a day. They age out of the retention window on
+ * their own. Until then they fall back to how they have always read.
+ */
+export function puzzleTitle(puzzle: {
+  title?: string | null;
+  difficulty: string;
+}): string {
+  if (puzzle.title && puzzle.title.trim().length > 0) return puzzle.title;
+  const difficulty =
+    puzzle.difficulty.charAt(0).toUpperCase() + puzzle.difficulty.slice(1);
+  return `${difficulty} Puzzle`;
 }
 
 /** Data required to record a puzzle completion */
@@ -136,7 +163,7 @@ export async function fetchDailyChallenge(
     const { data: row, error } = await supabase
       .from("daily_puzzles")
       .select(
-        "id, category, difficulty, grid_size, total_words, estimated_time, variant",
+        "id, category, difficulty, grid_size, total_words, estimated_time, variant, title, standfirst",
       )
       .eq("puzzle_date", date)
       .eq("is_daily_challenge", true)
@@ -161,7 +188,7 @@ export async function fetchDailyChallenge(
     const { data: candidates, error: candErr } = await supabase
       .from("daily_puzzles")
       .select(
-        "id, category, difficulty, grid_size, total_words, estimated_time, variant, puzzle_date",
+        "id, category, difficulty, grid_size, total_words, estimated_time, variant, puzzle_date, title, standfirst",
       )
       .order("puzzle_date", { ascending: false })
       .limit(50);
@@ -207,6 +234,8 @@ export async function fetchDailyChallenge(
     score: completion?.score ?? null,
     accuracy: completion?.accuracy ?? null,
     timeTaken: completion?.time_taken ?? null,
+    title: data.title ?? null,
+    standfirst: data.standfirst ?? null,
   };
 
   puzzleCache.set(cacheKey, result);
@@ -268,7 +297,7 @@ export async function fetchCategoryPuzzles(
   const { data: allRows, error: queryError } = await supabase
     .from("daily_puzzles")
     .select(
-      "id, category, difficulty, grid_size, variant, total_words, estimated_time, puzzle_date",
+      "id, category, difficulty, grid_size, variant, total_words, estimated_time, puzzle_date, title, standfirst",
     )
     .eq("category", category)
     .eq("is_daily_challenge", false)
@@ -328,6 +357,8 @@ export async function fetchCategoryPuzzles(
     score: completionMap.get(p.id)?.score ?? null,
     accuracy: completionMap.get(p.id)?.accuracy ?? null,
     timeTaken: completionMap.get(p.id)?.timeTaken ?? null,
+    title: p.title ?? null,
+    standfirst: p.standfirst ?? null,
   }));
 
   puzzleCache.set(cacheKey, result);
@@ -410,7 +441,7 @@ export async function fetchAllPuzzlesForToday(
   const { data: rows, error } = await supabase
     .from("daily_puzzles")
     .select(
-      "id, category, difficulty, grid_size, variant, total_words, estimated_time, is_daily_challenge",
+      "id, category, difficulty, grid_size, variant, total_words, estimated_time, is_daily_challenge, title, standfirst",
     )
     .eq("puzzle_date", targetDate)
     .order("is_daily_challenge", { ascending: false }) // Daily challenge first
@@ -444,6 +475,8 @@ export async function fetchAllPuzzlesForToday(
     score: completionMap.get(row.id)?.score ?? null,
     accuracy: completionMap.get(row.id)?.accuracy ?? null,
     timeTaken: completionMap.get(row.id)?.time_taken ?? null,
+    title: row.title ?? null,
+    standfirst: row.standfirst ?? null,
   }));
 
   puzzleCache.set(cacheKey, result);
@@ -484,7 +517,14 @@ export async function fetchTodayAvailableCategories(): Promise<Set<string>> {
 }
 
 export interface ActivityItem {
-  id: string; // completion ID or puzzle ID
+  /**
+   * The `puzzle_completions` primary key — NOT the puzzle's id. This is what
+   * `fetchCompletionById` looks up, so it is what the activity review screen
+   * must be given. The two were once described as interchangeable here, and
+   * they are not.
+   */
+  id: string;
+  /** The puzzle that was solved. For replaying or showing the grid. */
   puzzleId: string;
   category: Category;
   difficulty: Difficulty;
@@ -590,6 +630,9 @@ function hydrateStoredPuzzle(pd: any, row: any): Puzzle {
     completedAt: null,
     score: 0,
     hintsUsed: 0,
+    title: row.title ?? null,
+    standfirst: row.standfirst ?? null,
+    lesson: pd.lesson ?? null,
   };
 }
 
@@ -607,7 +650,7 @@ export async function fetchPuzzleById(
 
   const { data, error } = await supabase
     .from("daily_puzzles")
-    .select("id, puzzle_data, category, difficulty, grid_size")
+    .select("id, puzzle_data, category, difficulty, grid_size, title, standfirst")
     .eq("id", puzzleId)
     .maybeSingle();
 

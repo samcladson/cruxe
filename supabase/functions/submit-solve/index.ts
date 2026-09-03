@@ -67,6 +67,8 @@ Deno.serve(async (req) => {
   } catch {
     return json({ error: "length_mismatch" }, 400);
   }
+  // Rejects only a grid with empty cells. A filled grid with mistakes in it
+  // is a real attempt and is scored on its accuracy — see verifySubmission.
   if (!result.isComplete) return json({ error: "incomplete_solve" }, 422);
 
   // 4. Hints come from the server's own records, never the client's.

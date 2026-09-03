@@ -26,6 +26,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { theme } from "../../constants/theme";
 import {
   fetchLeaderboard,
@@ -180,10 +181,7 @@ export default function LeaderboardScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Leaderboard</Text>
-          <Text style={styles.subtitle}>Top players globally</Text>
-        </View>
+        <ScreenHeader title="Leaderboard" subtitle="Top players globally" />
         <View style={styles.centred}>
           <ActivityIndicator size="large" color={theme.colors.accentGold} />
         </View>
@@ -195,9 +193,7 @@ export default function LeaderboardScreen() {
   if (error) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Leaderboard</Text>
-        </View>
+        <ScreenHeader title="Leaderboard" subtitle="Top players globally" />
         <View style={styles.centred}>
           <MaterialIcons
             name="wifi-off"
@@ -217,10 +213,7 @@ export default function LeaderboardScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Leaderboard</Text>
-        <Text style={styles.subtitle}>Top players globally</Text>
-      </View>
+      <ScreenHeader title="Leaderboard" subtitle="Top players globally" />
 
       <ScrollView
         contentContainerStyle={styles.content}
@@ -352,22 +345,6 @@ export default function LeaderboardScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.bgPrimary },
-  header: {
-    paddingHorizontal: 24,
-    paddingTop: 8,
-    paddingBottom: 24,
-    backgroundColor: theme.colors.bgPrimary,
-  },
-  title: {
-    fontFamily: theme.typography.display.fontFamily,
-    fontSize: 32,
-    color: theme.colors.textPrimary,
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontFamily: theme.typography.body.fontFamily,
-    color: theme.colors.textSecondary,
-  },
   content: { flexGrow: 1 },
   centred: {
     flex: 1,

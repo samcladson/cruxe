@@ -10,9 +10,15 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { CATEGORIES } from "../../constants/categories";
 import { theme } from "../../constants/theme";
-import { fetchCategoryPuzzles, PuzzleMeta } from "../../services/puzzleService";
+import {
+  fetchCategoryPuzzles,
+  puzzleTitle,
+  PuzzleMeta,
+} from "../../services/puzzleService";
 import { useUserStore } from "../../stores/userStore";
 import {
   enterPuzzle,
@@ -70,20 +76,20 @@ export default function CategoryScreen() {
 
   if (!category) {
     return (
-      <View
-        style={[
-          styles.container,
-          { justifyContent: "center", alignItems: "center" },
-        ]}
-      >
-        <Text style={{ color: "white" }}>Category not found</Text>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={{ marginTop: 20 }}
-        >
-          <Text style={{ color: theme.colors.accentGold }}>Go Back</Text>
-        </TouchableOpacity>
-      </View>
+      <SafeAreaView style={styles.container} edges={["top"]}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <ScreenHeader title="Category" showBack />
+        <View style={styles.centred}>
+          <MaterialIcons
+            name="grid-off"
+            size={48}
+            color="rgba(255,255,255,0.1)"
+          />
+          <Text style={{ color: theme.colors.textMuted, marginTop: 16 }}>
+            Category not found
+          </Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
@@ -91,34 +97,19 @@ export default function CategoryScreen() {
   const gridSizes = ["6x6", "8x8", "10x10", "12x12"];
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <Stack.Screen options={{ headerShown: false }} />
+      <ScreenHeader
+        title={category.title}
+        subtitle={category.description}
+        icon={category.icon as any}
+        showBack
+      />
+
       <ScrollView
         style={styles.scrollArea}
         showsVerticalScrollIndicator={false}
       >
-        {/* Category Hero */}
-        <View style={styles.heroSection}>
-          <View style={styles.heroRow}>
-            <View
-              style={[
-                styles.heroIconBox,
-                { borderColor: theme.colors.accentGold + "40" },
-              ]}
-            >
-              <MaterialIcons
-                name={category.icon as any}
-                size={28}
-                color={theme.colors.accentGold}
-              />
-            </View>
-            <View>
-              <Text style={styles.heroTitle}>{category.title}</Text>
-              <Text style={styles.heroDesc}>{category.description}</Text>
-            </View>
-          </View>
-        </View>
-
         {/* Filters Section and Global Play Button removed in V1 to focus on curated list */}
 
         {/* Puzzle List */}
@@ -144,7 +135,8 @@ export default function CategoryScreen() {
             filteredPuzzles.map((puzzle) => (
               <View key={puzzle.id} style={styles.card}>
                 <View style={styles.cardTopRow}>
-                  <View>
+                  {/* Subject first, classification demoted to a kicker. */}
+                  <View style={styles.cardHeading}>
                     <Text
                       style={
                         puzzle.isCompleted
@@ -152,13 +144,17 @@ export default function CategoryScreen() {
                           : styles.cardDate
                       }
                     >
-                      {category.title.toUpperCase()}
+                      {puzzle.difficulty.toUpperCase()} • {puzzle.gridSize}×
+                      {puzzle.gridSize}
                     </Text>
-                    <Text style={styles.cardTitle}>
-                      {puzzle.difficulty.charAt(0).toUpperCase() +
-                        puzzle.difficulty.slice(1)}{" "}
-                      Puzzle
+                    <Text style={styles.cardTitle} numberOfLines={2}>
+                      {puzzleTitle(puzzle)}
                     </Text>
+                    {puzzle.standfirst ? (
+                      <Text style={styles.cardStandfirst} numberOfLines={2}>
+                        {puzzle.standfirst}
+                      </Text>
+                    ) : null}
                   </View>
                   {puzzle.isCompleted ? (
                     <View style={styles.progressRingBox}>
@@ -298,54 +294,23 @@ export default function CategoryScreen() {
           <View style={{ height: 40 }} />
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#1a1810", // Deep rich charcoal from stitch
+    backgroundColor: theme.colors.bgPrimary,
   },
   scrollArea: {
     flex: 1,
   },
-  heroSection: {
-    paddingHorizontal: 24,
-    paddingTop: 60,
-    paddingBottom: 32,
-  },
-  heroRow: {
-    flexDirection: "row",
+  centred: {
+    flex: 1,
     alignItems: "center",
-    gap: 16,
-  },
-  heroIconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: "rgba(238, 205, 43, 0.2)",
-    borderWidth: 1,
     justifyContent: "center",
-    alignItems: "center",
-    shadowColor: theme.colors.accentGold,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 15,
-  },
-  heroTitle: {
-    fontFamily: theme.typography.heading.fontFamily,
-    fontSize: 32,
-    fontWeight: "bold",
-    color: "#fff",
-    letterSpacing: -0.5,
-  },
-  heroDesc: {
-    fontFamily: theme.typography.body.fontFamily,
-    fontSize: 14,
-    color: "#c9c092",
-    marginTop: 4,
-    fontWeight: "500",
+    padding: 32,
   },
   filtersSection: {
     marginBottom: 24,
@@ -359,7 +324,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 6,
     borderRadius: 100,
-    backgroundColor: "#2c281b",
+    backgroundColor: theme.colors.bgSecondary,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
   },
@@ -375,10 +340,10 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.cellLetter.fontFamily,
     fontSize: 12,
     fontWeight: "bold",
-    color: "#c9c092",
+    color: theme.colors.textSecondary,
   },
   difficultyTextActive: {
-    color: "#1a1810", // Dark text on gold
+    color: theme.colors.bgPrimary,
   },
   sizeContainer: {
     flexDirection: "row",
@@ -391,31 +356,31 @@ const styles = StyleSheet.create({
     width: "22%",
     aspectRatio: 1,
     borderRadius: 12,
-    backgroundColor: "#2c281b",
+    backgroundColor: theme.colors.bgSecondary,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.05)",
     justifyContent: "center",
     alignItems: "center",
   },
   sizeBtnActive: {
-    backgroundColor: "#3a3524",
+    backgroundColor: theme.colors.bgTertiary,
     borderColor: "rgba(238, 205, 43, 0.4)",
   },
   sizeText: {
     fontFamily: theme.typography.cellLetter.fontFamily,
     fontSize: 12,
     fontWeight: "bold",
-    color: "#c9c092",
+    color: theme.colors.textSecondary,
   },
   sizeTextActive: {
     color: theme.colors.accentGold,
   },
   puzzleList: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 24,
     gap: 12,
   },
   card: {
-    backgroundColor: "#2c281b", // surface-dark
+    backgroundColor: theme.colors.bgSecondary,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
@@ -442,6 +407,20 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     color: theme.colors.accentGold,
     marginBottom: 4,
+  },
+  cardHeading: {
+    // Leftover width, so a two-line title wraps rather than colliding with
+    // the completion ring.
+    flex: 1,
+    minWidth: 0,
+    marginRight: 12,
+  },
+  cardStandfirst: {
+    fontFamily: theme.typography.body.fontFamily,
+    fontSize: 12,
+    lineHeight: 17,
+    color: theme.colors.textMuted,
+    marginTop: 4,
   },
   cardTitle: {
     fontFamily: theme.typography.heading.fontFamily,
@@ -520,7 +499,7 @@ const styles = StyleSheet.create({
   metaMediumText: {
     fontFamily: theme.typography.body.fontFamily,
     fontSize: 12,
-    color: "#c9c092",
+    color: theme.colors.textSecondary,
   },
   cardActionBtn: {
     backgroundColor: "rgba(255,255,255,0.05)",
@@ -555,7 +534,7 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
   },
   globalPlayBtnDisabled: {
-    backgroundColor: "#2c281b",
+    backgroundColor: theme.colors.bgSecondary,
     borderColor: "rgba(255,255,255,0.05)",
     borderWidth: 1,
     shadowOpacity: 0,
@@ -564,7 +543,7 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.cellLetter.fontFamily,
     fontSize: 16,
     fontWeight: "bold",
-    color: "#1a1810",
+    color: theme.colors.bgPrimary,
     letterSpacing: 1.5,
   },
   globalPlayBtnTextDisabled: {

@@ -10,12 +10,14 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { theme } from "../../constants/theme";
+import { ScreenHeader } from "../../../components/ui/ScreenHeader";
+import { CATEGORIES } from "../../../constants/categories";
+import { theme } from "../../../constants/theme";
 import {
   CompletionData,
   fetchCompletionById,
-} from "../../services/puzzleService";
-import { useUserStore } from "../../stores/userStore";
+} from "../../../services/puzzleService";
+import { useUserStore } from "../../../stores/userStore";
 
 export default function ActivityReviewScreen() {
   const { id } = useLocalSearchParams();
@@ -85,39 +87,23 @@ export default function ActivityReviewScreen() {
     },
   );
 
+  const categoryTitle =
+    CATEGORIES[completion.category as keyof typeof CATEGORIES]?.title ||
+    completion.category;
+  const difficultyTitle =
+    completion.difficulty.charAt(0).toUpperCase() +
+    completion.difficulty.slice(1);
+
   return (
-    <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <MaterialIcons
-            name="arrow-back"
-            size={24}
-            color={theme.colors.textPrimary}
-          />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Performance Insights</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <ScreenHeader
+        title="Performance Insights"
+        subtitle={`${categoryTitle} • ${difficultyTitle} • ${formattedDate}`}
+      />
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Main Title Area */}
-        <View style={styles.titleSection}>
-          <View style={styles.heroIconBox}>
-            <MaterialIcons
-              name="analytics"
-              size={48}
-              color={theme.colors.accentGold}
-            />
-          </View>
-          <Text style={styles.heroCategory}>
-            {completion.category.toUpperCase()} •{" "}
-            {completion.difficulty.toUpperCase()}
-          </Text>
-          <Text style={styles.heroDate}>{formattedDate}</Text>
-        </View>
-
         {/* Primary Stats Grid */}
         <Text style={styles.sectionHeader}>Core Metrics</Text>
         <View style={styles.metricsGrid}>
@@ -225,60 +211,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.bgPrimary,
   },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.05)",
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  headerTitle: {
-    fontFamily: theme.typography.heading.fontFamily,
-    fontSize: 18,
-    color: theme.colors.textPrimary,
-  },
   scrollContent: {
     padding: 24,
-    paddingBottom: 60,
-  },
-
-  titleSection: {
-    alignItems: "center",
-    marginBottom: 40,
-    marginTop: 20,
-  },
-  heroIconBox: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: "rgba(238, 205, 43, 0.08)",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 28,
-    borderWidth: 1,
-    borderColor: "rgba(238, 205, 43, 0.15)",
-  },
-  heroCategory: {
-    fontFamily: theme.typography.heading.fontFamily,
-    fontSize: 22,
-    color: theme.colors.textPrimary,
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  heroDate: {
-    fontFamily: theme.typography.body.fontFamily,
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-    textTransform: "uppercase",
-    letterSpacing: 2,
+    paddingTop: 0,
+    paddingBottom: 40,
   },
 
   sectionHeader: {
@@ -286,7 +222,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: theme.colors.textPrimary,
     marginBottom: 16,
-    paddingLeft: 4,
   },
 
   metricsGrid: {

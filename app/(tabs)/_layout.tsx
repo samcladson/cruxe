@@ -38,6 +38,15 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="collection"
+        options={{
+          title: "Collection",
+          tabBarIcon: ({ color }) => (
+            <MaterialIcons name="grid-view" size={24} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="store"
         options={{
           title: "Store",
@@ -62,6 +71,14 @@ export default function TabLayout() {
           tabBarIcon: ({ color, focused }) => (
             <MaterialIcons name="person" size={24} color={color} />
           ),
+        }}
+      />
+      {/* Reached from Recent Activity, not from the bar. It lives inside the
+          tab group so the bottom navigation stays visible on it. */}
+      <Tabs.Screen
+        name="activity"
+        options={{
+          href: null,
         }}
       />
       {/* Hide the archived full home screen from the tab bar */}

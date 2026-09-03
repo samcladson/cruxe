@@ -19,6 +19,10 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { buildPuzzle } from "../services/crosswordEngine";
+import { SYLLABUS } from "../constants/syllabus";
+import { SyllabusTopic } from "../constants/syllabusTypes";
+import { assignTopics, TopicUsage } from "./lib/assignTopics";
+import { Lesson, validateLesson } from "./lib/validateLesson";
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -111,6 +115,13 @@ interface DailyPuzzleData {
     estimatedTime: number;
     totalWords: number;
   };
+  /**
+   * Teaching content shown after solving. Lives here rather than in columns
+   * because listing screens need the title but never the facts, and loading
+   * the whole JSONB to draw a card is what the lightweight columns exist to
+   * avoid. Absent on puzzles generated before topics existed.
+   */
+  lesson?: Lesson;
 }
 
 interface PuzzleSpec {
@@ -161,14 +172,54 @@ async function generatePuzzleWords(
   gridSize: GridSize,
   apiKey: string,
   today: string,
-): Promise<GeneratedClue[]> {
+  topic: SyllabusTopic | null,
+  angle: string,
+): Promise<{ words: GeneratedClue[]; rawLesson: unknown }> {
   const settings = GRID_SIZES[gridSize];
   const wordCount = settings.maxWords;
   const maxLength = settings.maxWordLength;
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
+  // A puzzle is about a subject, not merely in a category. The brief is what
+  // turns a bag of category-adjacent words into something a player can learn
+  // from — so it leads the prompt rather than being appended to it.
+  const brief = topic
+    ? [
+        "",
+        "━━━ THE SUBJECT — THIS IS THE POINT OF THE PUZZLE ━━━",
+        `Subject: ${topic.title}`,
+        `Angle: ${angle}`,
+        `Framing: ${topic.standfirst}`,
+        "",
+        `EVERY answer must belong to this subject and this angle. A word that merely sits in`,
+        `the "${category}" category but has nothing to do with ${topic.title} is wrong, however`,
+        `good a crossword word it is. The player should finish knowing more about`,
+        `${topic.title} than when they started.`,
+        "",
+        "Range across the subject rather than clustering: its people, places, objects,",
+        "processes, terms of art and defining moments.",
+        "",
+      ].join("\n")
+    : "";
+
+  const lessonBrief = topic
+    ? [
+        "",
+        "━━━ WHAT THE PLAYER LEARNS ━━━",
+        'For EACH word, write "fact": one sentence of real information about that answer',
+        "within the subject. Not a restatement of the clue and not a definition — something",
+        "the player did not know. Concrete: a number, a date, a consequence, a surprise.",
+        "Under 140 characters.",
+        "",
+        `Also write "takeaway": two or three sentences shown after solving, tying these`,
+        `particular answers into one idea worth remembering about ${topic.title}. Write it`,
+        "as though explaining to someone who has just finished the puzzle and is curious.",
+        "",
+      ].join("\n")
+    : "";
+
   // Identical prompt logic to geminiService.ts — date-aware, quality-enforced
-  const prompt = `You are the puzzle editor of an award-winning crossword publication renowned for \
+  const prompt = `${brief}You are the puzzle editor of an award-winning crossword publication renowned for \
 puzzles that feel sharp, current, and culturally alive — the kind solvers share because a clue \
 made them groan and grin at the same time.
 
@@ -220,7 +271,8 @@ Mark exactly 2-3 words as isHint true. These become pre-revealed letters to help
 get a foothold in the grid. Choose short (3-5 letter), common-letter words strategically —
 never your most interesting or thematic words.
 
-Return a JSON array of exactly ${wordCount} objects. No markdown, no extra text.`;
+${lessonBrief}
+Return a JSON object with ${topic ? '"takeaway" and ' : ""}a "words" array of exactly ${wordCount} objects. No markdown, no extra text.`;
 
   const response = await fetch(endpoint, {
     method: "POST",
@@ -231,25 +283,41 @@ Return a JSON array of exactly ${wordCount} objects. No markdown, no extra text.
         temperature: 0.95,
         responseMimeType: "application/json",
         responseSchema: {
-          type: "ARRAY",
-          items: {
-            type: "OBJECT",
-            properties: {
-              word: {
-                type: "STRING",
-                description: "The crossword answer word. UPPERCASE, A-Z only, no spaces or hyphens."
-              },
-              clue: {
-                type: "STRING",
-                description: "A clever, concise crossword clue. Max 65 characters."
-              },
-              isHint: {
-                type: "BOOLEAN",
-                description: "True for exactly 2-3 short, common-letter words chosen to help players get a grid foothold."
-              }
+          type: "OBJECT",
+          properties: {
+            takeaway: {
+              type: "STRING",
+              description:
+                "Two or three sentences shown after solving, tying the answers into one idea worth remembering about the subject.",
             },
-            required: ["word", "clue", "isHint"]
-          }
+            words: {
+              type: "ARRAY",
+              items: {
+                type: "OBJECT",
+                properties: {
+                  word: {
+                    type: "STRING",
+                    description: "The crossword answer word. UPPERCASE, A-Z only, no spaces or hyphens."
+                  },
+                  clue: {
+                    type: "STRING",
+                    description: "A clever, concise crossword clue. Max 65 characters."
+                  },
+                  isHint: {
+                    type: "BOOLEAN",
+                    description: "True for exactly 2-3 short, common-letter words chosen to help players get a grid foothold."
+                  },
+                  fact: {
+                    type: "STRING",
+                    description:
+                      "One sentence of real information about this answer within the subject. Not a restatement of the clue. Under 140 characters.",
+                  }
+                },
+                required: ["word", "clue", "isHint"]
+              }
+            }
+          },
+          required: ["words"]
         }
       },
     }),
@@ -274,11 +342,21 @@ Return a JSON array of exactly ${wordCount} objects. No markdown, no extra text.
   if (!responseText) throw new Error("Gemini returned empty response");
 
   let parsedArray: any[] = [];
+  // The lesson half of the response, kept raw here and validated once the
+  // grid is built — a fact is only useful for a word that was actually placed.
+  let rawLesson: unknown = null;
+
   try {
     // Attempt standard JSON parsing first, which works 99% of the time with responseSchema
-    parsedArray = JSON.parse(responseText);
-    if (!Array.isArray(parsedArray)) {
-      parsedArray = [];
+    const parsed = JSON.parse(responseText);
+
+    if (Array.isArray(parsed)) {
+      // A model that ignored the object schema and returned the old shape.
+      // The words are still usable; there is simply no lesson.
+      parsedArray = parsed;
+    } else if (parsed && typeof parsed === "object") {
+      parsedArray = Array.isArray(parsed.words) ? parsed.words : [];
+      rawLesson = parsed;
     }
   } catch (err) {
     // Fallback: Robustly extract JSON objects from raw response using regex if JSON is malformed
@@ -333,7 +411,7 @@ Return a JSON array of exactly ${wordCount} objects. No markdown, no extra text.
     );
   }
 
-  return extractedWords.slice(0, wordCount);
+  return { words: extractedWords.slice(0, wordCount), rawLesson };
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -490,6 +568,29 @@ async function main() {
     process.exit(0);
   }
 
+  // ── Assign a subject to each puzzle before generating any of them ──────
+  // Done up front so "no topic twice today" holds across the whole run, and
+  // so a failure partway through does not leave the rotation half-advanced.
+  const { data: usageRows } = await supabase
+    .from("topic_usage")
+    .select("topic_id, last_used_on");
+
+  const usage: TopicUsage[] = (usageRows ?? []).map((row: any) => ({
+    topicId: row.topic_id,
+    lastUsedOn: row.last_used_on,
+  }));
+
+  const assignments = assignTopics(missing, SYLLABUS, usage, targetDate);
+  const assignmentBySpec = new Map(assignments.map((a) => [a.spec, a]));
+
+  const untitled = assignments.filter((a) => !a.topic).length;
+  if (untitled > 0) {
+    console.warn(
+      `⚠️  ${untitled} puzzle(s) have no syllabus topic for their category. ` +
+        "They will generate untitled — add topics to constants/syllabus.ts.",
+    );
+  }
+
   // Generate missing puzzles
   let generated = 0,
     errors = 0;
@@ -509,13 +610,19 @@ async function main() {
         : spec.category;
 
       // Generate words via Gemini (targetDate injected for freshness context)
-      const words = await withRetry(label, () =>
+      const assignment = assignmentBySpec.get(spec);
+      const topic = assignment?.topic ?? null;
+      const angle = assignment?.angle ?? "";
+
+      const { words, rawLesson } = await withRetry(label, () =>
         generatePuzzleWords(
           geminiCategory,
           spec.difficulty,
           spec.gridSize,
           geminiKey,
           targetDate,
+          topic,
+          angle,
         ),
       );
       if (words.length < 3)
@@ -559,6 +666,18 @@ async function main() {
         },
       };
 
+      // Validated against the finished grid, not the requested words: the
+      // builder drops any word it cannot place, and a fact shown against a
+      // word the player never saw would be baffling. Never throws — losing
+      // the extras is acceptable, losing the puzzle is not.
+      const lesson: Lesson = validateLesson(
+        rawLesson,
+        built.clues.map((c) => c.answer),
+      );
+      if (topic) {
+        puzzleData.lesson = lesson;
+      }
+
       // Store the built grid alongside the words
       const { error: insertError } = await supabase
         .from("daily_puzzles")
@@ -573,16 +692,42 @@ async function main() {
             puzzle_data: puzzleData,
             total_words: built.totalWords,
             estimated_time: built.estimatedTime,
+            // Straight from the syllabus, never from the model. A malformed
+            // response costs the puzzle its facts, never its title.
+            topic_id: topic?.id ?? null,
+            title: topic?.title ?? null,
+            standfirst: topic?.standfirst ?? null,
           },
           { onConflict: "puzzle_date,category,difficulty,grid_size,variant" },
         );
 
       if (insertError) throw new Error(`Insert failed: ${insertError.message}`);
 
+      // Only after the puzzle is stored. Marking a topic used for a puzzle
+      // that failed to insert would silently skip that subject's turn.
+      if (topic) {
+        const { error: usageError } = await supabase
+          .from("topic_usage")
+          .upsert(
+            {
+              topic_id: topic.id,
+              category: topic.category,
+              last_used_on: targetDate,
+            },
+            { onConflict: "topic_id" },
+          );
+        if (usageError) {
+          // Not fatal: the puzzle exists and is titled. The cost is that this
+          // topic may come round sooner than it should.
+          console.warn(`   ⚠ Could not record topic usage: ${usageError.message}`);
+        }
+      }
+
       generated++;
       console.log(
         ` ✅ Success: ${built.totalWords}/${words.length} words placed on a ` +
-          `${spec.gridSize}×${spec.gridSize} grid`,
+          `${spec.gridSize}×${spec.gridSize} grid` +
+          (topic ? ` — ${topic.title} (${angle})` : " — untitled"),
       );
     } catch (err) {
       errors++;

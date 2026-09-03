@@ -126,6 +126,28 @@ describeIntegration("player economy RPCs", () => {
     expect(ok.data.display_name).toBe("Sam C");
   });
 
+  it("starts every account at the 'Player' default and persists a rename", async () => {
+    // The signup trigger has no name to use, so it writes 'Player'. Social
+    // sign-in adopts the provider's name through this RPC — the one write
+    // path a client has, since migration 008 revoked UPDATE on users. If
+    // this stops persisting, every signed-in player is called "Player".
+    const before = await admin
+      .from("users")
+      .select("display_name")
+      .eq("id", userId)
+      .single();
+    expect(before.data!.display_name).toBe("Player");
+
+    await user.rpc("set_display_name", { p_name: "Ada Lovelace" });
+
+    const after = await admin
+      .from("users")
+      .select("display_name")
+      .eq("id", userId)
+      .single();
+    expect(after.data!.display_name).toBe("Ada Lovelace");
+  });
+
   it("cannot write users.coins directly", async () => {
     await user.from("users").update({ coins: 999999 }).eq("id", userId);
     // Whether the driver surfaces an error or RLS silently matches zero rows,

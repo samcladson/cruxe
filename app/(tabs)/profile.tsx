@@ -13,16 +13,16 @@ import {
   ActivityIndicator
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { router } from "expo-router";
 import { CATEGORIES } from "../../constants/categories";
 import { theme } from "../../constants/theme"; // Keep theme imported as it's used elsewhere
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useUserStore } from "../../stores/userStore";
-import { usePuzzleStore } from "../../stores/puzzleStore";
-import { deleteAccount } from "../../services/economyService";
-import { supabase } from "../../services/supabaseClient";
+
 import { formatCompactNumber } from "../../utils/formatNumber";
 import {
+  deleteAccountAndReset,
   getLinkedProviders,
   linkAppleAccount,
   linkGoogleAccount,
@@ -40,7 +40,18 @@ import {
 export default function ProfileScreen() {
   const profile = useUserStore((state) => state.profile);
   const settings = useSettingsStore();
-  const [isLinking, setIsLinking] = useState(false);
+  /**
+   * Which account action is currently running, or null.
+   *
+   * This used to be one shared `isLinking` boolean, which meant every row
+   * that showed a spinner showed it at once: deleting an account lit up the
+   * Google sign-in and Sign out rows too. A row should only spin for its own
+   * work, while still being disabled by anyone else's.
+   */
+  const [busyAction, setBusyAction] = useState<
+    "apple" | "google" | "signOut" | "delete" | null
+  >(null);
+  const isBusy = busyAction !== null;
   const [linked, setLinked] = useState({
     hasGoogle: false,
     hasApple: false,
@@ -65,27 +76,54 @@ export default function ProfileScreen() {
 
   const handleAppleLink = async () => {
     triggerHaptic();
-    setIsLinking(true);
-    const { error, user } = await linkAppleAccount();
-    setIsLinking(false);
+    setBusyAction("apple");
+    let error: Error | null = null;
+    let user: Awaited<ReturnType<typeof linkAppleAccount>>["user"];
+    let signedIntoExisting = false;
+    try {
+      ({ error, user, signedIntoExisting = false } = await linkAppleAccount());
+    } catch (e: any) {
+      error = e instanceof Error ? e : new Error(String(e));
+    } finally {
+      // In a finally so a throw cannot leave the row spinning forever.
+      setBusyAction(null);
+    }
     if (error) {
       Alert.alert("Link Failed", error.message);
     } else if (user) {
       void refreshLinked();
-      Alert.alert("Success", "Your account is now securely linked to Apple!");
+      Alert.alert(
+        signedIntoExisting ? "Welcome back" : "Success",
+        signedIntoExisting
+          ? "Signed into your existing Apple account. Your progress has been restored."
+          : "Your account is now securely linked to Apple!",
+      );
     }
   };
 
   const handleGoogleLink = async () => {
     triggerHaptic();
-    setIsLinking(true);
-    const { error, user } = await linkGoogleAccount();
-    setIsLinking(false);
+    setBusyAction("google");
+    let error: Error | null = null;
+    let user: Awaited<ReturnType<typeof linkGoogleAccount>>["user"];
+    let signedIntoExisting = false;
+    try {
+      ({ error, user, signedIntoExisting = false } = await linkGoogleAccount());
+    } catch (e: any) {
+      error = e instanceof Error ? e : new Error(String(e));
+    } finally {
+      setBusyAction(null);
+    }
     if (error) {
       Alert.alert("Link Failed", error.message);
     } else if (user) {
       void refreshLinked();
-      Alert.alert("Success", "Your account is now securely linked to Google!");
+      Alert.alert(
+        signedIntoExisting ? "Welcome back" : "Success",
+        signedIntoExisting
+          ? "Signed into your existing Google account. Your progress has been restored."
+          : "Your account is now securely linked to Google!",
+      );
     }
   };
 
@@ -93,7 +131,7 @@ export default function ProfileScreen() {
     triggerHaptic();
     Alert.alert(
       "Sign out",
-      "Your local progress on this device will reset and you’ll go to the sign-in screen. You can link Google/Apple again or continue as guest.",
+      "Your local progress on this device will reset and you’ll go back to the start screen. You can sign in again there, or carry on as a guest.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -101,18 +139,31 @@ export default function ProfileScreen() {
           style: "destructive",
           onPress: () => {
             void (async () => {
-              setIsLinking(true);
-              const { error } = await signOutAndStartNewAnonSession();
-              // The streak that warning referred to is no longer this
-              // session's. Onboarding flags stay - signing out is not the
-              // same as starting over.
-              await cancelStreakWarning();
-              setIsLinking(false);
+              setBusyAction("signOut");
+              let error: string | null = "Sign out failed";
+              try {
+                ({ error } = await signOutAndStartNewAnonSession());
+                // The streak that warning referred to is no longer this
+                // session's. Onboarding flags stay - signing out is not the
+                // same as starting over.
+                await cancelStreakWarning();
+              } catch (e: any) {
+                error = e?.message ?? "Sign out failed";
+              } finally {
+                // In a finally so no failure above can strand the screen on
+                // a spinner the user cannot dismiss.
+                setBusyAction(null);
+              }
+
               if (error) {
                 Alert.alert("Sign out failed", error);
               } else {
                 void refreshLinked();
-                router.replace("/(auth)/sign-in");
+                // The start screen is the sign-in screen now. It reads
+                // hasCompletedOnboarding, which signing out deliberately
+                // leaves set, so this returns to the tabs rather than
+                // replaying the warm-up.
+                router.replace("/(auth)/welcome");
               }
             })();
           },
@@ -190,26 +241,57 @@ export default function ProfileScreen() {
           style: "destructive",
           onPress: () => {
             void (async () => {
-              setIsLinking(true);
+              setBusyAction("delete");
+
+              // Server delete, local teardown and a fresh guest session, in
+              // that order and all-or-nothing about the parts that matter.
+              // Defaults chosen so an unexpected throw below leaves the
+              // account presumed intact — the safe assumption, since it
+              // keeps the user on a screen where they can try again.
+              let accountDeleted = false;
+              let error: string | null = "Could not delete account";
               try {
-                await deleteAccount();
-                await supabase.auth.signOut();
-
-                // Everything tied to the account goes, not just the server
-                // row. Without this the next launch skips onboarding and
-                // scheduled reminders keep firing about a streak that no
-                // longer exists.
-                await cancelAll();
-                useUserStore.getState().resetLocalProfile();
-                usePuzzleStore.getState().clearActivePuzzle();
-                useSettingsStore.getState().resetFirstRun();
-
-                // Genuinely fresh: welcome and tutorial, as a new install.
-                router.replace("/(auth)/welcome");
+                ({ accountDeleted, error } = await deleteAccountAndReset());
               } catch (e: any) {
-                Alert.alert("Could not delete account", e.message);
-              } finally {
-                setIsLinking(false);
+                error = e?.message ?? "Could not delete account";
+              }
+
+              // Device-level state the auth layer has no business knowing
+              // about. Tied to `accountDeleted`, not to the absence of an
+              // error: a deletion that succeeded but could not open a new
+              // session still has to leave the device clean, or the next
+              // launch skips onboarding and reminders keep firing about a
+              // streak that no longer exists.
+              //
+              // Each step is guarded separately. A throw from the
+              // notifications API must not skip the onboarding reset, and
+              // neither may skip the navigation away from this screen.
+              if (accountDeleted) {
+                try {
+                  await cancelAll();
+                } catch (e) {
+                  console.warn("[Profile] Could not cancel notifications:", e);
+                }
+                try {
+                  useSettingsStore.getState().resetFirstRun();
+                } catch (e) {
+                  console.warn("[Profile] Could not reset first-run flags:", e);
+                }
+              }
+
+              setBusyAction(null);
+
+              if (error) {
+                Alert.alert(
+                  accountDeleted ? "Account deleted" : "Could not delete account",
+                  error,
+                );
+              }
+
+              // Genuinely fresh: welcome and tutorial, as a new install.
+              // Only the account surviving keeps the user on this screen.
+              if (accountDeleted) {
+                router.replace("/(auth)/welcome");
               }
             })();
           },
@@ -228,11 +310,13 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
+      <ScreenHeader title="Profile" subtitle="Your stats, account and settings" />
+
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
+        <View style={styles.identityCard}>
           <View style={styles.avatarGlow}>
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>
@@ -297,7 +381,7 @@ export default function ProfileScreen() {
         <Text
           style={[
             styles.sectionTitle,
-            { marginTop: 32, marginBottom: 16, paddingHorizontal: 4 },
+            { marginTop: 32, marginBottom: 16 },
           ]}
         >
           Category Mastery
@@ -334,7 +418,7 @@ export default function ProfileScreen() {
         <Text
           style={[
             styles.sectionTitle,
-            { marginTop: 32, marginBottom: 16, paddingHorizontal: 4 },
+            { marginTop: 32, marginBottom: 16 },
           ]}
         >
           Account & Sync
@@ -345,7 +429,7 @@ export default function ProfileScreen() {
               <TouchableOpacity
                 style={styles.settingRow}
                 onPress={handleAppleLink}
-                disabled={isLinking || linked.hasApple}
+                disabled={isBusy || linked.hasApple}
               >
                 <View style={styles.settingInfo}>
                   <View style={styles.settingIconWrap}>
@@ -362,7 +446,7 @@ export default function ProfileScreen() {
                     )}
                   </View>
                 </View>
-                {isLinking ? (
+                {busyAction === "apple" ? (
                   <ActivityIndicator
                     size="small"
                     color={theme.colors.accentGold}
@@ -388,7 +472,7 @@ export default function ProfileScreen() {
           <TouchableOpacity
             style={styles.settingRow}
             onPress={handleGoogleLink}
-            disabled={isLinking || linked.hasGoogle}
+            disabled={isBusy || linked.hasGoogle}
           >
             <View style={styles.settingInfo}>
               <View style={styles.settingIconWrap}>
@@ -405,7 +489,7 @@ export default function ProfileScreen() {
                 )}
               </View>
             </View>
-            {isLinking && Platform.OS !== "ios" ? (
+            {busyAction === "google" ? (
               <ActivityIndicator size="small" color={theme.colors.accentGold} />
             ) : linked.hasGoogle ? (
               <Ionicons
@@ -427,7 +511,7 @@ export default function ProfileScreen() {
           <TouchableOpacity
             style={styles.settingRow}
             onPress={handleSignOut}
-            disabled={isLinking}
+            disabled={isBusy}
           >
             <View style={styles.settingInfo}>
               <View style={styles.settingIconWrap}>
@@ -441,7 +525,7 @@ export default function ProfileScreen() {
                 Sign out
               </Text>
             </View>
-            {isLinking ? (
+            {busyAction === "signOut" ? (
               <ActivityIndicator
                 size="small"
                 color={theme.colors.accentGold}
@@ -486,7 +570,7 @@ export default function ProfileScreen() {
           <TouchableOpacity
             style={styles.settingRow}
             onPress={handleDeleteAccount}
-            disabled={isLinking}
+            disabled={isBusy}
           >
             <View style={styles.settingInfo}>
               <View style={styles.settingIconWrap}>
@@ -500,11 +584,18 @@ export default function ProfileScreen() {
                 Delete account
               </Text>
             </View>
-            <MaterialIcons
-              name="chevron-right"
-              size={24}
-              color={theme.colors.textMuted}
-            />
+            {busyAction === "delete" ? (
+              // This row never had a spinner of its own: the old shared flag
+              // lit up the Google and Sign out rows instead, which is what
+              // made deleting look like it was signing in.
+              <ActivityIndicator size="small" color="#ef4444" />
+            ) : (
+              <MaterialIcons
+                name="chevron-right"
+                size={24}
+                color={theme.colors.textMuted}
+              />
+            )}
           </TouchableOpacity>
         </View>
 
@@ -512,7 +603,7 @@ export default function ProfileScreen() {
         <Text
           style={[
             styles.sectionTitle,
-            { marginTop: 32, marginBottom: 16, paddingHorizontal: 4 },
+            { marginTop: 32, marginBottom: 16 },
           ]}
         >
           App Settings
@@ -629,7 +720,7 @@ export default function ProfileScreen() {
         <Text
           style={[
             styles.sectionTitle,
-            { marginTop: 32, marginBottom: 16, paddingHorizontal: 4 },
+            { marginTop: 32, marginBottom: 16 },
           ]}
         >
           About & Legal
@@ -677,13 +768,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.bgPrimary,
   },
-  header: {
+  identityCard: {
     alignItems: "center",
-    paddingTop: 32,
-    paddingBottom: 24,
+    paddingVertical: 24,
+    marginTop: 4,
+    marginBottom: 32,
     backgroundColor: theme.colors.bgSecondary,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.05)",
+    borderRadius: theme.borderRadius.card,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.05)",
   },
   avatarGlow: {
     width: 80,
@@ -738,11 +831,11 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   content: {
-    padding: 20,
+    padding: 24,
+    paddingTop: 0,
     paddingBottom: 40,
   },
   sectionHeader: {
-    paddingHorizontal: 4,
     marginBottom: 16,
   },
   sectionTitle: {
@@ -789,7 +882,11 @@ const styles = StyleSheet.create({
   categoryGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 12,
+    // space-between supplies the column gutter out of the leftover 4%, so
+    // the pair always fits. A fixed `gap` on top of 2x48% is a rounding
+    // error away from overflowing and collapsing to one card per row.
+    justifyContent: "space-between",
+    rowGap: 12,
   },
   categoryBox: {
     width: "48%",
@@ -812,6 +909,7 @@ const styles = StyleSheet.create({
   },
   catMeta: {
     flex: 1,
+    minWidth: 0,
   },
   catTitle: {
     fontFamily: theme.typography.body.fontFamily,

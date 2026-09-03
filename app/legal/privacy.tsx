@@ -1,8 +1,8 @@
-import { MaterialIcons } from "@expo/vector-icons";
-import { router, Stack } from "expo-router";
+import { Stack } from "expo-router";
 import React from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { theme } from "../../constants/theme";
 
 export default function PrivacyPolicyScreen() {
@@ -10,21 +10,9 @@ export default function PrivacyPolicyScreen() {
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
       <Stack.Screen options={{ headerShown: false }} />
       
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <MaterialIcons name="arrow-back" size={24} color={theme.colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Privacy Policy</Text>
-        <View style={{ width: 40 }} /> {/* Spacer */}
-      </View>
+      <ScreenHeader title="Privacy Policy" subtitle="Last updated September 2026" showBack />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={styles.lastUpdated}>Last Updated: September 2026</Text>
         
         <Text style={styles.paragraph}>
           Welcome to Cruxe. Your privacy is important to us. This Privacy Policy explains how we collect, use, and protect your information when you use our mobile application.
@@ -83,34 +71,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.bgPrimary,
   },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.05)",
-  },
-  backBtn: {
-    padding: 8,
-    marginLeft: -8,
-  },
-  headerTitle: {
-    fontFamily: theme.typography.heading.fontFamily,
-    fontSize: 18,
-    color: theme.colors.textPrimary,
-    fontWeight: "bold",
-  },
   content: {
     padding: 24,
-  },
-  lastUpdated: {
-    fontFamily: theme.typography.cellLetter.fontFamily,
-    fontSize: 12,
-    color: theme.colors.textMuted,
-    marginBottom: 24,
-    letterSpacing: 1,
   },
   sectionTitle: {
     fontFamily: theme.typography.heading.fontFamily,

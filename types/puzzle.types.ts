@@ -61,5 +61,17 @@ export interface Puzzle {
   startedAt: number | null;
   completedAt: number | null;
   score: number;
+  /**
+   * The subject the puzzle is about. Null on puzzles generated before the
+   * syllabus existed — read it through `puzzleTitle()` so those fall back.
+   */
+  title?: string | null;
+  standfirst?: string | null;
+  /** Teaching content, shown only after solving. Absent on older puzzles. */
+  lesson?: {
+    takeaway?: string;
+    /** Answer word (uppercase) to its one-sentence fact. */
+    facts: Record<string, string>;
+  } | null;
   hintsUsed: number;
 }
