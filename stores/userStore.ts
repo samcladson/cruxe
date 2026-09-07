@@ -198,7 +198,7 @@ export const useUserStore = create<UserState>()(
         const { data, error } = await supabase
           .from("users")
           .select(
-            "coins, total_score, puzzles_solved, current_streak, longest_streak",
+            "coins, total_score, puzzles_solved, current_streak, longest_streak, last_played_date",
           )
           .eq("id", profile.id)
           .maybeSingle();
@@ -212,6 +212,13 @@ export const useUserStore = create<UserState>()(
             totalPuzzlesSolved: data.puzzles_solved,
             currentStreak: data.current_streak,
             longestStreak: data.longest_streak,
+            // Carried through because "have I already played today?" is
+            // decided by comparing this to today's date. Without it the
+            // value stayed at whatever the last full sync loaded, so every
+            // solve in a session looked like the first one of the day.
+            lastPlayedDate: data.last_played_date
+              ? new Date(data.last_played_date).toISOString()
+              : state.profile.lastPlayedDate,
           },
         }));
       },

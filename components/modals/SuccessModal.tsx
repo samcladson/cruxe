@@ -5,6 +5,7 @@ import {
   Modal,
   Platform,
   StatusBar,
+  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
@@ -43,10 +44,14 @@ interface SuccessModalProps {
   /** ID of the next unsolved puzzle in the same category/difficulty */
   nextPuzzleId?: string | null;
   /**
-   * True when the solve has not reached the server yet, so no reward has
-   * been granted. Shows an honest "pending" line instead of a coin figure.
+   * Where the reward has got to.
+   *
+   * "syncing" is work in progress and says so; "queued" is a solve that
+   * could not reach the server and will be retried. Collapsing the two into
+   * one flag meant a request that was merely in flight displayed
+   * "Pending — syncs later", which reads as a failure.
    */
-  rewardPending?: boolean;
+  rewardState?: "syncing" | "granted" | "queued";
 }
 
 export function SuccessModal({
@@ -56,7 +61,7 @@ export function SuccessModal({
   scoreEarned = 0,
   isNewStreak = false,
   nextPuzzleId,
-  rewardPending = false,
+  rewardState = "granted",
 }: SuccessModalProps) {
   const { activePuzzle, timer, getAccuracy } = usePuzzleStore();
   const { profile } = useUserStore();
@@ -99,7 +104,10 @@ export function SuccessModal({
   }, [visible, activePuzzle, finalCoins, showStreakScreen]);
 
   const handleFirstContinue = () => {
-    if (profile.currentStreak > 0) {
+    // Only on the day's first solve. This used to fire whenever the streak
+    // was above zero, which is after very nearly every puzzle — a
+    // celebration shown that often stops being a celebration.
+    if (isNewStreak && profile.currentStreak > 0) {
       // Move to Phase 2 (Streak Screen)
       setShowStreakScreen(true);
       flameScale.value = withDelay(
@@ -116,14 +124,25 @@ export function SuccessModal({
     router.replace("/(tabs)");
   };
 
-  const handleNextPuzzle = () => {
-    if (!nextPuzzleId) return;
+  /**
+   * Takes the player to where they can choose, rather than into a puzzle
+   * chosen for them.
+   *
+   * This used to jump straight into the next unsolved puzzle in the same
+   * category. Being handed a puzzle immediately after finishing one gives
+   * the player no say in what they play next, and no moment to stop.
+   */
+  const handleBrowseMore = () => {
+    const category = activePuzzle?.category;
     SFX.coinEarned();
     onClose();
-    router.replace({
-      pathname: "/game/generate",
-      params: { id: nextPuzzleId },
-    } as any);
+    // Falls back to the full collection if the puzzle has somehow gone from
+    // the store — either way the player lands somewhere they can choose.
+    router.replace(
+      category
+        ? ({ pathname: "/category/[id]", params: { id: category } } as any)
+        : ("/collection" as any),
+    );
   };
 
   const formatTime = (seconds: number) => {
@@ -298,16 +317,37 @@ export function SuccessModal({
                 entering={FadeInUp.delay(600).duration(400)}
                 style={styles.statBoxGrid}
               >
-                <MaterialIcons
-                  name={rewardPending ? "cloud-off" : "monetization-on"}
-                  size={20}
-                  color={
-                    rewardPending
-                      ? theme.colors.textMuted
-                      : theme.colors.accentGold
-                  }
-                />
-                {rewardPending ? (
+                {rewardState === "syncing" ? (
+                  <ActivityIndicator
+                    size="small"
+                    color={theme.colors.accentGold}
+                  />
+                ) : (
+                  <MaterialIcons
+                    name={
+                      rewardState === "queued" ? "cloud-off" : "monetization-on"
+                    }
+                    size={20}
+                    color={
+                      rewardState === "queued"
+                        ? theme.colors.textMuted
+                        : theme.colors.accentGold
+                    }
+                  />
+                )}
+                {rewardState === "syncing" ? (
+                  <>
+                    <Text
+                      style={[
+                        styles.statValue,
+                        { color: theme.colors.textSecondary, fontSize: 14 },
+                      ]}
+                    >
+                      Syncing
+                    </Text>
+                    <Text style={styles.statLabel}>AWARDING COINS</Text>
+                  </>
+                ) : rewardState === "queued" ? (
                   <>
                     <Text
                       style={[
@@ -396,9 +436,9 @@ export function SuccessModal({
             <>
               <TouchableOpacity
                 style={styles.continueBtn}
-                onPress={handleNextPuzzle}
+                onPress={handleBrowseMore}
               >
-                <Text style={styles.continueBtnText}>NEXT PUZZLE</Text>
+                <Text style={styles.continueBtnText}>PICK ANOTHER</Text>
                 <MaterialIcons name="arrow-forward" size={20} color="#000" />
               </TouchableOpacity>
               <TouchableOpacity

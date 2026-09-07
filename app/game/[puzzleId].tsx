@@ -22,6 +22,7 @@ import { submitSolve } from "../../services/economyService";
 import { invalidatePuzzleCache } from "../../services/puzzleService";
 import { reportError } from "../../services/errorReporting";
 import { isPermanentRejection } from "../../utils/functionErrors";
+import { isFirstSolveOfDay } from "../../utils/streakDay";
 import { track } from "../../services/analyticsService";
 import {
   calculateScore,
@@ -60,7 +61,17 @@ export default function GameScreen() {
   const [isNewStreak, setIsNewStreak] = useState(false);
   const [nextPuzzleId, setNextPuzzleId] = useState<string | null>(null);
   /** True while the solve is real but the reward has not been granted yet. */
-  const [rewardPending, setRewardPending] = useState(false);
+  /**
+   * Where the reward has got to.
+   *
+   * "syncing" and "queued" used to be the same boolean, so a submission in
+   * flight looked identical to one that had failed — the player saw
+   * "Pending, syncs later" during the second or two the request was simply
+   * in progress, which reads as a failure rather than as work happening.
+   */
+  const [rewardState, setRewardState] = useState<
+    "syncing" | "granted" | "queued"
+  >("syncing");
 
   // Prevent duplicate completion recording on re-renders
   const hasRecorded = useRef(false);
@@ -96,13 +107,11 @@ export default function GameScreen() {
     );
     setScoreEarned(predicted.finalScore);
     setScoreBreakdown(predicted);
-    setRewardPending(true);
+    setRewardState("syncing");
 
-    const todayStr = new Date().toISOString().split("T")[0];
-    const lastPlayedStr = new Date(profile.lastPlayedDate)
-      .toISOString()
-      .split("T")[0];
-    setIsNewStreak(todayStr !== lastPlayedStr);
+    // Read before the solve is submitted, so it reflects the day's history
+    // up to this puzzle rather than including it.
+    setIsNewStreak(isFirstSolveOfDay(profile.lastPlayedDate));
 
     setShowSuccessModal(true);
 
@@ -117,7 +126,7 @@ export default function GameScreen() {
       setScoreEarned(result.score);
       setScoreBreakdown(result.breakdown);
       setCoinsEarned(result.coinsEarned);
-      setRewardPending(false);
+      setRewardState("granted");
 
       track("puzzle_completed", {
         difficulty: activePuzzle.difficulty,
@@ -175,7 +184,7 @@ export default function GameScreen() {
           queuedAt: new Date().toISOString(),
         });
       }
-      setRewardPending(true);
+      setRewardState("queued");
     }
 
     // Find next unsolved puzzle in the same category
@@ -311,7 +320,7 @@ export default function GameScreen() {
           scoreEarned={scoreEarned}
           isNewStreak={isNewStreak}
           nextPuzzleId={nextPuzzleId}
-          rewardPending={rewardPending}
+          rewardState={rewardState}
         />
         <HintOptionsModal
           visible={showHintModal}
