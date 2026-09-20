@@ -23,9 +23,10 @@ export default function PrivacyPolicyScreen() {
           We collect minimal information necessary to provide you with the Cruxe crossword experience. This includes:
         </Text>
         <View style={styles.bulletList}>
-          <Text style={styles.bullet}>• <Text style={styles.bold}>Account Data:</Text> If you choose to link a Google or Apple account, we securely store your provided name and an authentication token via Supabase to sync your progress.</Text>
+          <Text style={styles.bullet}>• <Text style={styles.bold}>Account Data:</Text> An account is required to play. You create one with Google, Apple, or a one-time code sent to your email address. We store your email address, the name your provider supplies (if any), and an authentication token via Supabase, so your progress follows you to any device you sign in on.</Text>
           <Text style={styles.bullet}>• <Text style={styles.bold}>Gameplay Data:</Text> We store your puzzle completion times, scores, current streak, and coin balance to maintain the integrity of the leaderboard and your personal statistics.</Text>
           <Text style={styles.bullet}>• <Text style={styles.bold}>Device & Usage Data:</Text> We may collect anonymous diagnostic data to help us identify bugs and improve the app&apos;s performance.</Text>
+          <Text style={styles.bullet}>• <Text style={styles.bold}>Feedback You Send:</Text> If you use Send feedback, we store what you write along with your account identifier, app version and device platform, so we can reproduce the problem and reply. It is never shown to other players.</Text>
         </View>
 
         <Text style={styles.sectionTitle}>2. How We Use Your Information</Text>
@@ -45,9 +46,9 @@ export default function PrivacyPolicyScreen() {
         </Text>
         <View style={styles.bulletList}>
           <Text style={styles.bullet}>• <Text style={styles.bold}>Supabase:</Text> For secure authentication and database hosting.</Text>
-          <Text style={styles.bullet}>• <Text style={styles.bold}>RevenueCat:</Text> To securely process and validate your in-app coin purchases. RevenueCat retains purchase history associated with your anonymous or linked account identifier.</Text>
+          <Text style={styles.bullet}>• <Text style={styles.bold}>RevenueCat:</Text> To securely process and validate your in-app coin purchases. RevenueCat retains purchase history associated with your account identifier.</Text>
           <Text style={styles.bullet}>• <Text style={styles.bold}>Google/Apple Sign-In:</Text> For authenticating your identity if you choose to link an account.</Text>
-          <Text style={styles.bullet}>• <Text style={styles.bold}>Sentry:</Text> For crash reporting and performance diagnostics. Reports include device model, OS version, and an anonymous account identifier so we can correlate one user&apos;s crashes. We do not send your device name, puzzle answers, or authentication tokens.</Text>
+          <Text style={styles.bullet}>• <Text style={styles.bold}>Sentry:</Text> For crash reporting and performance diagnostics. Reports include device model, OS version, and your account identifier so we can correlate one user&apos;s crashes. We do not send your device name, puzzle answers, or authentication tokens.</Text>
         </View>
 
         <Text style={styles.sectionTitle}>4. Data Security & Deletion</Text>

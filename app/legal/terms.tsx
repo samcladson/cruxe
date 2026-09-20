@@ -35,7 +35,7 @@ export default function TermsOfServiceScreen() {
 
         <Text style={styles.sectionTitle}>3. Account Liability</Text>
         <Text style={styles.paragraph}>
-          We recommend linking your account via Apple or Google. If you choose to remain an "Anonymous" user, modifying your device, reinstalling the app, or clearing app storage may result in an irrecoverable loss of all purchased coins, progression, and streaks. We cannot be held liable for lost virtual currency in anonymous profiles.
+          An account is required to play, created by signing in with Apple, Google, or a code sent to your email address. Your coins, progression, and streaks are held against that account on our servers, so they survive reinstalling the app and follow you to any device you sign in on.
         </Text>
 
         <Text style={styles.sectionTitle}>4. User Conduct</Text>

@@ -51,11 +51,17 @@
       <h2>1. What we collect</h2>
       <ul>
         <li>
-          <strong>Account data.</strong> Every install gets an anonymous
-          identifier so your progress can be saved. If you choose to link a
-          Google or Apple account, we also store the name and email that
-          provider gives us. Linking is optional — the game is fully playable
-          without it.
+          <strong>Account data.</strong> An account is required to play. You
+          create one with Google, Apple, or a one-time code sent to your email
+          address. We store your email address, the name your provider gives us
+          (if any), and an account identifier, so your progress follows you to
+          any device you sign in on.
+        </li>
+        <li>
+          <strong>Feedback you send.</strong> If you use Send feedback in the
+          app, we store what you write along with your account identifier, app
+          version and device platform, so we can reproduce the problem and
+          reply. It is never shown to other players.
         </li>
         <li>
           <strong>Gameplay data.</strong> Puzzle completions, scores, solve
@@ -87,11 +93,11 @@
         <li><strong>Supabase</strong> — authentication and database hosting.</li>
         <li>
           <strong>RevenueCat</strong> — validating in-app purchases. Receives
-          your anonymous account identifier and purchase history.
+          your account identifier and purchase history.
         </li>
         <li>
           <strong>Sentry</strong> — crash reporting and diagnostics. Receives
-          device model, OS version and your anonymous identifier.
+          device model, OS version and your account identifier.
         </li>
         <li>
           <strong>Google or Apple Sign-In</strong> — only if you choose to link

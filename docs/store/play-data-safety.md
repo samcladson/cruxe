@@ -7,7 +7,12 @@ violation, and it is checked.
 
 Re-verify this document whenever a third-party SDK is added or removed.
 
-**Last derived:** 2026-09-02, against commit on `master` after sub-project 5.
+**Last derived:** 2026-09-20, after guest-account removal (an account is now
+required to play), the email sign-in fallback, and the feedback form.
+
+> Two answers changed materially since 2026-09-02. **Email address moved from
+> Optional to Required**, and a new free-text field is collected. Submitting
+> the old answers would now be a misdeclaration.
 
 ---
 
@@ -40,11 +45,16 @@ account supplies one.
 | Collected | **Yes** |
 | Shared | No |
 | Processing | Not ephemeral |
-| Required or optional | **Optional** |
+| Required or optional | **Required** |
 | Purpose | Account management |
 
-Why: only if the user chooses to link a Google account. Anonymous play is the
-default and collects no email. Supabase Auth stores it.
+Why: **this changed.** An account is now required to play — anonymous play was
+removed — and all three ways of creating one involve an email address. Google
+and Apple supply it with the identity, and the email one-time-code path takes
+it directly from the user. Supabase Auth stores it.
+
+Apple's "Hide My Email" yields a private relay address; that is still an email
+address for the purposes of this form.
 
 ### Personal info → User IDs
 
@@ -56,9 +66,33 @@ default and collects no email. Supabase Auth stores it.
 | Required or optional | **Required** |
 | Purpose | App functionality; Account management; Crash logs |
 
-Why: every install gets an anonymous Supabase UUID. It is sent to RevenueCat
-(as `app_user_id`, to attribute purchases) and to Sentry (to correlate one
-user's crashes). Both are processors acting on our behalf.
+Why: every account has a Supabase UUID. It is sent to RevenueCat (as
+`app_user_id`, to attribute purchases) and to Sentry (to correlate one user's
+crashes). Both are processors acting on our behalf.
+
+Previously this read "every install gets an anonymous UUID". Installs no
+longer create accounts; signing in does.
+
+### Personal info → Other info
+
+| Question | Answer |
+|---|---|
+| Collected | **Yes** |
+| Shared | No |
+| Processing | Not ephemeral (stored) |
+| Required or optional | **Optional** |
+| Purpose | App functionality; Customer support |
+
+Why: the in-app feedback form (**Profile → Send feedback**) stores free text
+the user writes, in the `feedback` table, with their account id, app version
+and platform. It is free text, so a user may put anything in it, including
+personal information — which is why it is declared rather than treated as
+telemetry.
+
+It is **not** user-generated content in the sense the content-rating
+questionnaire means: feedback is sent only to the developer and is never
+displayed to other users. The table is insert-only from the client and has no
+SELECT policy at all, so not even its author can read it back.
 
 ### Financial info → Purchase history
 
@@ -161,3 +195,7 @@ completions.
 - [ ] Re-read this file if any SDK has changed since the "last derived" date
 - [ ] Confirm the in-app privacy policy (`app/legal/privacy.tsx`) names the
       same processors: Supabase, RevenueCat, Google/Apple Sign-In, Sentry
+- [ ] Confirm the privacy policy mentions the feedback form and that an email
+      address is now required, not optional
+- [ ] Update the hosted `web/privacy.html` and `web/terms.html` to match the
+      in-app copies, which were rewritten when guest play was removed
