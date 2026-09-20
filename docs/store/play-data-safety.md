@@ -1,201 +1,193 @@
-# Google Play Data Safety — answer sheet
+# Google Play Data Safety — fill-in sheet
 
-Fill the Play Console **Data safety** form with these answers. They are derived
-from what the code actually does, not from what would be convenient to declare.
-A mismatch between this form and the app's real behaviour is a policy
-violation, and it is checked.
+Follow this **in the order the Play Console asks**. Every answer is derived
+from what the code does, not from what would be convenient to declare. A
+mismatch between this form and the app's real behaviour is a policy
+violation, and Google does check it.
 
-Re-verify this document whenever a third-party SDK is added or removed.
+**Last derived:** 2026-09-20, verified against `master` at `dd587bf`.
 
-**Last derived:** 2026-09-20, after guest-account removal (an account is now
-required to play), the email sign-in fallback, and the feedback form.
+Re-derive whenever an SDK is added or removed. The SDKs that touch user data
+today are exactly: `@supabase/supabase-js`, `@sentry/react-native`,
+`react-native-purchases`, `@react-native-google-signin/google-signin`,
+`expo-apple-authentication`, `expo-notifications`.
 
-> Two answers changed materially since 2026-09-02. **Email address moved from
-> Optional to Required**, and a new free-text field is collected. Submitting
-> the old answers would now be a misdeclaration.
-
----
-
-## Does your app collect or share any of the required user data types?
-
-**Yes.**
+> **Changed since 2026-09-02** — submitting the old answers would now be a
+> misdeclaration:
+> - **Email address: Optional → Required.** An account is mandatory and all
+>   three ways of creating one involve an address.
+> - **New: Personal info → Other info**, for the feedback form's free text.
 
 ---
 
-## Data types
+## Step 1 — Data collection and security
+
+| Prompt | Answer |
+|---|---|
+| Does your app collect or share any of the required user data types? | **Yes** |
+| Is all of the user data collected by your app encrypted in transit? | **Yes** — every call to Supabase, RevenueCat and Sentry is HTTPS |
+| Do you provide a way for users to request that their data is deleted? | **Yes** |
+| Deletion URL | `https://samcladson.github.io/cruxe/account-deletion.html` |
+
+Deletion is also in-app at **Profile → Account & Sync → Delete account**,
+which calls the `delete-account` Edge Function. That removes the auth user;
+foreign-key cascades clear the profile, ledger, hint events, completions and
+feedback.
+
+---
+
+## Step 2 — Tick exactly these data types
+
+**Personal info:** Name · Email address · User IDs · Other info
+**Financial info:** Purchase history
+**App activity:** Other actions
+**App info and performance:** Crash logs · Diagnostics
+
+Leave **everything else unticked**, including: Address, Phone number, Race
+and ethnicity, Political or religious beliefs, Sexual orientation, Payment
+info, Credit score, Location (any precision), Messages of any kind, Photos,
+Videos, Audio, Music, Voice or sound recordings, Files and docs, Calendar,
+Contacts, App activity → In-app search history / Installed apps / Other
+user-generated content, Web browsing history, Device or other IDs.
+
+Two worth knowing the reason for, because a reviewer may ask:
+
+- **Device or other IDs — not collected.** No advertising ID, no device
+  fingerprint, no push token. There is no ads SDK; the app is IAP-only by
+  decision. `expo-notifications` is used for *local* reminders only and never
+  calls `getExpoPushTokenAsync`.
+- **Audio — not collected.** `expo-av` declares `RECORD_AUDIO` in its own
+  manifest, but `android.blockedPermissions` in `app.json` strips it and the
+  app only plays bundled sound effects.
+
+---
+
+## Step 3 — Answer per data type
+
+Every type below is **not ephemeral** (it is stored), so that column is
+omitted. "Shared" means it leaves our control to a third party.
 
 ### Personal info → Name
 
-| Question | Answer |
+| | |
 |---|---|
-| Collected | **Yes** |
+| Collected | Yes |
 | Shared | No |
-| Processing | Not ephemeral (stored) |
 | Required or optional | **Optional** |
-| Purpose | App functionality; Account management |
+| Purposes | App functionality, Account management |
 
-Why: `users.display_name` is shown on the public leaderboard. It defaults to
-"Player" and is only meaningful if the user sets it, or if a linked Google
-account supplies one.
+`users.display_name` appears on the public leaderboard. It defaults to
+"Player"; it is only meaningful if the user sets it or a provider supplies it.
 
 ### Personal info → Email address
 
-| Question | Answer |
+| | |
 |---|---|
-| Collected | **Yes** |
+| Collected | Yes |
 | Shared | No |
-| Processing | Not ephemeral |
 | Required or optional | **Required** |
-| Purpose | Account management |
+| Purposes | Account management |
 
-Why: **this changed.** An account is now required to play — anonymous play was
-removed — and all three ways of creating one involve an email address. Google
-and Apple supply it with the identity, and the email one-time-code path takes
-it directly from the user. Supabase Auth stores it.
-
-Apple's "Hide My Email" yields a private relay address; that is still an email
-address for the purposes of this form.
+An account is required to play. Google and Apple supply an address with the
+identity; the email one-time-code path takes it directly. Supabase Auth
+stores it. Apple's "Hide My Email" yields a private relay address — still an
+email address for this form.
 
 ### Personal info → User IDs
 
-| Question | Answer |
+| | |
 |---|---|
-| Collected | **Yes** |
-| Shared | **Yes** (RevenueCat, Sentry) |
-| Processing | Not ephemeral |
+| Collected | Yes |
+| Shared | **Yes** — RevenueCat, Sentry |
 | Required or optional | **Required** |
-| Purpose | App functionality; Account management; Crash logs |
+| Purposes | App functionality, Account management, Crash logs |
 
-Why: every account has a Supabase UUID. It is sent to RevenueCat (as
-`app_user_id`, to attribute purchases) and to Sentry (to correlate one user's
-crashes). Both are processors acting on our behalf.
-
-Previously this read "every install gets an anonymous UUID". Installs no
-longer create accounts; signing in does.
+Every account has a Supabase UUID. It goes to RevenueCat as `app_user_id` to
+attribute purchases, and to Sentry to correlate one user's crashes. Both are
+processors acting on our behalf.
 
 ### Personal info → Other info
 
-| Question | Answer |
+| | |
 |---|---|
-| Collected | **Yes** |
+| Collected | Yes |
 | Shared | No |
-| Processing | Not ephemeral (stored) |
 | Required or optional | **Optional** |
-| Purpose | App functionality; Customer support |
+| Purposes | App functionality, Customer support |
 
-Why: the in-app feedback form (**Profile → Send feedback**) stores free text
-the user writes, in the `feedback` table, with their account id, app version
-and platform. It is free text, so a user may put anything in it, including
-personal information — which is why it is declared rather than treated as
-telemetry.
+The feedback form (**Profile → Send feedback**) stores what the user writes,
+with their account id, app version and platform. It is free text, so it may
+contain anything including personal information — which is why it is declared
+rather than treated as telemetry.
 
-It is **not** user-generated content in the sense the content-rating
-questionnaire means: feedback is sent only to the developer and is never
-displayed to other users. The table is insert-only from the client and has no
-SELECT policy at all, so not even its author can read it back.
+It is **not** "Other user-generated content": feedback goes only to the
+developer and is never shown to other users. The table has an INSERT policy
+and no SELECT policy at all, so not even its author can read it back.
 
 ### Financial info → Purchase history
 
-| Question | Answer |
+| | |
 |---|---|
-| Collected | **Yes** |
+| Collected | Yes |
 | Shared | No |
-| Processing | Not ephemeral |
 | Required or optional | **Optional** |
-| Purpose | App functionality |
+| Purposes | App functionality |
 
-Why: `iap_events` and `coin_ledger` record coin-pack purchases so a grant can
-be reconciled and a refund honoured. No payment card data is ever seen by the
-app — Google Play handles the transaction.
-
-### App activity → In-app search history
-
-**Not collected.** There is no search.
+`iap_events` and `coin_ledger` record coin-pack purchases so a grant can be
+reconciled and a refund honoured. **No payment card data ever reaches the
+app** — Google Play handles the transaction.
 
 ### App activity → Other actions
 
-| Question | Answer |
+| | |
 |---|---|
-| Collected | **Yes** |
-| Shared | **Yes** (Sentry) |
-| Processing | Not ephemeral |
+| Collected | Yes |
+| Shared | **Yes** — Sentry |
 | Required or optional | **Required** |
-| Purpose | Analytics; Crash logs |
+| Purposes | Analytics, Crash logs |
 
-Why: the analytics funnel in `services/analyticsService.ts` records 13 events
-(puzzle started/completed/abandoned, hint used, store viewed, purchase
-started/completed/failed, and so on). They are attached to Sentry crash
-reports as breadcrumbs. Gameplay results are also stored in
+`services/analyticsService.ts` emits 13 events: `onboarding_started`,
+`onboarding_completed`, `tutorial_skipped`, `first_solve`, `puzzle_started`,
+`puzzle_completed`, `puzzle_abandoned`, `hint_used`, `store_viewed`,
+`purchase_started`, `purchase_completed`, `purchase_failed`,
+`daily_bonus_claimed`.
+
+They route to **Sentry breadcrumbs only** — there is no product-analytics
+vendor, so no second consent surface. Gameplay results are also stored in
 `puzzle_completions` for the leaderboard.
 
 ### App info and performance → Crash logs
 
-| Question | Answer |
+| | |
 |---|---|
-| Collected | **Yes** |
-| Shared | **Yes** (Sentry) |
-| Processing | Not ephemeral |
+| Collected | Yes |
+| Shared | **Yes** — Sentry |
 | Required or optional | **Required** |
-| Purpose | Crash logs |
+| Purposes | Crash logs |
 
 ### App info and performance → Diagnostics
 
-| Question | Answer |
+| | |
 |---|---|
-| Collected | **Yes** |
-| Shared | **Yes** (Sentry) |
-| Processing | Not ephemeral |
+| Collected | Yes |
+| Shared | **Yes** — Sentry |
 | Required or optional | **Required** |
-| Purpose | Crash logs; Analytics |
+| Purposes | Crash logs, Analytics |
 
-Why: Sentry captures device model, OS version, and performance traces at a 20%
-sample rate. **Device *name* is explicitly scrubbed** in `beforeSend`, because
-users routinely put their real name in it.
-
-### Device or other IDs
-
-**Not collected.** No advertising ID, no device fingerprint. There is no ads
-SDK — the app is IAP-only by deliberate decision.
+Sentry captures device model, OS version and performance traces at a 20%
+sample rate. **Device *name* is explicitly scrubbed** in `beforeSend`
+(`app/_layout.tsx`), because users routinely put their real name in it.
 
 ---
 
-## Everything NOT collected
+## Step 4 — Before you submit
 
-Declare these as not collected: location (any precision), health and fitness,
-messages, photos and videos, audio files, voice or sound recordings, music,
-files and docs, calendar, contacts, web browsing history, installed apps,
-SMS, call logs, advertising ID.
-
-Note on audio: `expo-av` declares `RECORD_AUDIO` in its own manifest, but the
-app blocks it (`android.blockedPermissions` in `app.json`) and only ever plays
-bundled sound effects. Nothing is recorded.
-
----
-
-## Security practices
-
-| Question | Answer |
-|---|---|
-| Is data encrypted in transit? | **Yes** — all traffic to Supabase, RevenueCat and Sentry is HTTPS |
-| Can users request data deletion? | **Yes** |
-| Deletion URL | *(the hosted `web/account-deletion.html`, once published)* |
-| Independent security review | No |
-
-Deletion is available in-app at **Profile → Delete account**, which calls the
-`delete-account` Edge Function. That removes the auth user, and foreign-key
-cascades clear the profile, ledger, hint events, puzzle entries, and
-completions.
-
----
-
-## Before you submit
-
-- [ ] Publish `web/account-deletion.html` and paste its URL into the form
-- [ ] Publish a privacy policy URL and paste it into the store listing
-- [ ] Re-read this file if any SDK has changed since the "last derived" date
-- [ ] Confirm the in-app privacy policy (`app/legal/privacy.tsx`) names the
-      same processors: Supabase, RevenueCat, Google/Apple Sign-In, Sentry
-- [ ] Confirm the privacy policy mentions the feedback form and that an email
-      address is now required, not optional
-- [ ] Update the hosted `web/privacy.html` and `web/terms.html` to match the
-      in-app copies, which were rewritten when guest play was removed
+- [ ] Publish the legal pages and confirm the deletion URL above actually
+      resolves. A 404 there is a rejection.
+- [ ] Paste the privacy policy URL into the **store listing** (a different
+      field from this form)
+- [ ] Confirm `app/legal/privacy.tsx` and the hosted `web/privacy.html` name
+      the same processors: Supabase, RevenueCat, Google/Apple Sign-In, Sentry
+- [ ] Confirm both mention the feedback form and that an email address is
+      required
+- [ ] Ads declaration (also a separate field): **contains no ads**
