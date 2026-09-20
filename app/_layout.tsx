@@ -49,7 +49,6 @@ export function ErrorBoundary(props: ErrorBoundaryProps) {
 }
 
 export const unstable_settings = {
-  // Ensure that reloading on `/modal` keeps a back button present.
   initialRouteName: "(tabs)",
 };
 
@@ -121,8 +120,8 @@ function RootLayoutNav() {
   /**
    * Bootstrap authentication on app mount.
    *
-   * 1. Restore existing session (AsyncStorage) or create new anonymous one.
-   * 2. Write the real UUID into the local userStore (replaces "guest").
+   * 1. Restore an existing session from AsyncStorage, if there is one.
+   * 2. Write the real UUID into the local userStore.
    * 3. Ensure the `users` row exists in the DB (no-op if already present).
    * 4. Hydrate local stats, coins, streak from Supabase (remote wins on conflict).
    *
@@ -140,18 +139,18 @@ function RootLayoutNav() {
 
       if (userId) {
         setUserId(userId);
-        // Anonymous UUID only — enough to correlate a user's crashes,
+        // Opaque UUID only — enough to correlate a user's crashes,
         // nothing that identifies a person.
         Sentry.setUser({ id: userId });
         await loginToRevenueCat(userId);
         await syncFromSupabase(userId);
         // Backfills accounts that linked Google or Apple before the link
         // path started carrying the name across. A no-op for everyone
-        // else, including anonymous players.
+        // else.
         await adoptProviderDisplayName();
         console.log("[Layout] Auth bootstrap complete for user:", userId);
       } else {
-        console.warn("[Layout] Auth unavailable — running in local-only mode");
+        console.log("[Layout] No session — the entry gate routes to sign-in.");
       }
 
       // Stay subscribed to token refreshes and future sign-in upgrades
@@ -161,8 +160,8 @@ function RootLayoutNav() {
         // Crash reports follow the current identity, including when there
         // isn't one. Setting this on every event rather than only on
         // sign-out keeps it correct whatever order the events arrive in —
-        // a sign-out immediately followed by a new anonymous session used
-        // to leave the departed user's id attached to every later report.
+        // a sign-out used to leave the departed user's id attached to
+        // every later report.
         Sentry.setUser(user?.id ? { id: user.id } : null);
 
         if (user?.id && user.id !== useUserStore.getState().profile.id) {
@@ -241,7 +240,6 @@ function RootLayoutNav() {
           {/* Every screen draws its own <ScreenHeader />, so the native
               stack header stays off app-wide — two stacked titles was the
               bug this replaced. */}
-          <Stack.Screen name="category/[id]" options={{ headerShown: false }} />
           <Stack.Screen
             name="legal/privacy"
             options={{

@@ -61,6 +61,12 @@ export interface PuzzleMeta {
   totalWords: number;
   estimatedTime: number;
   isCompleted: boolean;
+  /**
+   * The `puzzle_completions` primary key — NOT this puzzle's id. It is what
+   * `fetchCompletionById` looks up, so it is what the review screen must be
+   * given. Null when the player has not solved this puzzle.
+   */
+  completionId: string | null;
   score: number | null;
   accuracy: number | null;
   timeTaken: number | null;
@@ -147,7 +153,7 @@ function getYesterdayUTC(): string {
  *     daily_challenge row was never generated, e.g. due to API rate limits)
  */
 export async function fetchDailyChallenge(
-  userId: string = "guest",
+  userId: string,
 ): Promise<PuzzleMeta | null> {
   const cacheKey = `daily_challenge_${userId}`;
   const cached = puzzleCache.get<PuzzleMeta>(cacheKey);
@@ -217,7 +223,7 @@ export async function fetchDailyChallenge(
   // Check if this specific user has completed the resolved puzzle
   const { data: completion } = await supabase
     .from("puzzle_completions")
-    .select("score, accuracy, time_taken")
+    .select("id, score, accuracy, time_taken")
     .eq("user_id", userId)
     .eq("puzzle_id", data.id)
     .maybeSingle();
@@ -231,6 +237,7 @@ export async function fetchDailyChallenge(
     totalWords: data.total_words,
     estimatedTime: data.estimated_time,
     isCompleted: !!completion,
+    completionId: completion?.id ?? null,
     score: completion?.score ?? null,
     accuracy: completion?.accuracy ?? null,
     timeTaken: completion?.time_taken ?? null,
@@ -277,7 +284,7 @@ export async function getDailyPlayerCount(puzzleId: string): Promise<number> {
  */
 export async function fetchCategoryPuzzles(
   category: Category,
-  userId: string = "guest",
+  userId: string,
 ): Promise<PuzzleMeta[]> {
   const cacheKey = `category_puzzles_${category}_${userId}`;
   const cached = puzzleCache.get<PuzzleMeta[]>(cacheKey);
@@ -330,7 +337,7 @@ export async function fetchCategoryPuzzles(
   const puzzleIds = puzzles.map((p: any) => p.id);
   const { data: completions } = await supabase
     .from("puzzle_completions")
-    .select("puzzle_id, score, accuracy, time_taken")
+    .select("id, puzzle_id, score, accuracy, time_taken")
     .eq("user_id", userId)
     .in("puzzle_id", puzzleIds);
 
@@ -338,6 +345,7 @@ export async function fetchCategoryPuzzles(
     (completions || []).map((c) => [
       c.puzzle_id,
       {
+        completionId: c.id,
         score: c.score,
         accuracy: c.accuracy,
         timeTaken: c.time_taken,
@@ -354,6 +362,7 @@ export async function fetchCategoryPuzzles(
     totalWords: p.total_words,
     estimatedTime: p.estimated_time,
     isCompleted: completionMap.has(p.id),
+    completionId: completionMap.get(p.id)?.completionId ?? null,
     score: completionMap.get(p.id)?.score ?? null,
     accuracy: completionMap.get(p.id)?.accuracy ?? null,
     timeTaken: completionMap.get(p.id)?.timeTaken ?? null,
@@ -417,7 +426,7 @@ export async function fetchTodayCollectionSummary(): Promise<CollectionSummary |
  * Fetches every puzzle in today's collection for the unified view.
  */
 export async function fetchAllPuzzlesForToday(
-  userId: string = "guest",
+  userId: string,
 ): Promise<PuzzleMeta[]> {
   const cacheKey = `all_puzzles_today_${userId}`;
   const cached = puzzleCache.get<PuzzleMeta[]>(cacheKey);
@@ -455,7 +464,7 @@ export async function fetchAllPuzzlesForToday(
   const ids = rows.map((r) => r.id);
   const { data: completions } = await supabase
     .from("puzzle_completions")
-    .select("puzzle_id, score, accuracy, time_taken")
+    .select("id, puzzle_id, score, accuracy, time_taken")
     .eq("user_id", userId)
     .in("puzzle_id", ids);
 
@@ -472,6 +481,7 @@ export async function fetchAllPuzzlesForToday(
     totalWords: row.total_words,
     estimatedTime: row.estimated_time,
     isCompleted: completionMap.has(row.id),
+    completionId: completionMap.get(row.id)?.id ?? null,
     score: completionMap.get(row.id)?.score ?? null,
     accuracy: completionMap.get(row.id)?.accuracy ?? null,
     timeTaken: completionMap.get(row.id)?.time_taken ?? null,
@@ -538,7 +548,7 @@ export interface ActivityItem {
  * Fetches the user's most recent completed puzzles.
  */
 export async function fetchRecentActivity(
-  userId: string = "guest",
+  userId: string,
   limit: number = 3,
 ): Promise<ActivityItem[]> {
   const cacheKey = `recent_activity_${userId}_${limit}`;
@@ -788,7 +798,7 @@ export function invalidatePuzzleCache(): void {
  * Returns the most recent completions with denormalized puzzle metadata.
  */
 export async function fetchCompletionHistory(
-  userId: string = "guest",
+  userId: string,
   limit: number = 20,
 ): Promise<CompletionData[]> {
   const { data, error } = await supabase
@@ -824,7 +834,7 @@ export async function fetchCompletionHistory(
  */
 export async function fetchCompletionById(
   id: string,
-  userId: string = "guest",
+  userId: string,
 ): Promise<CompletionData | null> {
   const { data, error } = await supabase
     .from("puzzle_completions")

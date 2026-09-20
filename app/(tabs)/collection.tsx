@@ -298,11 +298,24 @@ export default function CollectionScreen() {
                     style={styles.cardActionBtn}
                     onPress={async () => {
                       triggerHaptic();
+                      // A solved puzzle is reviewed, never replayed. This
+                      // used to open /game/generate — the same route as
+                      // PLAY — so "REVIEW" handed the player a fresh,
+                      // empty grid of a puzzle they had already finished.
                       if (puzzle.isCompleted) {
-                        router.push({
-                          pathname: "/game/generate",
-                          params: { id: puzzle.id },
-                        });
+                        if (puzzle.completionId) {
+                          router.push(
+                            `/activity/${puzzle.completionId}` as any,
+                          );
+                        } else {
+                          // Completed, but the completion row did not come
+                          // back. Say so rather than falling through to the
+                          // game, which is the bug this replaced.
+                          Alert.alert(
+                            "Result unavailable",
+                            "We couldn't load your result for this puzzle. Pull to refresh and try again.",
+                          );
+                        }
                         return;
                       }
 
