@@ -3,13 +3,11 @@ import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   Modal,
-  Platform,
   StatusBar,
   ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from "react-native";
 import Animated, {
@@ -23,16 +21,30 @@ import Animated, {
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { theme } from "../../constants/theme";
+import { LessonScreen, LessonFact } from "./LessonScreen";
+import { CompletionActions } from "./CompletionActions";
+import { clueReference } from "../../utils/clueLabel";
 import { SFX } from "../../services/soundService";
 import { usePuzzleStore } from "../../stores/puzzleStore";
 import { useUserStore } from "../../stores/userStore";
 import { formatCompactNumber } from "../../utils/formatNumber";
 
 /**
- * SuccessModal — Full-screen puzzle completion & streak flow.
+ * SuccessModal — Full-screen puzzle completion flow.
  *
- * Phase 1: Puzzle Stats (no scrolling, fits in screen)
- * Phase 2: If streak > 0, shows full-screen Duolingo-style streak flame on "Continue"
+ * 1. Puzzle stats — time, accuracy, points, coins. Always shown.
+ * 2. Streak flame — the day's first solve only.
+ * 3. The takeaway and what you learned — only when the puzzle carries a
+ *    lesson.
+ *
+ * Steps 2 and 3 are each conditional, so any of the three can be the last
+ * screen. Only the last one offers a way out (PICK ANOTHER / BACK TO HOME);
+ * the others offer CONTINUE. See `CompletionActions`.
+ *
+ * The lesson had its own section inside the stats screen until it was given
+ * one of its own: a `flex: 1` stats block and a `maxHeight: 260` lesson block
+ * could not both fit a short screen, and the stats overflowed and drew over
+ * the facts.
  */
 
 interface SuccessModalProps {
@@ -41,8 +53,6 @@ interface SuccessModalProps {
   coinsEarned?: number;
   scoreEarned?: number;
   isNewStreak?: boolean;
-  /** ID of the next unsolved puzzle in the same category/difficulty */
-  nextPuzzleId?: string | null;
   /**
    * Where the reward has got to.
    *
@@ -54,20 +64,44 @@ interface SuccessModalProps {
   rewardState?: "syncing" | "granted" | "queued";
 }
 
+/**
+ * The completion flow, in order.
+ *
+ * "streak" appears only on the day's first solve and "lesson" only when the
+ * puzzle carries one, so the run can be one, two or three screens long — and
+ * which screen ends it changes with them. `CompletionActions` reads that from
+ * the sequence rather than each screen assuming it knows.
+ */
+type Phase = "stats" | "streak" | "lesson";
+
 export function SuccessModal({
   visible,
   onClose,
   coinsEarned: earnedProp,
   scoreEarned = 0,
   isNewStreak = false,
-  nextPuzzleId,
   rewardState = "granted",
 }: SuccessModalProps) {
   const { activePuzzle, timer, getAccuracy } = usePuzzleStore();
   const { profile } = useUserStore();
 
   const [displayCoins, setDisplayCoins] = useState(0);
-  const [showStreakScreen, setShowStreakScreen] = useState(false);
+  const [phaseIndex, setPhaseIndex] = useState(0);
+
+  // Facts are keyed by answer word. Walking the puzzle's own clues rather
+  // than the facts object means they read in the sequence the player solved
+  // them, and carry the clue reference that labels them on screen.
+  const facts = activePuzzle?.lesson?.facts ?? {};
+  const factEntries: LessonFact[] = (activePuzzle?.clues ?? [])
+    .filter((clue) => Boolean(facts[clue.answer]))
+    .map((clue) => ({
+      reference: clueReference(clue.number, clue.direction),
+      word: clue.answer,
+      fact: facts[clue.answer],
+    }));
+
+  const hasLesson =
+    Boolean(activePuzzle?.lesson?.takeaway) || factEntries.length > 0;
 
   const accuracy = Math.round(getAccuracy() * 100);
   // No invented fallback: the reward is whatever the server granted, and
@@ -78,8 +112,39 @@ export function SuccessModal({
   // Flame bounce animation for streak screen
   const flameScale = useSharedValue(0);
 
+  // Only on the day's first solve. This used to fire whenever the streak was
+  // above zero, which is after very nearly every puzzle — a celebration shown
+  // that often stops being a celebration.
+  const showStreak = isNewStreak && profile.currentStreak > 0;
+
+  // The score first, then the streak it extended, then what the puzzle was
+  // about. Built as a list so the last screen — the one that carries the way
+  // out — is whichever one it actually is.
+  const phases: Phase[] = [
+    "stats",
+    ...(showStreak ? (["streak"] as const) : []),
+    ...(hasLesson ? (["lesson"] as const) : []),
+  ];
+  const phase = phases[Math.min(phaseIndex, phases.length - 1)];
+  const isLast = phaseIndex >= phases.length - 1;
+
+  const advance = () => setPhaseIndex((i) => i + 1);
+
   useEffect(() => {
-    if (visible && activePuzzle && !showStreakScreen) {
+    if (visible) setPhaseIndex(0);
+  }, [visible]);
+
+  useEffect(() => {
+    if (phase === "streak") {
+      flameScale.value = withDelay(
+        300,
+        withSpring(1, { damping: 12, stiffness: 100 }),
+      );
+    }
+  }, [phase]);
+
+  useEffect(() => {
+    if (visible && activePuzzle && phase === "stats") {
       // Coin counter animation
       const coinDelay = setTimeout(() => {
         let current = 0;
@@ -98,26 +163,9 @@ export function SuccessModal({
       return () => clearTimeout(coinDelay);
     } else if (!visible) {
       setDisplayCoins(0);
-      setShowStreakScreen(false);
       flameScale.value = 0;
     }
-  }, [visible, activePuzzle, finalCoins, showStreakScreen]);
-
-  const handleFirstContinue = () => {
-    // Only on the day's first solve. This used to fire whenever the streak
-    // was above zero, which is after very nearly every puzzle — a
-    // celebration shown that often stops being a celebration.
-    if (isNewStreak && profile.currentStreak > 0) {
-      // Move to Phase 2 (Streak Screen)
-      setShowStreakScreen(true);
-      flameScale.value = withDelay(
-        300,
-        withSpring(1, { damping: 12, stiffness: 100 }),
-      );
-    } else {
-      handleFinalReturn();
-    }
-  };
+  }, [visible, activePuzzle, finalCoins, phase]);
 
   const handleFinalReturn = () => {
     onClose();
@@ -125,24 +173,18 @@ export function SuccessModal({
   };
 
   /**
-   * Takes the player to where they can choose, rather than into a puzzle
-   * chosen for them.
+   * Takes the player to today's collection, rather than into a puzzle chosen
+   * for them.
    *
    * This used to jump straight into the next unsolved puzzle in the same
-   * category. Being handed a puzzle immediately after finishing one gives
-   * the player no say in what they play next, and no moment to stop.
+   * category, then to that category's own screen. Both narrowed the choice to
+   * the subject they had just finished; the collection is the whole of today's
+   * set, which is what "pick another" means.
    */
   const handleBrowseMore = () => {
-    const category = activePuzzle?.category;
     SFX.coinEarned();
     onClose();
-    // Falls back to the full collection if the puzzle has somehow gone from
-    // the store — either way the player lands somewhere they can choose.
-    router.replace(
-      category
-        ? ({ pathname: "/category/[id]", params: { id: category } } as any)
-        : ("/collection" as any),
-    );
+    router.replace("/collection" as any);
   };
 
   const formatTime = (seconds: number) => {
@@ -157,21 +199,36 @@ export function SuccessModal({
 
   if (!activePuzzle) return null;
 
-  // Facts are keyed by answer word. Ordering them by the puzzle's own clue
-  // order rather than object order means they read in the sequence the
-  // player just solved them.
-  const facts = activePuzzle.lesson?.facts ?? {};
-  const factEntries = activePuzzle.clues
-    .map((clue) => [clue.answer, facts[clue.answer]] as const)
-    .filter((entry): entry is readonly [string, string] => Boolean(entry[1]));
-
-  const hasLesson =
-    Boolean(activePuzzle.lesson?.takeaway) || factEntries.length > 0;
+  // ═══════════════════════════════════════════════════════════════════
+  // LAST PHASE: WHAT YOU LEARNED
+  // Shown after the score, and after the streak when there is one.
+  // ═══════════════════════════════════════════════════════════════════
+  if (phase === "lesson") {
+    return (
+      <Modal
+        visible={visible}
+        animationType="slide"
+        presentationStyle="fullScreen"
+      >
+        <StatusBar barStyle="light-content" />
+        <LessonScreen
+          title={activePuzzle.title ?? "What you learned"}
+          takeaway={activePuzzle.lesson?.takeaway}
+          facts={factEntries}
+          isLast={isLast}
+          onContinue={advance}
+          onPickAnother={handleBrowseMore}
+          onHome={handleFinalReturn}
+        />
+      </Modal>
+    );
+  }
 
   // ═══════════════════════════════════════════════════════════════════
-  // PHASE 2: STREAK SCREEN
+  // MIDDLE PHASE: STREAK SCREEN
+  // The day's first solve only. Last screen when the puzzle has no lesson.
   // ═══════════════════════════════════════════════════════════════════
-  if (showStreakScreen) {
+  if (phase === "streak") {
     return (
       <Modal
         visible={visible}
@@ -213,16 +270,13 @@ export function SuccessModal({
             )}
           </View>
 
-          <Animated.View
-            entering={FadeInUp.delay(1200)}
-            style={styles.bottomActions}
-          >
-            <TouchableOpacity
-              style={styles.continueBtn}
-              onPress={handleFinalReturn}
-            >
-              <Text style={styles.continueBtnText}>CONTINUE</Text>
-            </TouchableOpacity>
+          <Animated.View entering={FadeInUp.delay(1200)}>
+            <CompletionActions
+              isLast={isLast}
+              onContinue={advance}
+              onPickAnother={handleBrowseMore}
+              onHome={handleFinalReturn}
+            />
           </Animated.View>
         </SafeAreaView>
       </Modal>
@@ -230,7 +284,7 @@ export function SuccessModal({
   }
 
   // ═══════════════════════════════════════════════════════════════════
-  // PHASE 1: PUZZLE STATS SCREEN
+  // PHASE 2 of 3: PUZZLE STATS SCREEN
   // ═══════════════════════════════════════════════════════════════════
   return (
     <Modal
@@ -241,7 +295,14 @@ export function SuccessModal({
       <SafeAreaView style={styles.screen}>
         <StatusBar barStyle="light-content" />
 
-        <View style={styles.centerContent}>
+        {/* Centres when there is room and scrolls when there is not. The
+            stats used to sit in a plain flex:1 box that overflowed its
+            bounds on a short screen and drew over whatever followed. */}
+        <ScrollView
+          style={styles.centerScroll}
+          contentContainerStyle={styles.centerContent}
+          showsVerticalScrollIndicator={false}
+        >
           {/* Main Trophy */}
           <Animated.View
             entering={ZoomIn.duration(600).springify().damping(12)}
@@ -387,76 +448,16 @@ export function SuccessModal({
               {activePuzzle.gridSize}
             </Text>
           </Animated.View>
-        </View>
-
-        {/* ── What you learned ─────────────────────────────────────────
-            Shown only after solving, which is the whole point: the puzzle
-            stays a puzzle, and this is the reward for finishing it.
-            Scrolls independently so a long list of facts cannot push the
-            action buttons off the screen. */}
-        {hasLesson ? (
-          <Animated.View
-            entering={FadeInUp.delay(800).duration(400)}
-            style={styles.lessonSection}
-          >
-            <Text style={styles.lessonHeading}>
-              {activePuzzle.title ?? "What you learned"}
-            </Text>
-
-            {activePuzzle.lesson?.takeaway ? (
-              <Text style={styles.lessonTakeaway}>
-                {activePuzzle.lesson.takeaway}
-              </Text>
-            ) : null}
-
-            {factEntries.length > 0 ? (
-              <ScrollView
-                style={styles.lessonScroll}
-                contentContainerStyle={styles.lessonScrollContent}
-                showsVerticalScrollIndicator={false}
-                nestedScrollEnabled
-              >
-                {factEntries.map(([word, fact]) => (
-                  <View key={word} style={styles.factRow}>
-                    <Text style={styles.factWord}>{word}</Text>
-                    <Text style={styles.factText}>{fact}</Text>
-                  </View>
-                ))}
-              </ScrollView>
-            ) : null}
-          </Animated.View>
-        ) : null}
+        </ScrollView>
 
         {/* Action Buttons */}
-        <Animated.View
-          entering={FadeInUp.delay(900).duration(500).springify()}
-          style={styles.bottomActions}
-        >
-          {nextPuzzleId ? (
-            <>
-              <TouchableOpacity
-                style={styles.continueBtn}
-                onPress={handleBrowseMore}
-              >
-                <Text style={styles.continueBtnText}>PICK ANOTHER</Text>
-                <MaterialIcons name="arrow-forward" size={20} color="#000" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.secondaryBtn}
-                onPress={handleFirstContinue}
-              >
-                <Text style={styles.secondaryBtnText}>BACK TO HOME</Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <TouchableOpacity
-              style={styles.continueBtn}
-              onPress={handleFirstContinue}
-            >
-              <Text style={styles.continueBtnText}>CONTINUE</Text>
-              <MaterialIcons name="arrow-forward" size={20} color="#000" />
-            </TouchableOpacity>
-          )}
+        <Animated.View entering={FadeInUp.delay(900).duration(500).springify()}>
+          <CompletionActions
+            isLast={isLast}
+            onContinue={advance}
+            onPickAnother={handleBrowseMore}
+            onHome={handleFinalReturn}
+          />
         </Animated.View>
       </SafeAreaView>
     </Modal>
@@ -473,11 +474,15 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.bgPrimary,
     justifyContent: "space-between", // Pushes content and button to edges
   },
-  centerContent: {
+  centerScroll: {
     flex: 1,
+  },
+  centerContent: {
+    flexGrow: 1,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 24,
+    paddingVertical: 16,
   },
   trophyCircle: {
     width: 80,
@@ -539,52 +544,6 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     letterSpacing: 1,
   },
-  lessonSection: {
-    paddingHorizontal: 24,
-    paddingBottom: 8,
-    // Bounded so a long fact list scrolls inside the section rather than
-    // pushing the action buttons off the bottom of the screen.
-    maxHeight: 260,
-  },
-  lessonHeading: {
-    fontFamily: theme.typography.heading.fontFamily,
-    fontSize: 16,
-    color: theme.colors.textPrimary,
-    marginBottom: 8,
-  },
-  lessonTakeaway: {
-    fontFamily: theme.typography.body.fontFamily,
-    fontSize: 14,
-    lineHeight: 21,
-    color: theme.colors.textSecondary,
-    marginBottom: 12,
-  },
-  lessonScroll: {
-    flexGrow: 0,
-  },
-  lessonScrollContent: {
-    gap: 10,
-    paddingBottom: 4,
-  },
-  factRow: {
-    borderLeftWidth: 2,
-    borderLeftColor: "rgba(238, 205, 43, 0.35)",
-    paddingLeft: 10,
-  },
-  factWord: {
-    fontFamily: theme.typography.cellLetter.fontFamily,
-    fontSize: 12,
-    letterSpacing: 1,
-    fontWeight: "bold",
-    color: theme.colors.accentGold,
-  },
-  factText: {
-    fontFamily: theme.typography.body.fontFamily,
-    fontSize: 13,
-    lineHeight: 19,
-    color: theme.colors.textSecondary,
-    marginTop: 2,
-  },
   extraStats: {
     backgroundColor: "rgba(255,255,255,0.03)",
     paddingHorizontal: 16,
@@ -600,43 +559,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     fontWeight: "600",
   },
-  bottomActions: {
-    paddingHorizontal: 24,
-    paddingBottom: Platform.OS === "ios" ? 12 : 24,
-    paddingTop: 12,
-  },
-  continueBtn: {
-    backgroundColor: theme.colors.accentGold,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    width: "100%",
-    paddingVertical: 16,
-    borderRadius: 16,
-    gap: 10,
-    ...theme.shadows.goldGlow,
-  },
-  continueBtnText: {
-    fontFamily: theme.typography.body.fontFamily,
-    fontSize: 16,
-    color: "#000",
-    fontWeight: "bold",
-    letterSpacing: 1.5,
-  },
-
-  secondaryBtn: {
-    alignItems: "center",
-    paddingVertical: 14,
-    marginTop: 8,
-  },
-  secondaryBtnText: {
-    fontFamily: theme.typography.body.fontFamily,
-    fontSize: 14,
-    color: theme.colors.textMuted,
-    fontWeight: "600",
-    letterSpacing: 1,
-  },
-
   // Streak Screen Styles
   streakScreen: {
     flex: 1,

@@ -72,7 +72,7 @@ export function deriveCoachState(
   }
   if (!hasTouchedReverse) {
     return {
-      message: "Here's the twist — some answers run backwards.",
+      message: "Here's the twist: some answers run backwards.",
       detail: "The arrow on the clue always tells you which way to fill.",
     };
   }

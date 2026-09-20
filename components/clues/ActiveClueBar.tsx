@@ -8,21 +8,21 @@ import { usePuzzleStore } from "../../stores/puzzleStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { Direction } from "../../types/puzzle.types";
 import { findClueId } from "../../utils/clueId";
+import { DIRECTION_LABELS } from "../../utils/clueLabel";
 
 interface ActiveClueBarProps {
   /** Callback fired when the lightbulb hint button is pressed */
   onHintPress?: () => void;
+  /**
+   * Whether this bar is teaching, i.e. it is on the tutorial screen.
+   *
+   * Off by default, so the backwards-clue explanation cannot appear in a real
+   * puzzle. It used to show wherever `hasSeenReverseHint` was false, and that
+   * flag is only set by tapping the dismiss X — which most players never do.
+   * The result was a "tip" that returned on every reverse clue forever.
+   */
+  coaching?: boolean;
 }
-
-/**
- * Human-readable labels for each direction type.
- */
-const DIRECTION_LABELS: Record<Direction, string> = {
-  across: "ACROSS",
-  down: "DOWN",
-  reverse_across: "BACKWARDS",
-  reverse_down: "UP",
-};
 
 /**
  * A permanent arrow for every clue, not just the odd ones.
@@ -45,7 +45,10 @@ const REVERSE_DIRECTIONS: Direction[] = ["reverse_across", "reverse_down"];
  * ActiveClueBar shows the currently selected clue floating above the clue panel.
  * Tapping it toggles through available directions for the selected cell.
  */
-export function ActiveClueBar({ onHintPress }: ActiveClueBarProps) {
+export function ActiveClueBar({
+  onHintPress,
+  coaching = false,
+}: ActiveClueBarProps) {
   const { activePuzzle, selectedCell, selectedDirection, toggleDirection } =
     usePuzzleStore();
   const hasSeenReverseHint = useSettingsStore((s) => s.hasSeenReverseHint);
@@ -71,9 +74,9 @@ export function ActiveClueBar({ onHintPress }: ActiveClueBarProps) {
   const dirArrow = DIRECTION_ARROWS[clueObj.direction] ?? "arrow-forward";
   const isReverse = REVERSE_DIRECTIONS.includes(clueObj.direction);
 
-  // Explain backwards clues once, the first time one is actually selected —
-  // in the tutorial or in a real puzzle, whichever the player reaches first.
-  const showReverseHint = isReverse && !hasSeenReverseHint;
+  // Explained during the tutorial only. How to play is taught there; a real
+  // puzzle is not the place to keep teaching it.
+  const showReverseHint = coaching && isReverse && !hasSeenReverseHint;
 
   const onToggle = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -94,7 +97,7 @@ export function ActiveClueBar({ onHintPress }: ActiveClueBarProps) {
             color={theme.colors.accentGold}
           />
           <Text style={styles.reverseHintText}>
-            Heads up — this answer reads{" "}
+            Heads up: this answer reads{" "}
             {clueObj.direction === "reverse_across" ? "backwards" : "upwards"}.
             The arrow always shows which way to fill.
           </Text>
@@ -185,6 +188,12 @@ const styles = StyleSheet.create({
   containerWrap: {
     paddingHorizontal: 12,
     paddingVertical: 6,
+    // The grid slides up under here when the keyboard is open, so this bar
+    // has to be opaque and above it. Without both, the rows being scrolled
+    // out of view are drawn straight over the clue you are answering.
+    backgroundColor: theme.colors.bgPrimary,
+    zIndex: 10,
+    elevation: 10,
   },
   card: {
     flexDirection: "row",

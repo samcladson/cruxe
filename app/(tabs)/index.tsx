@@ -399,7 +399,7 @@ export default function HomeScreen() {
               </Text>
               <Text style={styles.repairBody}>
                 {streak.repair_is_free
-                  ? "Restore it — your free repair this month."
+                  ? "Restore it. Your free repair this month."
                   : `Restore it for ${streak.repair_cost} coins.`}
               </Text>
             </View>
@@ -431,7 +431,7 @@ export default function HomeScreen() {
               color={theme.colors.accentGold}
             />
             <Text style={styles.setCompleteText}>
-              You&apos;ve finished today&apos;s set — new puzzles at midnight.
+              You&apos;ve finished today&apos;s set. New puzzles at midnight.
               Keep going any time by spending coins.
             </Text>
           </View>
