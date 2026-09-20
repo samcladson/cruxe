@@ -19,7 +19,7 @@ import * as Sentry from "@sentry/react-native";
  *               Sentry discards a bare string and the report vanishes.
  */
 export function reportError(
-  scope: "auth" | "purchases" | "sync" | "puzzle" | "render",
+  scope: "auth" | "purchases" | "sync" | "puzzle" | "render" | "feedback",
   error: unknown,
   extra: Record<string, string | number | boolean> = {},
 ): void {

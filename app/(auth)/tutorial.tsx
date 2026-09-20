@@ -13,7 +13,7 @@ import {
 import Animated, { FadeIn, FadeInUp } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ActiveClueBar } from "../../components/clues/ActiveClueBar";
-import { CluePanel } from "../../components/clues/CluePanel";
+import { ClueSheet } from "../../components/clues/ClueSheet";
 import { CrosswordGrid } from "../../components/grid/CrosswordGrid";
 import { CoachBar } from "../../components/tutorial/CoachBar";
 import { Button } from "../../components/ui/Button";
@@ -23,10 +23,6 @@ import {
   TUTORIAL_REVERSE_CLUE_IDS,
 } from "../../constants/tutorialPuzzle";
 import { track } from "../../services/analyticsService";
-import {
-  getLinkedProviders,
-  linkGoogleAccount,
-} from "../../services/authService";
 import { SFX } from "../../services/soundService";
 import { usePuzzleStore } from "../../stores/puzzleStore";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -51,21 +47,12 @@ export default function TutorialScreen() {
   // says what the warm-up is, and saying it twice made the app feel like it
   // kept clearing its throat before letting anyone play.
   const [coachVisible, setCoachVisible] = useState(true);
+  /** Reserved beneath the grid for the collapsed clue sheet, which reports
+   *  its own resting height rather than being given a guessed one. */
+  const [clueRestHeight, setClueRestHeight] = useState(0);
   const [hasTouchedReverse, setHasTouchedReverse] = useState(false);
   const [solved, setSolved] = useState(false);
-  const [linking, setLinking] = useState(false);
 
-  /**
-   * Whether an account is already linked. The start screen offers sign-in
-   * first now, so most players arrive here having already decided — asking
-   * again on the celebration screen would be nagging.
-   */
-  const [hasAccount, setHasAccount] = useState(false);
-  useEffect(() => {
-    void getLinkedProviders().then(({ hasGoogle, hasApple }) =>
-      setHasAccount(hasGoogle || hasApple),
-    );
-  }, []);
 
   /**
    * The grid renders from puzzleStore, so the tutorial has to put its puzzle
@@ -132,12 +119,6 @@ export default function TutorialScreen() {
     router.replace("/(tabs)");
   };
 
-  const handleLink = async () => {
-    setLinking(true);
-    await linkGoogleAccount();
-    setLinking(false);
-    finish();
-  };
 
   if (!activePuzzle) return <View style={styles.container} />;
 
@@ -175,28 +156,7 @@ export default function TutorialScreen() {
             entering={FadeInUp.delay(550).duration(500)}
             style={styles.celebrateActions}
           >
-            {hasAccount ? (
-              <Button title="Start playing" onPress={finish} />
-            ) : (
-              <>
-                <Button
-                  title={linking ? "Connecting…" : "Save my progress"}
-                  onPress={handleLink}
-                  disabled={linking}
-                />
-                <TouchableOpacity
-                  onPress={finish}
-                  style={styles.laterButton}
-                  accessibilityRole="button"
-                  accessibilityLabel="Continue without signing in"
-                >
-                  <Text style={styles.laterText}>Not now</Text>
-                </TouchableOpacity>
-                <Text style={styles.laterNote}>
-                  You can link an account any time from your profile.
-                </Text>
-              </>
-            )}
+            <Button title="Start playing" onPress={finish} />
           </Animated.View>
         </View>
       </SafeAreaView>
@@ -232,12 +192,11 @@ export default function TutorialScreen() {
           />
         )}
 
-        <ActiveClueBar onHintPress={() => revealLetter()} />
+        <ActiveClueBar onHintPress={() => revealLetter()} coaching />
         <CrosswordGrid />
 
-        <View style={styles.bottomSection}>
-          <CluePanel />
-        </View>
+        <View style={{ height: clueRestHeight }} />
+        <ClueSheet onRestHeightChange={setClueRestHeight} />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -264,12 +223,6 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.body.fontFamily,
     fontSize: 14,
     color: theme.colors.textMuted,
-  },
-  bottomSection: {
-    flex: 1,
-    minHeight: 160,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.08)",
   },
   celebrate: {
     flex: 1,

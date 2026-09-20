@@ -7,9 +7,26 @@
  */
 
 export type StartDestination = "/(auth)/tutorial" | "/(tabs)";
+export type LaunchDestination = "/(auth)/welcome" | StartDestination;
 
 export function routeAfterStart(
   hasCompletedOnboarding: boolean,
 ): StartDestination {
   return hasCompletedOnboarding ? "/(tabs)" : "/(auth)/tutorial";
+}
+
+/**
+ * Where a launch goes, now that an account is required.
+ *
+ * Anonymous sign-in used to guarantee every launch had a session, so this
+ * decision did not exist — the app could always go straight in. With guest
+ * play removed, no session means no entry, and onboarding completed on some
+ * earlier account does not change that.
+ */
+export function routeForSession(
+  hasSession: boolean,
+  hasCompletedOnboarding: boolean,
+): LaunchDestination {
+  if (!hasSession) return "/(auth)/welcome";
+  return routeAfterStart(hasCompletedOnboarding);
 }

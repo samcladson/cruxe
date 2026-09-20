@@ -117,7 +117,9 @@ const initialCategoryStats: Record<Category, CategoryStat> = {
 };
 
 const initialProfile: UserProfile = {
-  id: "guest", // Replaced with real UUID after auth init
+  // Empty until a session exists. Guest play is gone: the app no longer
+  // creates an account on launch, so there is no id to stand in for one.
+  id: "",
   displayName: DEFAULT_DISPLAY_NAME,
   avatarUrl: "",
   // Starts at zero. The welcome bonus is written by the auth trigger as a
@@ -193,7 +195,7 @@ export const useUserStore = create<UserState>()(
 
       refreshBalance: async () => {
         const { profile } = get();
-        if (!profile.id || profile.id === "guest") return;
+        if (!profile.id) return;
 
         const { data, error } = await supabase
           .from("users")
@@ -285,7 +287,7 @@ export const useUserStore = create<UserState>()(
 
       // ── Supabase sync ────────────────────────────────────────────
       syncFromSupabase: async (userId: string) => {
-        if (!userId || userId === "guest") return;
+        if (!userId) return;
 
         try {
           const { data, error } = await supabase

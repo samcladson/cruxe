@@ -1,12 +1,13 @@
 /**
  * authService.ts — Manages Supabase authentication for Cruxe.
  *
- * Uses Supabase anonymous auth so every device gets a real, persistent UUID
- * without requiring the user to sign up. The anonymous session is stored in
- * AsyncStorage and silently restored on subsequent app launches.
+ * An account is required to play. It is created by signing in with Google,
+ * Apple, or a code emailed through Supabase; the session is stored in
+ * AsyncStorage and silently restored on subsequent launches.
  *
- * Anonymous accounts can later be upgraded to Google / Apple sign-in without
- * losing any progress (Supabase links the identities).
+ * Anonymous sign-in used to create an account on first launch and sign-in
+ * merely upgraded it. That is gone, so these functions create or enter an
+ * account rather than linking an identity onto an existing one.
  */
 
 import * as Sentry from "@sentry/react-native";
@@ -79,8 +80,8 @@ export interface AuthState {
  *
  * Flow:
  *  1. Attempt to restore existing session from AsyncStorage.
- *  2. If no session exists (first install, or cleared storage):
- *     sign in anonymously and create a new user.
+ *  2. If no session exists (first install, signed out, or cleared storage):
+ *     return no user. Nothing is created on the player's behalf.
  *  3. Return the authenticated user so the calling code can hydrate
  *     the userStore and create the DB profile row if needed.
  *
@@ -108,7 +109,8 @@ export async function initAuth(): Promise<AuthState> {
           /* The remote session is already gone; only storage matters. */
         });
         await clearLocalIdentity();
-        // Falls through to the anonymous sign-in below.
+        // Falls through to the no-session return below, which sends the
+        // player to the sign-in screen.
       } else {
         // "exists" or "unknown". Unknown means the check itself could not
         // reach the server, which is not evidence of anything — treating an
@@ -126,34 +128,12 @@ export async function initAuth(): Promise<AuthState> {
       }
     }
 
-    // No session — sign in anonymously (first launch)
-    console.log("[Auth] No session found, signing in anonymously...");
-    const { data: anonData, error: anonError } =
-      await supabase.auth.signInAnonymously();
+    // No session, and the app no longer makes one on the player's behalf.
+    // Guest play is gone: an account is created by signing in, not by
+    // launching. The root layout routes this to the welcome screen.
+    console.log("[Auth] No session — sign-in required.");
+    return { user: null, session: null, isInitialised: true };
 
-    if (anonError || !anonData.user) {
-      console.error("[Auth] Anonymous sign-in failed:", anonError?.message);
-      if (anonError?.message?.toLowerCase().includes("captcha")) {
-        // Supabase CAPTCHA protection covers the signup endpoint, and
-        // signInAnonymously IS a signup. With it enabled, no new user can
-        // ever get a session - the app silently degrades to local-only and
-        // nothing saves. Anonymous-first auth and CAPTCHA are incompatible.
-        console.error(
-          "[Auth] CAPTCHA is enabled on this Supabase project. It blocks " +
-            "anonymous sign-in, so no new install can create an account. " +
-            "Disable it under Authentication > Settings, or every fresh " +
-            "install will be broken.",
-        );
-      }
-      return { user: null, session: null, isInitialised: true };
-    }
-
-    console.log("[Auth] Anonymous sign-in successful:", anonData.user.id);
-    return {
-      user: anonData.user,
-      session: anonData.session,
-      isInitialised: true,
-    };
   } catch (err) {
     console.error("[Auth] initAuth failed unexpectedly:", err);
     // Degrading to local-only is deliberate, but it should never happen
@@ -340,27 +320,36 @@ export interface SocialAuthResult {
 }
 
 /**
- * Attaches a provider identity to this device's session — by linking it to
- * the current anonymous account, or by signing into the account that already
- * owns it.
+ * Signs the player in with a provider token, or adds that provider to the
+ * account they are already in.
  *
- * Only the first half of that used to exist, and it made returning
- * impossible. Signing out leaves the previous account intact and starts a
- * fresh anonymous one, so the identity is still attached to the old user;
- * every later attempt to link it failed with "Identity is already linked to
- * another user" and there was no path back into your own account. Deleting
- * an account had the same effect whenever an earlier sign-out had left an
- * orphaned account holding the identity.
+ * Which of the two it is comes from whether a session exists, and that is not
+ * cosmetic. `linkIdentity` requires a session to link onto. The app used to
+ * guarantee one by signing in anonymously on launch, so linking first was
+ * always valid; with guest play removed the welcome screen has no session at
+ * all, and calling `linkIdentity` there fails with "session missing" rather
+ * than anything this could recover from.
  *
- * So: link if the identity is new — that upgrades a guest account and keeps
- * the progress it earned — and sign in if it is not, which is a returning
- * player asking for the account they already have.
+ * With a session, linking is still right: that is the profile screen adding a
+ * second way into an existing account. If the identity already belongs to
+ * someone else, sign into that account instead — otherwise a player who
+ * signed out could never get back in, because the identity is still attached
+ * to the account they left.
  */
 async function linkOrSignIn(
   provider: "google" | "apple",
   token: string,
   nonce?: string,
 ): Promise<SocialAuthResult> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  // No session: this is a sign-in, and there is nothing to link onto.
+  if (!session) {
+    return signInWithProviderToken(provider, token, nonce);
+  }
+
   const linked = await supabase.auth.linkIdentity({ provider, token, nonce });
 
   if (!linked.error) {
@@ -376,6 +365,19 @@ async function linkOrSignIn(
       "into it rather than linking.",
   );
 
+  const result = await signInWithProviderToken(provider, token, nonce);
+  return result.error ? result : { ...result, signedIntoExisting: true };
+}
+
+/**
+ * Exchanges a provider token for a session, creating the account if this
+ * identity has not been seen before. Signing in IS signing up now.
+ */
+async function signInWithProviderToken(
+  provider: "google" | "apple",
+  token: string,
+  nonce?: string,
+): Promise<SocialAuthResult> {
   const signedIn = await supabase.auth.signInWithIdToken({
     provider,
     token,
@@ -389,21 +391,20 @@ async function linkOrSignIn(
     return { error: new Error("Signed in but no user was returned.") };
   }
 
-  // The anonymous account this device was using is now abandoned. Nothing
-  // here can delete it — the client has no such privilege — and it holds no
-  // progress worth keeping, since the player just chose a different account.
+  // Point the local stores at whichever account was just entered, so state
+  // from a previous identity cannot bleed into it.
   await rebindToAccount(user.id);
 
-  return { error: null, user, signedIntoExisting: true };
+  return { error: null, user };
 }
 
 
 
 /**
- * Initiates native Apple Sign-In and links it to the current Supabase session.
+ * Initiates native Apple Sign-In, creating or entering the matching account.
  * Uses a crypto nonce to prevent replay attacks per Apple guidelines.
  */
-export async function linkAppleAccount(): Promise<SocialAuthResult> {
+export async function signInWithApple(): Promise<SocialAuthResult> {
   try {
     const rawNonce = Math.random().toString(36).substring(2, 10);
     const hashedNonce = await Crypto.digestStringAsync(
@@ -464,7 +465,7 @@ export async function linkAppleAccount(): Promise<SocialAuthResult> {
 /**
  * Initiates native Google Sign-In and links it to the current Supabase session.
  */
-export async function linkGoogleAccount(): Promise<SocialAuthResult> {
+export async function signInWithGoogle(): Promise<SocialAuthResult> {
   try {
     await GoogleSignin.hasPlayServices();
 
@@ -612,6 +613,8 @@ export async function linkGoogleAccount(): Promise<SocialAuthResult> {
 export interface LinkedProviders {
   hasGoogle: boolean;
   hasApple: boolean;
+  /** The account's email address, when it has one. */
+  email: string | null;
 }
 
 /**
@@ -620,12 +623,16 @@ export interface LinkedProviders {
 export async function getLinkedProviders(): Promise<LinkedProviders> {
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user?.identities) {
-    return { hasGoogle: false, hasApple: false };
+    return { hasGoogle: false, hasApple: false, email: null };
   }
   const idents = data.user.identities;
   return {
     hasGoogle: idents.some((i) => i.provider === "google"),
     hasApple: idents.some((i) => i.provider === "apple"),
+    // Shown on the settings screen so a player can tell which account they
+    // are in. With three ways to sign in, "signed in" on its own is not
+    // enough to know whether you will land back in the same account.
+    email: data.user.email ?? null,
   };
 }
 
@@ -749,61 +756,17 @@ async function clearLocalIdentity(): Promise<void> {
 }
 
 /**
- * Starts a fresh anonymous session and hydrates the stores from it.
+ * Signs out of Supabase and clears local state, leaving no session.
  *
- * Shared by sign-out and deletion: in both cases the app must be immediately
- * usable, and every economy RPC needs a JWT. Returns a message on failure.
- */
-async function startAnonymousSession(): Promise<{ error: string | null }> {
-  const { data, error } = await supabase.auth.signInAnonymously();
-  if (error || !data.user) {
-    const msg = error?.message ?? "";
-    if (msg.toLowerCase().includes("captcha")) {
-      return {
-        error:
-          "Couldn't start a new session. CAPTCHA protection is blocking " +
-          "anonymous sign-in on this project — it needs to be disabled in " +
-          "Supabase Authentication settings.",
-      };
-    }
-    return { error: msg || "Could not start a new session" };
-  }
-
-  const userId = data.user.id;
-  useUserStore.getState().setUserId(userId);
-  await loginToRevenueCat(userId);
-  await useUserStore.getState().syncFromSupabase(userId);
-
-  // A fresh account must read as a fresh account. Anything non-zero here
-  // besides the welcome bonus means state from the previous identity
-  // survived, which is invisible in the UI until a player reports their old
-  // streak following them onto a new account.
-  const fresh = useUserStore.getState().profile;
-  console.log(
-    `[Auth] New anonymous session ${userId} — coins=${fresh.coins} ` +
-      `streak=${fresh.currentStreak} solved=${fresh.totalPuzzlesSolved} ` +
-      `name=${fresh.displayName}`,
-  );
-  if (fresh.currentStreak !== 0 || fresh.totalPuzzlesSolved !== 0) {
-    console.warn(
-      "[Auth] A new account came up with a non-zero streak or solve count. " +
-        "That is carried-over state from the previous identity, not server " +
-        "data — the users row for a new account is NOT NULL DEFAULT 0.",
-    );
-  }
-
-  return { error: null };
-}
-
-/**
- * Signs out of Supabase, clears local state, and establishes a new anonymous
- * session so the user can keep playing without a full reinstall.
+ * It used to start a fresh anonymous session so play could continue without
+ * an account. With guest play removed there is nothing to continue into, and
+ * the root layout routes a sessionless launch to the welcome screen.
  *
  * The server call goes first on purpose. Wiping local state up front meant a
  * failed sign-out left the user still signed in with their progress already
  * destroyed — an error message on top of unrecoverable data loss.
  */
-export async function signOutAndStartNewAnonSession(): Promise<{
+export async function signOutToWelcome(): Promise<{
   error: string | null;
 }> {
   const run = runExclusively(() => signOutInner());
@@ -839,7 +802,7 @@ async function signOutInner(): Promise<{ error: string | null }> {
     }
 
     await clearLocalIdentity();
-    return await startAnonymousSession();
+    return { error: null };
   } catch (e) {
     return {
       error: e instanceof Error ? e.message : "Sign out failed",
@@ -930,26 +893,66 @@ async function deleteAccountInner(): Promise<DeleteAccountResult> {
 
   await clearLocalIdentity();
 
-  // startAnonymousSession can reject as well as return an error — a throw
-  // from the profile hydration inside it, say. Letting that escape would
-  // reject this whole call after the account was already destroyed, and the
-  // caller's spinner would never come down. It resolves, always.
-  let sessionError: string | null;
-  try {
-    sessionError = (await startAnonymousSession()).error;
-  } catch (e) {
-    sessionError = e instanceof Error ? e.message : "unexpected failure";
-  }
-
-  if (sessionError) {
-    // The deletion itself succeeded; only the fresh session did not. Callers
-    // key off `accountDeleted`, never off the wording of this message.
-    return {
-      accountDeleted: true,
-      error:
-        "Your account was deleted, but a new guest session could not be " +
-        `started: ${sessionError}. Restart the app to continue.`,
-    };
-  }
+  // No replacement session is started. Deletion now ends with no account at
+  // all, and the root layout sends a sessionless launch to the welcome
+  // screen — which is exactly where someone who just deleted their account
+  // should land.
   return { accountDeleted: true, error: null };
+}
+
+// ─── Email one-time code ─────────────────────────────────────────────
+
+/**
+ * Sends a six-digit sign-in code to `email`.
+ *
+ * The backup door. With guest play removed and Apple limited to iOS, Google
+ * would otherwise be the only way into the app on Android — one provider
+ * misconfiguration away from locking every user out. This path depends on
+ * nothing but Supabase itself.
+ *
+ * `shouldCreateUser` is true because signing in IS signing up now; there is
+ * no anonymous account waiting to be upgraded.
+ */
+export async function sendEmailCode(
+  email: string,
+): Promise<{ error?: Error }> {
+  const address = email.trim().toLowerCase();
+  if (!address) return { error: new Error("Enter your email address.") };
+
+  const { error } = await supabase.auth.signInWithOtp({
+    email: address,
+    options: { shouldCreateUser: true },
+  });
+
+  if (error) {
+    console.error("[Auth] Could not send email code:", error.message);
+    return { error };
+  }
+  return {};
+}
+
+/**
+ * Exchanges the emailed code for a session.
+ */
+export async function verifyEmailCode(
+  email: string,
+  code: string,
+): Promise<SocialAuthResult> {
+  try {
+    const { data, error } = await supabase.auth.verifyOtp({
+      email: email.trim().toLowerCase(),
+      token: code.trim(),
+      type: "email",
+    });
+
+    if (error) return { error };
+    if (!data.user) return { error: new Error("That code did not work.") };
+
+    console.log("[Auth] Signed in by email code:", data.user.id);
+    return { error: null, user: data.user };
+  } catch (error: any) {
+    console.error("[Auth] Email code verification failed:", error);
+    reportError("auth", error);
+    return { error };
+  }
 }

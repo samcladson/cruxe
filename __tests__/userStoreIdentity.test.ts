@@ -91,8 +91,10 @@ describe("setUserId", () => {
     expect(pendingSolves).toHaveLength(1);
   });
 
-  it("adopts the first real id over the 'guest' placeholder", () => {
-    expect(useUserStore.getState().profile.id).toBe("guest");
+  it("adopts the first real id over the empty placeholder", () => {
+    // Empty, not "guest": the app no longer creates an account on launch, so
+    // there is no anonymous id standing in for a real one.
+    expect(useUserStore.getState().profile.id).toBe("");
 
     useUserStore.getState().setUserId(NEW_ACCOUNT);
 
@@ -122,7 +124,7 @@ describe("resetLocalProfile", () => {
     useUserStore.getState().resetLocalProfile();
 
     const { profile, pendingSolves } = useUserStore.getState();
-    expect(profile.id).toBe("guest");
+    expect(profile.id).toBe("");
     expect(profile.coins).toBe(0);
     expect(profile.currentStreak).toBe(0);
     expect(profile.displayName).toBe("Player");

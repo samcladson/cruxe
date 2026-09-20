@@ -16,7 +16,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { router } from "expo-router";
 import { CATEGORIES } from "../../constants/categories";
-import { theme } from "../../constants/theme"; // Keep theme imported as it's used elsewhere
+import { theme } from "../../constants/theme";
+import { FeedbackModal } from "../../components/modals/FeedbackModal";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useUserStore } from "../../stores/userStore";
 
@@ -24,9 +25,9 @@ import { formatCompactNumber } from "../../utils/formatNumber";
 import {
   deleteAccountAndReset,
   getLinkedProviders,
-  linkAppleAccount,
-  linkGoogleAccount,
-  signOutAndStartNewAnonSession,
+  signInWithApple,
+  signInWithGoogle,
+  signOutToWelcome,
 } from "../../services/authService";
 import * as Haptics from "expo-haptics";
 import {
@@ -52,10 +53,12 @@ export default function ProfileScreen() {
     "apple" | "google" | "signOut" | "delete" | null
   >(null);
   const isBusy = busyAction !== null;
-  const [linked, setLinked] = useState({
-    hasGoogle: false,
-    hasApple: false,
-  });
+  const [linked, setLinked] = useState<{
+    hasGoogle: boolean;
+    hasApple: boolean;
+    email: string | null;
+  }>({ hasGoogle: false, hasApple: false, email: null });
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   const refreshLinked = useCallback(async () => {
     const l = await getLinkedProviders();
@@ -78,10 +81,10 @@ export default function ProfileScreen() {
     triggerHaptic();
     setBusyAction("apple");
     let error: Error | null = null;
-    let user: Awaited<ReturnType<typeof linkAppleAccount>>["user"];
+    let user: Awaited<ReturnType<typeof signInWithApple>>["user"];
     let signedIntoExisting = false;
     try {
-      ({ error, user, signedIntoExisting = false } = await linkAppleAccount());
+      ({ error, user, signedIntoExisting = false } = await signInWithApple());
     } catch (e: any) {
       error = e instanceof Error ? e : new Error(String(e));
     } finally {
@@ -105,10 +108,10 @@ export default function ProfileScreen() {
     triggerHaptic();
     setBusyAction("google");
     let error: Error | null = null;
-    let user: Awaited<ReturnType<typeof linkGoogleAccount>>["user"];
+    let user: Awaited<ReturnType<typeof signInWithGoogle>>["user"];
     let signedIntoExisting = false;
     try {
-      ({ error, user, signedIntoExisting = false } = await linkGoogleAccount());
+      ({ error, user, signedIntoExisting = false } = await signInWithGoogle());
     } catch (e: any) {
       error = e instanceof Error ? e : new Error(String(e));
     } finally {
@@ -131,7 +134,7 @@ export default function ProfileScreen() {
     triggerHaptic();
     Alert.alert(
       "Sign out",
-      "Your local progress on this device will reset and you’ll go back to the start screen. You can sign in again there, or carry on as a guest.",
+      "You’ll be signed out and returned to the start screen. Your progress stays on your account and comes back when you sign in again.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -142,7 +145,7 @@ export default function ProfileScreen() {
               setBusyAction("signOut");
               let error: string | null = "Sign out failed";
               try {
-                ({ error } = await signOutAndStartNewAnonSession());
+                ({ error } = await signOutToWelcome());
                 // The streak that warning referred to is no longer this
                 // session's. Onboarding flags stay - signing out is not the
                 // same as starting over.
@@ -243,7 +246,7 @@ export default function ProfileScreen() {
             void (async () => {
               setBusyAction("delete");
 
-              // Server delete, local teardown and a fresh guest session, in
+              // Server delete and local teardown, in
               // that order and all-or-nothing about the parts that matter.
               // Defaults chosen so an unexpected throw below leaves the
               // account presumed intact — the safe assumption, since it
@@ -414,191 +417,6 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        {/* Account Settings */}
-        <Text
-          style={[
-            styles.sectionTitle,
-            { marginTop: 32, marginBottom: 16 },
-          ]}
-        >
-          Account & Sync
-        </Text>
-        <View style={styles.settingsGroup}>
-          {Platform.OS === "ios" && (
-            <>
-              <TouchableOpacity
-                style={styles.settingRow}
-                onPress={handleAppleLink}
-                disabled={isBusy || linked.hasApple}
-              >
-                <View style={styles.settingInfo}>
-                  <View style={styles.settingIconWrap}>
-                    <Ionicons
-                      name="logo-apple"
-                      size={18}
-                      color={theme.colors.textPrimary}
-                    />
-                  </View>
-                  <View>
-                    <Text style={styles.settingText}>Sign in with Apple</Text>
-                    {linked.hasApple && (
-                      <Text style={styles.connectedLabel}>Connected</Text>
-                    )}
-                  </View>
-                </View>
-                {busyAction === "apple" ? (
-                  <ActivityIndicator
-                    size="small"
-                    color={theme.colors.accentGold}
-                  />
-                ) : linked.hasApple ? (
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={22}
-                    color={theme.colors.accentGreen}
-                  />
-                ) : (
-                  <MaterialIcons
-                    name="chevron-right"
-                    size={24}
-                    color={theme.colors.textMuted}
-                  />
-                )}
-              </TouchableOpacity>
-              <View style={styles.settingDivider} />
-            </>
-          )}
-
-          <TouchableOpacity
-            style={styles.settingRow}
-            onPress={handleGoogleLink}
-            disabled={isBusy || linked.hasGoogle}
-          >
-            <View style={styles.settingInfo}>
-              <View style={styles.settingIconWrap}>
-                <Ionicons
-                  name="logo-google"
-                  size={18}
-                  color={theme.colors.textPrimary}
-                />
-              </View>
-              <View>
-                <Text style={styles.settingText}>Sign in with Google</Text>
-                {linked.hasGoogle && (
-                  <Text style={styles.connectedLabel}>Connected</Text>
-                )}
-              </View>
-            </View>
-            {busyAction === "google" ? (
-              <ActivityIndicator size="small" color={theme.colors.accentGold} />
-            ) : linked.hasGoogle ? (
-              <Ionicons
-                name="checkmark-circle"
-                size={22}
-                color={theme.colors.accentGreen}
-              />
-            ) : (
-              <MaterialIcons
-                name="chevron-right"
-                size={24}
-                color={theme.colors.textMuted}
-              />
-            )}
-          </TouchableOpacity>
-
-          <View style={styles.settingDivider} />
-
-          <TouchableOpacity
-            style={styles.settingRow}
-            onPress={handleSignOut}
-            disabled={isBusy}
-          >
-            <View style={styles.settingInfo}>
-              <View style={styles.settingIconWrap}>
-                <MaterialIcons
-                  name="logout"
-                  size={18}
-                  color={theme.colors.accentRed}
-                />
-              </View>
-              <Text style={[styles.settingText, { color: theme.colors.textPrimary }]}>
-                Sign out
-              </Text>
-            </View>
-            {busyAction === "signOut" ? (
-              <ActivityIndicator
-                size="small"
-                color={theme.colors.accentGold}
-              />
-            ) : (
-              <MaterialIcons
-                name="chevron-right"
-                size={24}
-                color={theme.colors.textMuted}
-              />
-            )}
-          </TouchableOpacity>
-
-          <View style={styles.settingDivider} />
-
-          <TouchableOpacity
-            style={styles.settingRow}
-            onPress={handleReplayTutorial}
-            accessibilityRole="button"
-            accessibilityLabel="Replay the tutorial"
-          >
-            <View style={styles.settingInfo}>
-              <View style={styles.settingIconWrap}>
-                <MaterialIcons
-                  name="school"
-                  size={18}
-                  color={theme.colors.accentGold}
-                />
-              </View>
-              <Text style={styles.settingText}>Replay tutorial</Text>
-            </View>
-            <MaterialIcons
-              name="chevron-right"
-              size={24}
-              color={theme.colors.textMuted}
-            />
-          </TouchableOpacity>
-
-          <View style={styles.settingDivider} />
-
-          {/* Permanent deletion — required for App Store and Play review */}
-          <TouchableOpacity
-            style={styles.settingRow}
-            onPress={handleDeleteAccount}
-            disabled={isBusy}
-          >
-            <View style={styles.settingInfo}>
-              <View style={styles.settingIconWrap}>
-                <MaterialIcons
-                  name="delete-forever"
-                  size={18}
-                  color="#ef4444"
-                />
-              </View>
-              <Text style={[styles.settingText, { color: "#ef4444" }]}>
-                Delete account
-              </Text>
-            </View>
-            {busyAction === "delete" ? (
-              // This row never had a spinner of its own: the old shared flag
-              // lit up the Google and Sign out rows instead, which is what
-              // made deleting look like it was signing in.
-              <ActivityIndicator size="small" color="#ef4444" />
-            ) : (
-              <MaterialIcons
-                name="chevron-right"
-                size={24}
-                color={theme.colors.textMuted}
-              />
-            )}
-          </TouchableOpacity>
-        </View>
-
         {/* App Settings */}
         <Text
           style={[
@@ -726,8 +544,38 @@ export default function ProfileScreen() {
           About & Legal
         </Text>
         <View style={styles.settingsGroup}>
-          <TouchableOpacity 
-            style={styles.settingRow} 
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={() => setFeedbackOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Send feedback"
+          >
+            <View style={styles.settingInfo}>
+              <View style={styles.settingIconWrap}>
+                <MaterialIcons
+                  name="chat-bubble-outline"
+                  size={18}
+                  color={theme.colors.accentGold}
+                />
+              </View>
+              <View>
+                <Text style={styles.settingText}>Send feedback</Text>
+                <Text style={styles.connectedLabel}>
+                  Report a bug or suggest something
+                </Text>
+              </View>
+            </View>
+            <MaterialIcons
+              name="chevron-right"
+              size={24}
+              color={theme.colors.textMuted}
+            />
+          </TouchableOpacity>
+
+          <View style={styles.settingDivider} />
+
+          <TouchableOpacity
+            style={styles.settingRow}
             onPress={() => router.push("/legal/privacy")}
           >
             <View style={styles.settingInfo}>
@@ -755,10 +603,232 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Account Settings */}
+        <Text
+          style={[
+            styles.sectionTitle,
+            { marginTop: 32, marginBottom: 16 },
+          ]}
+        >
+          Account & Sync
+        </Text>
+        <View style={styles.settingsGroup}>
+          {/* Which account this is. An account is required to play now, and
+              with three ways to sign in, "signed in" alone does not tell you
+              whether you will land back in the same one. */}
+          <View style={styles.settingRow}>
+            <View style={styles.settingInfo}>
+              <View style={styles.settingIconWrap}>
+                <MaterialIcons
+                  name="account-circle"
+                  size={18}
+                  color={theme.colors.textPrimary}
+                />
+              </View>
+              <View>
+                <Text style={styles.settingText}>Signed in</Text>
+                <Text style={styles.connectedLabel}>
+                  {linked.email ??
+                    (linked.hasApple
+                      ? "Apple account"
+                      : linked.hasGoogle
+                        ? "Google account"
+                        : "This device")}
+                </Text>
+              </View>
+            </View>
+          </View>
+          <View style={styles.settingDivider} />
+
+          <Text style={styles.groupHint}>
+            Add another way to sign in, so you can still reach this account if
+            you lose the first.
+          </Text>
+
+          {Platform.OS === "ios" && (
+            <>
+              <TouchableOpacity
+                style={styles.settingRow}
+                onPress={handleAppleLink}
+                disabled={isBusy || linked.hasApple}
+              >
+                <View style={styles.settingInfo}>
+                  <View style={styles.settingIconWrap}>
+                    <Ionicons
+                      name="logo-apple"
+                      size={18}
+                      color={theme.colors.textPrimary}
+                    />
+                  </View>
+                  <View>
+                    <Text style={styles.settingText}>Apple</Text>
+                    {linked.hasApple && (
+                      <Text style={styles.connectedLabel}>Connected</Text>
+                    )}
+                  </View>
+                </View>
+                {busyAction === "apple" ? (
+                  <ActivityIndicator
+                    size="small"
+                    color={theme.colors.accentGold}
+                  />
+                ) : linked.hasApple ? (
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={22}
+                    color={theme.colors.accentGreen}
+                  />
+                ) : (
+                  <MaterialIcons
+                    name="chevron-right"
+                    size={24}
+                    color={theme.colors.textMuted}
+                  />
+                )}
+              </TouchableOpacity>
+              <View style={styles.settingDivider} />
+            </>
+          )}
+
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={handleGoogleLink}
+            disabled={isBusy || linked.hasGoogle}
+          >
+            <View style={styles.settingInfo}>
+              <View style={styles.settingIconWrap}>
+                <Ionicons
+                  name="logo-google"
+                  size={18}
+                  color={theme.colors.textPrimary}
+                />
+              </View>
+              <View>
+                <Text style={styles.settingText}>Google</Text>
+                {linked.hasGoogle && (
+                  <Text style={styles.connectedLabel}>Connected</Text>
+                )}
+              </View>
+            </View>
+            {busyAction === "google" ? (
+              <ActivityIndicator size="small" color={theme.colors.accentGold} />
+            ) : linked.hasGoogle ? (
+              <Ionicons
+                name="checkmark-circle"
+                size={22}
+                color={theme.colors.accentGreen}
+              />
+            ) : (
+              <MaterialIcons
+                name="chevron-right"
+                size={24}
+                color={theme.colors.textMuted}
+              />
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.settingDivider} />
+
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={handleSignOut}
+            disabled={isBusy}
+          >
+            <View style={styles.settingInfo}>
+              <View style={styles.settingIconWrap}>
+                <MaterialIcons
+                  name="logout"
+                  size={18}
+                  color={theme.colors.accentRed}
+                />
+              </View>
+              <Text style={[styles.settingText, { color: theme.colors.textPrimary }]}>
+                Sign out
+              </Text>
+            </View>
+            {busyAction === "signOut" ? (
+              <ActivityIndicator
+                size="small"
+                color={theme.colors.accentGold}
+              />
+            ) : (
+              <MaterialIcons
+                name="chevron-right"
+                size={24}
+                color={theme.colors.textMuted}
+              />
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.settingDivider} />
+
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={handleReplayTutorial}
+            accessibilityRole="button"
+            accessibilityLabel="Replay the tutorial"
+          >
+            <View style={styles.settingInfo}>
+              <View style={styles.settingIconWrap}>
+                <MaterialIcons
+                  name="school"
+                  size={18}
+                  color={theme.colors.accentGold}
+                />
+              </View>
+              <Text style={styles.settingText}>Replay tutorial</Text>
+            </View>
+            <MaterialIcons
+              name="chevron-right"
+              size={24}
+              color={theme.colors.textMuted}
+            />
+          </TouchableOpacity>
+
+          <View style={styles.settingDivider} />
+
+          {/* Permanent deletion — required for App Store and Play review */}
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={handleDeleteAccount}
+            disabled={isBusy}
+          >
+            <View style={styles.settingInfo}>
+              <View style={styles.settingIconWrap}>
+                <MaterialIcons
+                  name="delete-forever"
+                  size={18}
+                  color="#ef4444"
+                />
+              </View>
+              <Text style={[styles.settingText, { color: "#ef4444" }]}>
+                Delete account
+              </Text>
+            </View>
+            {busyAction === "delete" ? (
+              // This row never had a spinner of its own: the old shared flag
+              // lit up the Google and Sign out rows instead, which is what
+              // made deleting look like it was signing in.
+              <ActivityIndicator size="small" color="#ef4444" />
+            ) : (
+              <MaterialIcons
+                name="chevron-right"
+                size={24}
+                color={theme.colors.textMuted}
+              />
+            )}
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.footer}>
           <Text style={styles.versionText}>Cruxe v1.0.0</Text>
         </View>
       </ScrollView>
+
+      <FeedbackModal
+        visible={feedbackOpen}
+        onClose={() => setFeedbackOpen(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -976,6 +1046,15 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.body.fontFamily,
     fontSize: 16,
     color: theme.colors.textPrimary,
+  },
+  groupHint: {
+    fontFamily: theme.typography.body.fontFamily,
+    fontSize: 12,
+    lineHeight: 17,
+    color: theme.colors.textMuted,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 4,
   },
   connectedLabel: {
     fontFamily: theme.typography.caption.fontFamily,
