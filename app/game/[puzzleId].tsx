@@ -12,12 +12,11 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ActiveClueBar } from "../../components/clues/ActiveClueBar";
-import { CluePanel } from "../../components/clues/CluePanel";
+import { ClueSheet } from "../../components/clues/ClueSheet";
 import { CrosswordGrid } from "../../components/grid/CrosswordGrid";
 import { HintOptionsModal } from "../../components/modals/HintOptionsModal";
 import { SuccessModal } from "../../components/modals/SuccessModal";
 import { theme } from "../../constants/theme";
-import { fetchCategoryPuzzles } from "../../services/puzzleService";
 import { submitSolve } from "../../services/economyService";
 import { invalidatePuzzleCache } from "../../services/puzzleService";
 import { reportError } from "../../services/errorReporting";
@@ -52,6 +51,9 @@ export default function GameScreen() {
   const { profile, completePuzzle, enqueuePendingSolve } = useUserStore();
 
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  /** Reserved beneath the grid for the collapsed clue sheet, which reports
+   *  its own resting height rather than being given a guessed one. */
+  const [clueRestHeight, setClueRestHeight] = useState(0);
   const [showHintModal, setShowHintModal] = useState(false);
   const [coinsEarned, setCoinsEarned] = useState(0);
   const [scoreEarned, setScoreEarned] = useState(0);
@@ -59,7 +61,6 @@ export default function GameScreen() {
     null,
   );
   const [isNewStreak, setIsNewStreak] = useState(false);
-  const [nextPuzzleId, setNextPuzzleId] = useState<string | null>(null);
   /** True while the solve is real but the reward has not been granted yet. */
   /**
    * Where the reward has got to.
@@ -187,19 +188,6 @@ export default function GameScreen() {
       setRewardState("queued");
     }
 
-    // Find next unsolved puzzle in the same category
-    try {
-      const categoryPuzzles = await fetchCategoryPuzzles(
-        activePuzzle.category as any,
-        profile.id,
-      );
-      const next = categoryPuzzles.find(
-        (p) => !p.isCompleted && p.id !== activePuzzle.id,
-      );
-      if (next) setNextPuzzleId(next.id);
-    } catch {
-      // Non-critical — just won't show "Next Puzzle" button
-    }
   }, [activePuzzle, timer, profile.id]);
 
   // Funnel: entering and leaving a puzzle. `hasRecorded` distinguishes a
@@ -308,10 +296,10 @@ export default function GameScreen() {
         {/* Crossword Grid */}
         <CrosswordGrid />
 
-        {/* Bottom Clue Panel Section */}
-        <View style={styles.bottomSection}>
-          <CluePanel />
-        </View>
+        {/* The clue list sits here when resting, and is raised over the
+            grid from its own chevron. This view only reserves the space. */}
+        <View style={{ height: clueRestHeight }} />
+        <ClueSheet onRestHeightChange={setClueRestHeight} />
 
         <SuccessModal
           visible={showSuccessModal}
@@ -319,7 +307,6 @@ export default function GameScreen() {
           coinsEarned={coinsEarned}
           scoreEarned={scoreEarned}
           isNewStreak={isNewStreak}
-          nextPuzzleId={nextPuzzleId}
           rewardState={rewardState}
         />
         <HintOptionsModal
@@ -346,7 +333,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "rgba(255,255,255,0.05)",
     backgroundColor: theme.colors.bgPrimary,
+    // zIndex alone does not order overlapping siblings on Android; elevation
+    // is what the platform actually reads.
     zIndex: 20,
+    elevation: 20,
   },
   headerLeft: {
     flexDirection: "row",
@@ -384,7 +374,14 @@ const styles = StyleSheet.create({
   },
   subjectBar: {
     paddingHorizontal: 20,
+    paddingTop: 14,
     paddingBottom: 10,
+    // Solid, and above the grid. The header and clue bar already are; this
+    // was the transparent gap between them that the rising grid showed
+    // through.
+    backgroundColor: theme.colors.bgPrimary,
+    zIndex: 15,
+    elevation: 15,
   },
   subjectText: {
     fontFamily: theme.typography.subheading.fontFamily,
@@ -430,10 +427,4 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
 
-  bottomSection: {
-    flex: 1,
-    minHeight: 180,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.08)",
-  },
 });

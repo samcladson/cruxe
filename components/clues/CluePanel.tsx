@@ -12,6 +12,7 @@ import { theme } from "../../constants/theme";
 import { usePuzzleStore } from "../../stores/puzzleStore";
 import { CrosswordClue, Direction } from "../../types/puzzle.types";
 import { findClueId } from "../../utils/clueId";
+import { hasPlayerInput } from "../../utils/hasPlayerInput";
 
 interface ClueItemProps {
   clue: CrosswordClue;
@@ -52,11 +53,30 @@ const DIRECTION_TABS: { key: Direction; label: string; icon: string }[] = [
   { key: "reverse_down", label: "UP", icon: "arrow-upward" },
 ];
 
+interface CluePanelProps {
+  /** Whether the sheet holding this panel is raised over the grid. */
+  expanded?: boolean;
+  /** Toggles that. Omitted, the chevron is not rendered at all. */
+  onToggleExpanded?: () => void;
+  /** Fired when a clue is chosen, so the sheet can get out of the way. */
+  onClueSelected?: () => void;
+  /**
+   * Combined height of the parts that stay on screen when collapsed: the
+   * direction tabs and the action bar. The sheet rests at this height.
+   */
+  onChromeHeight?: (height: number) => void;
+}
+
 /**
  * CluePanel displays all clues organized by direction with 4 tabs:
  * Across, Down, Backwards, and Up.
  */
-export function CluePanel() {
+export function CluePanel({
+  expanded = false,
+  onToggleExpanded,
+  onClueSelected,
+  onChromeHeight,
+}: CluePanelProps = {}) {
   const {
     activePuzzle,
     selectedCell,
@@ -71,6 +91,19 @@ export function CluePanel() {
   } = usePuzzleStore();
   const scrollViewRef = useRef<ScrollView>(null);
 
+  // Tabs should operate independently of the board's selected direction.
+  const [activeTab, setActiveTab] = React.useState<Direction>("across");
+
+  // Measured rather than assumed: the sheet rests at exactly the height of
+  // the controls that remain visible when the clue list is hidden.
+  const [tabsHeight, setTabsHeight] = React.useState(0);
+  const [actionsHeight, setActionsHeight] = React.useState(0);
+  React.useEffect(() => {
+    if (tabsHeight > 0 && actionsHeight > 0) {
+      onChromeHeight?.(tabsHeight + actionsHeight);
+    }
+  }, [tabsHeight, actionsHeight, onChromeHeight]);
+
   if (!activePuzzle) return null;
 
   const getActiveClueId = () => {
@@ -82,14 +115,14 @@ export function CluePanel() {
     return targetId;
   };
 
-  // Tabs should operate independently of the board's selected direction.
-  const [activeTab, setActiveTab] = React.useState<Direction>("across");
-
   const activeClueId = getActiveClueId();
 
   const handleCluePress = (clue: CrosswordClue) => {
     selectCell(clue.startRow, clue.startCol);
     usePuzzleStore.setState({ selectedDirection: clue.direction });
+    // Picking a clue means you want to type it, so the raised sheet drops
+    // back rather than sitting over the square you just chose.
+    onClueSelected?.();
   };
 
   // Get clues for the active tab
@@ -110,13 +143,20 @@ export function CluePanel() {
 
   const currentClues = getCluesForDirection(activeTab);
 
+  // Checking an untouched grid only confirms the letters the puzzle came
+  // with, and spends one of a limited number of checks to do it.
+  const canCheck = checksRemaining > 0 && hasPlayerInput(activePuzzle.grid);
+
   // Render all tabs. If a tab has no clues, we will disable it.
   const availableTabs = DIRECTION_TABS;
 
   return (
     <View style={styles.container}>
       {/* Direction Tabs (Fixed, evenly spaced) */}
-      <View style={styles.tabsHeader}>
+      <View
+        style={styles.tabsHeader}
+        onLayout={(e) => setTabsHeight(e.nativeEvent.layout.height)}
+      >
         {availableTabs.map((tab) => {
           const isEmpty = getCluesForDirection(tab.key).length === 0;
           return (
@@ -155,37 +195,65 @@ export function CluePanel() {
             </TouchableOpacity>
           );
         })}
+
+        {onToggleExpanded ? (
+          <TouchableOpacity
+            style={styles.expandBtn}
+            onPress={onToggleExpanded}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={
+              expanded ? "Collapse the clue list" : "Show all clues"
+            }
+          >
+            <MaterialIcons
+              name={expanded ? "keyboard-arrow-down" : "keyboard-arrow-up"}
+              size={22}
+              color={theme.colors.accentGold}
+            />
+          </TouchableOpacity>
+        ) : null}
       </View>
 
-      <ScrollView
-        ref={scrollViewRef}
-        style={styles.scrollArea}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.contentContainer}
-      >
-        {currentClues.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>No clues in this direction</Text>
-          </View>
-        ) : (
-          currentClues.map((clue) => (
-            <ClueItem
-              key={clue.id}
-              clue={clue}
-              isActive={clue.id === activeClueId}
-              onPress={() => handleCluePress(clue)}
-            />
-          ))
-        )}
-      </ScrollView>
+      {/* Only while raised. Collapsed, the tabs and the action bar are the
+          whole panel, and the space goes back to the grid. */}
+      {expanded ? (
+        <ScrollView
+          ref={scrollViewRef}
+          style={styles.scrollArea}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.contentContainer}
+        >
+          {currentClues.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>No clues in this direction</Text>
+            </View>
+          ) : (
+            currentClues.map((clue) => (
+              <ClueItem
+                key={clue.id}
+                clue={clue}
+                isActive={clue.id === activeClueId}
+                onPress={() => handleCluePress(clue)}
+              />
+            ))
+          )}
+        </ScrollView>
+      ) : null}
 
       {/* Bottom Action Bar */}
-      <View style={styles.actionBar}>
+      <View
+        style={styles.actionBar}
+        onLayout={(e) => setActionsHeight(e.nativeEvent.layout.height)}
+      >
         <TouchableOpacity
-          style={[styles.actionBtn, checksRemaining === 0 && { opacity: 0.5 }]}
-          disabled={checksRemaining === 0}
+          style={[styles.actionBtn, !canCheck && { opacity: 0.5 }]}
+          disabled={!canCheck}
+          accessibilityRole="button"
+          accessibilityLabel={`Check answers, ${checksRemaining} remaining`}
+          accessibilityState={{ disabled: !canCheck }}
           onPress={() => {
-            if (checksRemaining > 0) {
+            if (canCheck) {
               checkAnswers();
               decrementCheck();
             }
@@ -263,6 +331,12 @@ export function CluePanel() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  expandBtn: {
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    alignItems: "center",
+    justifyContent: "center",
   },
   tabsHeader: {
     flexDirection: "row",

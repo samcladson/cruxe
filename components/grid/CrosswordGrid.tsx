@@ -1,9 +1,19 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Dimensions, StyleSheet, TextInput, View } from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { SFX } from "../../services/soundService";
 import { usePuzzleStore } from "../../stores/puzzleStore";
 import { GridCell } from "./GridCell";
 import { resolveClueId } from "../../utils/clueId";
+import {
+  activeRowShift,
+  ACTIVE_ROW_MARGIN,
+} from "../../utils/activeRowShift";
+import { useKeyboardTop } from "../../utils/useKeyboardTop";
 
 const { width } = Dimensions.get("window");
 
@@ -23,11 +33,58 @@ export function CrosswordGrid() {
   } = usePuzzleStore();
   const inputRef = useRef<TextInput>(null);
 
+  /**
+   * Keeps the row being typed into above the keyboard.
+   *
+   * The grid is not resized; it slides. Android 15 with edge-to-edge does not
+   * shrink the window for the keyboard, so without this the lower rows are
+   * drawn underneath it.
+   */
+  const wrapRef = useRef<View>(null);
+  const [gridTopY, setGridTopY] = useState(0);
+  const keyboardTop = useKeyboardTop();
+  const shift = useSharedValue(0);
+
+  const measureGrid = () => {
+    wrapRef.current?.measureInWindow((_x, y) => {
+      setGridTopY((prev) => (Math.abs(prev - y) < 1 ? prev : y));
+    });
+  };
+
   useEffect(() => {
     if (activePuzzle && selectedCell) {
       inputRef.current?.focus();
     }
   }, [selectedCell, activePuzzle]);
+
+  // The keyboard appearing does not fire a layout event on Android 15, so the
+  // grid's position is re-read whenever the keyboard moves.
+  useEffect(measureGrid, [keyboardTop, activePuzzle?.id]);
+
+  useEffect(() => {
+    const size = activePuzzle?.gridSize ?? 0;
+    const cell = size > 0 ? Math.floor((width - 24) / size) : 0;
+    const row = selectedCell?.row;
+
+    const target =
+      cell === 0 || row == null || gridTopY === 0
+        ? 0
+        : activeRowShift(
+            gridTopY + (row + 1) * cell,
+            keyboardTop,
+            // A full cell of clearance, so the row below the active one stays
+            // visible. Clearing the keyboard by a few pixels leaves the cell
+            // legible but with nothing around it, which is what every row in
+            // the lower half of the grid looked like.
+            cell + ACTIVE_ROW_MARGIN,
+          );
+
+    shift.value = withTiming(target, { duration: 180 });
+  }, [activePuzzle?.gridSize, selectedCell?.row, gridTopY, keyboardTop]);
+
+  const shiftStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: -shift.value }],
+  }));
 
   if (!activePuzzle) return null;
 
@@ -249,7 +306,7 @@ export function CrosswordGrid() {
   };
 
   return (
-    <View style={styles.container}>
+    <View ref={wrapRef} style={styles.container} onLayout={measureGrid}>
       <TextInput
         ref={inputRef}
         style={styles.hiddenInput}
@@ -261,6 +318,7 @@ export function CrosswordGrid() {
         showSoftInputOnFocus={true}
       />
 
+      <Animated.View style={shiftStyle}>
       <View
         style={[
           styles.gridWrapper,
@@ -298,6 +356,7 @@ export function CrosswordGrid() {
           </View>
         ))}
       </View>
+      </Animated.View>
     </View>
   );
 }
@@ -307,6 +366,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginVertical: 8,
+    // The grid slides up behind the bars above it when the keyboard opens.
+    // Clipping it to its own box is what actually keeps it out of them:
+    // relying on the bars being opaque and elevated works only as long as
+    // every one of them is, and z-order on Android is easy to get wrong.
+    // Rows that scroll past the top edge are simply not drawn.
+    overflow: "hidden",
   },
   gridWrapper: {
     borderWidth: 1.5,
