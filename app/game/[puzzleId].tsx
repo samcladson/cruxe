@@ -34,6 +34,7 @@ import { usePuzzleStore } from "../../stores/puzzleStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useUserStore } from "../../stores/userStore";
 import { Difficulty } from "../../types/puzzle.types";
+import { ScreenBackdrop } from "../../components/ui/ScreenBackdrop";
 
 // Coin rewards live in economy_config on the server. The client is told what
 // it earned; it never decides.
@@ -238,6 +239,7 @@ export default function GameScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <ScreenBackdrop variant="game" />
       <Stack.Screen options={{ headerShown: false }} />
       <KeyboardAvoidingView
         style={{ flex: 1 }}

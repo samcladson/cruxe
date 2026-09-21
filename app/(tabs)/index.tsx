@@ -32,6 +32,7 @@ import {
   fetchRecentActivity,
   fetchTodayCollectionSummary,
   getDailyPlayerCount,
+  puzzleTitle,
   PuzzleMeta,
 } from "../../services/puzzleService";
 import { supabase } from "../../services/supabaseClient";
@@ -53,6 +54,7 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import { track } from "../../services/analyticsService";
 import { drainPendingSolves } from "../../services/offlineSyncService";
 import { formatCompactNumber } from "../../utils/formatNumber";
+import { ScreenBackdrop } from "../../components/ui/ScreenBackdrop";
 
 function PulseDot() {
   const opacity = useSharedValue(0.4);
@@ -288,7 +290,12 @@ export default function HomeScreen() {
     if (dailyPuzzle) {
       router.push({
         pathname: "/game/generate",
-        params: { id: dailyPuzzle.id },
+        params: {
+          id: dailyPuzzle.id,
+          title: puzzleTitle(dailyPuzzle),
+          difficulty: dailyPuzzle.difficulty,
+          size: String(dailyPuzzle.gridSize),
+        },
       });
     } else {
       router.push("/game/generate");
@@ -306,6 +313,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <ScreenBackdrop variant="home" />
       <StatusBar barStyle="light-content" />
       <View style={styles.header}>
         {/* Top bar with branding and stats */}

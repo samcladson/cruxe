@@ -29,6 +29,7 @@ import {
 import { supabase } from "../../services/supabaseClient";
 import { Difficulty } from "../../types/puzzle.types";
 import { useSettingsStore } from "../../stores/settingsStore";
+import { ScreenBackdrop } from "../../components/ui/ScreenBackdrop";
 
 export default function CollectionScreen() {
   const [puzzles, setPuzzles] = useState<PuzzleMeta[]>([]);
@@ -97,6 +98,7 @@ export default function CollectionScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
+      <ScreenBackdrop variant="collection" />
       <ScreenHeader
         title="Today's Collection"
         subtitle="Every puzzle published today"
@@ -334,7 +336,15 @@ export default function CollectionScreen() {
 
                       router.push({
                         pathname: "/game/generate",
-                        params: { id: puzzle.id },
+                        // The loading screen has nothing of its own to go on
+                        // when given only an id, and used to fall back on
+                        // defaults that were usually wrong.
+                        params: {
+                          id: puzzle.id,
+                          title: puzzleTitle(puzzle),
+                          difficulty: puzzle.difficulty,
+                          size: String(puzzle.gridSize),
+                        },
                       });
                     }}
                   >

@@ -34,6 +34,7 @@ import {
 } from "../../services/puzzleService";
 import { useUserStore } from "../../stores/userStore";
 import { formatCompactNumber } from "../../utils/formatNumber";
+import { ScreenBackdrop } from "../../components/ui/ScreenBackdrop";
 
 // ─── Podium Bar ───────────────────────────────────────────────────────
 
@@ -181,6 +182,7 @@ export default function LeaderboardScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
+        <ScreenBackdrop variant="leaderboard" />
         <ScreenHeader title="Leaderboard" subtitle="Top players globally" />
         <View style={styles.centred}>
           <ActivityIndicator size="large" color={theme.colors.accentGold} />
@@ -193,6 +195,7 @@ export default function LeaderboardScreen() {
   if (error) {
     return (
       <SafeAreaView style={styles.container}>
+        <ScreenBackdrop variant="leaderboard" />
         <ScreenHeader title="Leaderboard" subtitle="Top players globally" />
         <View style={styles.centred}>
           <MaterialIcons
@@ -213,6 +216,7 @@ export default function LeaderboardScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <ScreenBackdrop variant="leaderboard" />
       <ScreenHeader title="Leaderboard" subtitle="Top players globally" />
 
       <ScrollView

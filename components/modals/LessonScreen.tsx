@@ -1,11 +1,21 @@
 import React from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { theme } from "../../constants/theme";
 import { useReducedMotion } from "../../utils/useReducedMotion";
 import { CompletionActions } from "./CompletionActions";
+import { ScreenBackdrop } from "../ui/ScreenBackdrop";
 
 /** One fact, tied to the clue the player solved to earn it. */
 export interface LessonFact {
@@ -13,6 +23,14 @@ export interface LessonFact {
   reference: string;
   word: string;
   fact: string;
+  /**
+   * True when the player got this word wrong and has not bought it back.
+   *
+   * The fact is still present in this object: the lesson ships inside the
+   * puzzle payload, so the lock is what the screen draws, not what it knows.
+   * The spend behind it is real and server-checked.
+   */
+  locked: boolean;
 }
 
 interface LessonScreenProps {
@@ -20,6 +38,10 @@ interface LessonScreenProps {
   title: string;
   takeaway?: string;
   facts: ReadonlyArray<LessonFact>;
+  /** Coins one locked fact costs, priced by the puzzle's difficulty. */
+  unlockPrice: number;
+  /** Resolves true once the fact has been paid for. */
+  onUnlock: (word: string) => Promise<boolean>;
   /** Normally true — the takeaway ends the flow when a puzzle has one. */
   isLast: boolean;
   onContinue: () => void;
@@ -49,12 +71,27 @@ export function LessonScreen({
   title,
   takeaway,
   facts,
+  unlockPrice,
+  onUnlock,
   isLast,
   onContinue,
   onPickAnother,
   onHome,
 }: LessonScreenProps) {
   const reduceMotion = useReducedMotion();
+  /** The word currently being bought, so only its own tag spins. */
+  const [unlocking, setUnlocking] = React.useState<string | null>(null);
+
+  const unlock = async (word: string) => {
+    setUnlocking(word);
+    try {
+      await onUnlock(word);
+    } catch (e: any) {
+      Alert.alert("Couldn't unlock", e?.message ?? "Please try again.");
+    } finally {
+      setUnlocking(null);
+    }
+  };
 
   /** Entrance for the nth block, or nothing at all under reduced motion. */
   const rise = (delay: number) =>
@@ -67,6 +104,7 @@ export function LessonScreen({
 
   return (
     <SafeAreaView style={styles.screen}>
+      <ScreenBackdrop variant="success" />
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
@@ -92,7 +130,7 @@ export function LessonScreen({
           </Animated.Text>
         ) : null}
 
-        {facts.map(({ reference, word, fact }, i) => (
+        {facts.map(({ reference, word, fact, locked }, i) => (
           <Animated.View
             key={`${reference}-${word}`}
             entering={rise(
@@ -103,9 +141,43 @@ export function LessonScreen({
             <Text style={styles.factLabel}>
               <Text style={styles.factReference}>{reference}</Text>
               <Text style={styles.factSeparator}>{"  ·  "}</Text>
-              <Text style={styles.factWord}>{word}</Text>
+              <Text style={locked ? styles.factWordLocked : styles.factWord}>
+                {locked ? "?????" : word}
+              </Text>
             </Text>
-            <Text style={styles.factText}>{fact}</Text>
+
+            {locked ? (
+              <TouchableOpacity
+                style={styles.lockedWrap}
+                onPress={() => unlock(word)}
+                disabled={unlocking !== null}
+                accessibilityRole="button"
+                accessibilityLabel={`Unlock what ${reference} was, for ${unlockPrice} coins`}
+              >
+                {/* The text underneath is never rendered: a blurred view can
+                    still be read by a screenshot, and there is no reason to
+                    draw something the player has not paid for. */}
+                <Text style={styles.lockedRedacted} numberOfLines={2}>
+                  {"█".repeat(28)}
+                </Text>
+                <View style={styles.priceTag}>
+                  {unlocking === word ? (
+                    <ActivityIndicator size="small" color="#000" />
+                  ) : (
+                    <>
+                      <MaterialIcons
+                        name="monetization-on"
+                        size={15}
+                        color="#000"
+                      />
+                      <Text style={styles.priceText}>{unlockPrice}</Text>
+                    </>
+                  )}
+                </View>
+              </TouchableOpacity>
+            ) : (
+              <Text style={styles.factText}>{fact}</Text>
+            )}
           </Animated.View>
         ))}
       </ScrollView>
@@ -192,6 +264,43 @@ const styles = StyleSheet.create({
     letterSpacing: 1.4,
     fontWeight: "bold",
     color: theme.colors.accentGold,
+  },
+  factWordLocked: {
+    fontFamily: theme.typography.cellLetter.fontFamily,
+    fontSize: 11,
+    letterSpacing: 1.4,
+    fontWeight: "bold",
+    color: theme.colors.textMuted,
+  },
+  // The redaction and the price sit on one line: the row stays the same
+  // height locked or unlocked, so buying one does not reflow the list.
+  lockedWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  lockedRedacted: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 21,
+    color: "rgba(255,255,255,0.07)",
+  },
+  priceTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: theme.colors.accentGold,
+    paddingVertical: 5,
+    paddingHorizontal: 11,
+    borderRadius: 100,
+    minWidth: 62,
+    justifyContent: "center",
+  },
+  priceText: {
+    fontFamily: theme.typography.cellLetter.fontFamily,
+    fontSize: 13,
+    fontWeight: "bold",
+    color: "#000",
   },
   factText: {
     fontFamily: theme.typography.body.fontFamily,

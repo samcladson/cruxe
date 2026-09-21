@@ -1,5 +1,6 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import * as Crypto from "expo-crypto";
 import React, { useEffect, useState } from "react";
 import {
   Modal,
@@ -24,10 +25,14 @@ import { theme } from "../../constants/theme";
 import { LessonScreen, LessonFact } from "./LessonScreen";
 import { CompletionActions } from "./CompletionActions";
 import { clueReference } from "../../utils/clueLabel";
+import { unsolvedAnswers } from "../../utils/clueSolved";
+import { fetchUnlockedFacts, unlockFact } from "../../services/economyService";
+import { supabase } from "../../services/supabaseClient";
 import { SFX } from "../../services/soundService";
 import { usePuzzleStore } from "../../stores/puzzleStore";
 import { useUserStore } from "../../stores/userStore";
 import { formatCompactNumber } from "../../utils/formatNumber";
+import { ScreenBackdrop } from "../ui/ScreenBackdrop";
 
 /**
  * SuccessModal — Full-screen puzzle completion flow.
@@ -92,12 +97,30 @@ export function SuccessModal({
   // than the facts object means they read in the sequence the player solved
   // them, and carry the clue reference that labels them on screen.
   const facts = activePuzzle?.lesson?.facts ?? {};
+
+  /**
+   * Words the player got wrong. Their facts are locked until bought.
+   *
+   * Computed from the grid at completion, before anything navigates away —
+   * the store still holds what was actually typed.
+   */
+  const wrongAnswers = activePuzzle
+    ? unsolvedAnswers(activePuzzle.grid, activePuzzle.clues)
+    : new Set<string>();
+
+  /** Facts already paid for, so reopening the screen does not relock them. */
+  const [unlocked, setUnlocked] = useState<Set<string>>(new Set());
+  const [unlockPrice, setUnlockPrice] = useState(0);
+
   const factEntries: LessonFact[] = (activePuzzle?.clues ?? [])
     .filter((clue) => Boolean(facts[clue.answer]))
     .map((clue) => ({
       reference: clueReference(clue.number, clue.direction),
       word: clue.answer,
       fact: facts[clue.answer],
+      locked:
+        wrongAnswers.has(clue.answer) &&
+        !unlocked.has(clue.answer.toUpperCase()),
     }));
 
   const hasLesson =
@@ -133,6 +156,42 @@ export function SuccessModal({
   useEffect(() => {
     if (visible) setPhaseIndex(0);
   }, [visible]);
+
+  useEffect(() => {
+    if (!visible || !activePuzzle) return;
+    let cancelled = false;
+
+    void (async () => {
+      const [already, priceRow] = await Promise.all([
+        fetchUnlockedFacts(activePuzzle.id),
+        supabase
+          .from("economy_config")
+          .select("value")
+          .eq("key", "fact_unlock")
+          .single(),
+      ]);
+      if (cancelled) return;
+      setUnlocked(already);
+      // Priced per difficulty, server-side. A missing price leaves this at 0
+      // and the screen shows nothing to buy, which is better than inventing
+      // a number the server would not honour.
+      const byDifficulty = (priceRow.data?.value ?? {}) as Record<string, number>;
+      setUnlockPrice(byDifficulty[activePuzzle.difficulty] ?? 0);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, activePuzzle?.id]);
+
+  /** Buys one fact, then reflects the new balance the server reports. */
+  const handleUnlock = async (word: string): Promise<boolean> => {
+    if (!activePuzzle) return false;
+    const result = await unlockFact(activePuzzle.id, word, Crypto.randomUUID());
+    useUserStore.getState().applyServerBalance(result.balance);
+    setUnlocked((prev) => new Set(prev).add(word.toUpperCase()));
+    return true;
+  };
 
   useEffect(() => {
     if (phase === "streak") {
@@ -215,6 +274,8 @@ export function SuccessModal({
           title={activePuzzle.title ?? "What you learned"}
           takeaway={activePuzzle.lesson?.takeaway}
           facts={factEntries}
+          unlockPrice={unlockPrice}
+          onUnlock={handleUnlock}
           isLast={isLast}
           onContinue={advance}
           onPickAnother={handleBrowseMore}
@@ -236,6 +297,7 @@ export function SuccessModal({
         presentationStyle="fullScreen"
       >
         <SafeAreaView style={styles.streakScreen}>
+          <ScreenBackdrop variant="success" />
           <StatusBar barStyle="light-content" />
           <View style={styles.streakCenter}>
             <Animated.View style={[styles.bigFlameWrap, flameAnimatedStyle]}>
@@ -293,6 +355,7 @@ export function SuccessModal({
       presentationStyle="fullScreen"
     >
       <SafeAreaView style={styles.screen}>
+        <ScreenBackdrop variant="success" />
         <StatusBar barStyle="light-content" />
 
         {/* Centres when there is room and scrolls when there is not. The

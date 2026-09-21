@@ -26,6 +26,7 @@ import { track } from "../../services/analyticsService";
 import { SFX } from "../../services/soundService";
 import { usePuzzleStore } from "../../stores/puzzleStore";
 import { useSettingsStore } from "../../stores/settingsStore";
+import { ScreenBackdrop } from "../../components/ui/ScreenBackdrop";
 
 /**
  * TutorialScreen — a bundled warm-up puzzle with non-blocking coaching.
@@ -126,6 +127,7 @@ export default function TutorialScreen() {
   if (solved) {
     return (
       <SafeAreaView style={styles.container}>
+        <ScreenBackdrop variant="tutorial" />
         <Stack.Screen options={{ headerShown: false }} />
         <View style={styles.celebrate}>
           <Animated.View entering={FadeIn.duration(500)}>
@@ -166,6 +168,7 @@ export default function TutorialScreen() {
   // ── The guided puzzle ────────────────────────────────────────────
   return (
     <SafeAreaView style={styles.container}>
+      <ScreenBackdrop variant="tutorial" />
       <Stack.Screen options={{ headerShown: false }} />
       <KeyboardAvoidingView
         style={{ flex: 1 }}

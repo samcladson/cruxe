@@ -18,6 +18,7 @@ import {
   fetchCompletionById,
 } from "../../../services/puzzleService";
 import { useUserStore } from "../../../stores/userStore";
+import { ScreenBackdrop } from "../../../components/ui/ScreenBackdrop";
 
 export default function ActivityReviewScreen() {
   const { id } = useLocalSearchParams();
@@ -48,6 +49,7 @@ export default function ActivityReviewScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.centerContainer}>
+        <ScreenBackdrop variant="activity" />
         <ActivityIndicator size="large" color={theme.colors.accentGold} />
       </SafeAreaView>
     );
@@ -56,6 +58,7 @@ export default function ActivityReviewScreen() {
   if (!completion) {
     return (
       <SafeAreaView style={styles.centerContainer}>
+        <ScreenBackdrop variant="activity" />
         <Text style={{ color: theme.colors.textMuted }}>
           Could not load the activity details for this puzzle.
         </Text>
@@ -96,6 +99,7 @@ export default function ActivityReviewScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
+      <ScreenBackdrop variant="activity" />
       <Stack.Screen options={{ headerShown: false }} />
 
       <ScreenHeader

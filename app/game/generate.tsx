@@ -31,11 +31,43 @@ export default function GenerateScreen() {
   const params = useLocalSearchParams();
   const setActivePuzzle = usePuzzleStore((state) => state.setActivePuzzle);
 
-  const category = (params.category as Category) || "general";
-  const difficulty = (params.difficulty as Difficulty) || "medium";
-  const gridSize = (params.size ? Number(params.size) : 8) as GridSize;
-  const variant = params.variant ? Number(params.variant) : 1;
   const explicitId = params.id as string | undefined;
+
+  // What the caller actually told us, before defaults. Kept separate from
+  // the fetch parameters below: those defaults exist so a request with no
+  // parameters can still resolve a puzzle, but showing them to the player
+  // meant every load by id announced "General - Medium - 8x8" no matter
+  // what was really loading, because an id-only push supplies none of them.
+  const statedDifficulty = params.difficulty as Difficulty | undefined;
+  const statedSize = params.size ? Number(params.size) : undefined;
+  const statedTitle = (params.title as string | undefined)?.trim() || undefined;
+
+  const category = (params.category as Category) || "general";
+  const difficulty = statedDifficulty ?? Difficulty.MEDIUM;
+  const gridSize = (statedSize ?? 8) as GridSize;
+  const variant = params.variant ? Number(params.variant) : 1;
+
+  /**
+   * The line under the spinner, or null when nothing true can be said.
+   *
+   * Silence beats a confident wrong answer: a player who sees the wrong
+   * difficulty on the way in has been told something the puzzle will
+   * immediately contradict.
+   */
+  const subtitle = (() => {
+    const shape =
+      statedDifficulty && statedSize
+        ? `${statedDifficulty.charAt(0).toUpperCase()}${statedDifficulty.slice(1)} • ${statedSize}x${statedSize}`
+        : null;
+
+    if (statedTitle) return shape ? `${statedTitle} • ${shape}` : statedTitle;
+    if (shape) return shape;
+    // No id means the parameters above ARE the request, so they are true.
+    if (!explicitId) {
+      return `${category.charAt(0).toUpperCase()}${category.slice(1)} • ${difficulty.charAt(0).toUpperCase()}${difficulty.slice(1)} • ${gridSize}x${gridSize}`;
+    }
+    return null;
+  })();
 
   const [status, setStatus] = useState<"loading" | "error">("loading");
   const [errorMsg, setErrorMsg] = useState("");
@@ -137,11 +169,9 @@ export default function GenerateScreen() {
         <>
           <ActivityIndicator size="large" color={theme.colors.accentGold} />
           <Text style={styles.text}>Loading your puzzle...</Text>
-          <Text style={styles.subtext}>
-            {category.charAt(0).toUpperCase() + category.slice(1)} •{" "}
-            {difficulty.charAt(0).toUpperCase() + difficulty.slice(1)} •{" "}
-            {gridSize}x{gridSize}
-          </Text>
+          {subtitle ? (
+            <Text style={styles.subtext}>{subtitle}</Text>
+          ) : null}
         </>
       )}
 

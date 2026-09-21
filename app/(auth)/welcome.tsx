@@ -23,6 +23,7 @@ import {
 } from "../../services/authService";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { routeAfterStart } from "../../utils/onboardingRoute";
+import { ScreenBackdrop } from "../../components/ui/ScreenBackdrop";
 
 /**
  * WelcomeScreen — the app's single starting screen.
@@ -134,6 +135,7 @@ export default function WelcomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <ScreenBackdrop variant="welcome" />
       <View style={styles.content}>
         <View style={styles.hero}>
           <Animated.View

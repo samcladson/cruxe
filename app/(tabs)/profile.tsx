@@ -37,6 +37,7 @@ import {
   requestPermission,
   scheduleDailyReminder,
 } from "../../services/notificationService";
+import { ScreenBackdrop } from "../../components/ui/ScreenBackdrop";
 
 export default function ProfileScreen() {
   const profile = useUserStore((state) => state.profile);
@@ -313,6 +314,7 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
+      <ScreenBackdrop variant="profile" />
       <ScreenHeader title="Profile" subtitle="Your stats, account and settings" />
 
       <ScrollView

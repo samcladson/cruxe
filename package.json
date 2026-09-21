@@ -9,7 +9,8 @@
     "web": "expo start --web",
     "test": "jest",
     "test:unit": "jest --testPathIgnorePatterns integration",
-    "test:integration": "jest __tests__/integration"
+    "test:integration": "jest __tests__/integration",
+    "brand": "node scripts/brand/generate-brand.cjs"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",
@@ -55,6 +56,7 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@types/jest": "^29.5.14",
     "@types/react": "~19.1.0",
     "jest": "^29.7.0",

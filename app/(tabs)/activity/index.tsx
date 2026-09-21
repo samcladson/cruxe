@@ -19,6 +19,7 @@ import {
   fetchRecentActivity,
 } from "../../../services/puzzleService";
 import { useUserStore } from "../../../stores/userStore";
+import { ScreenBackdrop } from "../../../components/ui/ScreenBackdrop";
 
 /**
  * ActivityHistoryScreen — every puzzle this player has completed.
@@ -70,6 +71,7 @@ export default function ActivityHistoryScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
+      <ScreenBackdrop variant="activity" />
       <ScreenHeader
         title="Activity History"
         subtitle={

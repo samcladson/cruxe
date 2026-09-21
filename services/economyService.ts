@@ -63,6 +63,8 @@ function rpcError(context: string, error: { message: string }): Error {
     repair_window_expired:
       "That streak is too old to restore now — but a new one starts today.",
     unknown_hint_type: "That hint isn't available.",
+    unknown_puzzle: "That puzzle is no longer available.",
+    no_price_for_difficulty: "That fact can't be unlocked right now.",
     display_name_length: "Name must be 2–20 characters.",
     display_name_charset:
       "Name can only use letters, numbers, spaces, - and _.",
@@ -70,6 +72,53 @@ function rpcError(context: string, error: { message: string }): Error {
   };
   const key = Object.keys(known).find((k) => error.message.includes(k));
   return new Error(key ? known[key] : `${context} failed. Please try again.`);
+}
+
+export interface FactUnlockResult {
+  cost: number;
+  balance: number;
+  already_unlocked: boolean;
+}
+
+/**
+ * Buys the fact behind one word the player got wrong.
+ *
+ * The price lives in `economy_config` and is read server-side — nothing about
+ * cost is sent from here. `actionId` is the idempotency key, so a double tap
+ * or a retry cannot charge twice, and re-opening a fact already bought comes
+ * back with `cost: 0`.
+ */
+export async function unlockFact(
+  puzzleId: string,
+  answer: string,
+  actionId: string,
+): Promise<FactUnlockResult> {
+  const { data, error } = await supabase.rpc("unlock_fact", {
+    p_puzzle_id: puzzleId,
+    p_answer: answer,
+    p_action_id: actionId,
+  });
+  if (error) throw rpcError("Unlock", error);
+  return data as FactUnlockResult;
+}
+
+/** Which facts this player has already bought for a puzzle. */
+export async function fetchUnlockedFacts(
+  puzzleId: string,
+): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from("fact_unlocks")
+    .select("answer")
+    .eq("puzzle_id", puzzleId);
+
+  if (error) {
+    // Not worth blocking the screen over: the worst case is a fact showing
+    // as locked that has already been paid for, and unlocking it again is
+    // free because the RPC recognises it.
+    console.warn("[Economy] Could not load unlocked facts:", error.message);
+    return new Set();
+  }
+  return new Set((data ?? []).map((r) => String(r.answer).toUpperCase()));
 }
 
 export async function spendOnHint(

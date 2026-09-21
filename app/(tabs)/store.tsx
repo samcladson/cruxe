@@ -21,6 +21,7 @@ import { track } from "../../services/analyticsService";
 import { supabase } from "../../services/supabaseClient";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useUserStore } from "../../stores/userStore";
+import { ScreenBackdrop } from "../../components/ui/ScreenBackdrop";
 
 // Coin amounts come from the `coin_products` table, never from parsing the
 // product identifier. The old regex granted 2 coins for a SKU like
@@ -191,6 +192,7 @@ export default function StoreScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <ScreenBackdrop variant="store" />
       <ScreenHeader title="Store" subtitle="Top up your coin balance" />
 
       <ScrollView
