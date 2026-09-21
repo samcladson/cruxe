@@ -1,80 +1,482 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Cruxe</title>
-    <style>
-      :root {
-        --bg: #0a0a0a;
-        --card: #141414;
-        --text: #f8f8f6;
-        --muted: #a1a1a1;
-        --gold: #eecd2b;
-        --border: rgba(255, 255, 255, 0.08);
-      }
-      * { box-sizing: border-box; }
-      body {
-        margin: 0;
-        padding: 3rem 1.25rem 4rem;
-        background: var(--bg);
-        color: var(--text);
-        font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-          Helvetica, Arial, sans-serif;
-      }
-      main { max-width: 34rem; margin: 0 auto; }
-      .wordmark {
-        font-size: 0.8rem;
-        letter-spacing: 0.4em;
-        color: var(--gold);
-        font-weight: 700;
-      }
-      h1 { font-size: 2rem; margin: 1rem 0 0.5rem; letter-spacing: -0.02em; }
-      p.sub { color: var(--muted); margin: 0 0 2.5rem; }
-      a.row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 1rem;
-        padding: 1.1rem 1.35rem;
-        margin-bottom: 0.75rem;
-        background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        color: var(--text);
-        text-decoration: none;
-      }
-      a.row:hover { border-color: rgba(238, 205, 43, 0.35); }
-      a.row span.chev { color: var(--muted); }
-      footer {
-        margin-top: 3rem;
-        padding-top: 1.5rem;
-        border-top: 1px solid var(--border);
-        color: var(--muted);
-        font-size: 0.875rem;
-      }
-      footer a { color: var(--gold); }
-    </style>
-  </head>
-  <body>
-    <main>
-      <div class="wordmark">CRUXE</div>
-      <h1>The elite crossword</h1>
-      <p class="sub">A new set of handcrafted puzzles every day.</p>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Cruxe</title>
+<meta name="description" content="Cruxe is a daily crossword for Android. A new set of handcrafted puzzles every day, with answers that sometimes read backwards or upwards. No ads.">
+<meta property="og:title" content="Cruxe: the elite crossword">
+<meta property="og:description" content="A new set of crosswords every day. Made properly, and not especially forgiving.">
+<meta property="og:image" content="assets/icon.png">
+<meta name="theme-color" content="#0a0a0a">
+<link rel="icon" href="assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap">
+<style>
+  /* One committed dark theme: this is the app's own world. */
+  :root {
+    --ground: #0a0a0a;
+    --surface: #131312;
+    --raised: #1a1a19;
+    --line: rgba(248, 248, 246, 0.08);
+    --line-strong: rgba(248, 248, 246, 0.16);
+    --text: #f8f8f6;
+    --muted: #a3a39c;
+    --faint: #6b6b64;
+    --gold: #eecd2b;
+    --gold-soft: rgba(238, 205, 43, 0.12);
+    --gold-line: rgba(238, 205, 43, 0.4);
+    --green: #22c38e;
+    --sans: "Manrope", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: "Space Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    padding-inline: 20px;
+    /* The app's dot grid, carried onto the page. */
+    background-image: radial-gradient(rgba(248,248,246,.07) 1px, transparent 1.2px);
+    background-size: 24px 24px;
+  }
+  img { max-width: 100%; display: block; }
+  a { color: inherit; }
+  h1, h2, h3 { margin: 0; text-wrap: balance; }
+  p { margin: 0; }
+  .wrap { max-width: 1120px; margin: 0 auto; }
+  .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--gold); }
+  :focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; border-radius: 6px; }
 
-      <a class="row" href="./privacy.html">
-        <span>Privacy Policy</span><span class="chev">&rsaquo;</span>
-      </a>
-      <a class="row" href="./terms.html">
-        <span>Terms of Service</span><span class="chev">&rsaquo;</span>
-      </a>
-      <a class="row" href="./account-deletion.html">
-        <span>Delete your account</span><span class="chev">&rsaquo;</span>
-      </a>
+  /* ---------- Wordmark tiles ---------- */
+  .wm { display: flex; gap: 4px; text-decoration: none; }
+  .wm span {
+    width: var(--s, 28px); height: var(--s, 28px); border-radius: calc(var(--s, 28px) * .2);
+    display: grid; place-items: center;
+    background: var(--raised); border: 1px solid var(--line-strong);
+    font-weight: 700; font-size: calc(var(--s, 28px) * .5); line-height: 1;
+  }
+  .wm span:first-child { border-color: var(--gold); background: var(--gold-soft); color: var(--gold); }
 
-      <footer>
-        Support: <a href="mailto:samcladson08@gmail.com">samcladson08@gmail.com</a>
-      </footer>
-    </main>
-  </body>
+  /* ---------- Header ---------- */
+  header.top {
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10;
+    margin-inline: -20px; padding: 14px 20px;
+    background: rgba(10,10,10,.82); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line);
+  }
+  header.top .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  header.top nav { display: flex; align-items: center; gap: 28px; font-size: 14px; font-weight: 600; }
+  header.top nav a.link { color: var(--muted); text-decoration: none; }
+  header.top nav a.link:hover { color: var(--text); }
+  .btn-sm {
+    display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 100px;
+    background: var(--gold); color: #0a0a0a; font-weight: 700; font-size: 13px; text-decoration: none; letter-spacing: .02em;
+  }
+  @media (max-width: 720px) { header.top nav a.link { display: none; } }
+
+  /* ---------- Hero ---------- */
+  .hero {
+    position: relative; display: grid; grid-template-columns: 1.05fr 1fr; gap: 48px; align-items: center;
+    padding-block: 72px 88px;
+  }
+  .hero::before {
+    content: ""; position: absolute; inset: -120px auto auto -200px; width: 720px; height: 620px; z-index: -1;
+    background: radial-gradient(closest-side, rgba(238,205,43,.13), transparent);
+    pointer-events: none;
+  }
+  .hero .wm { --s: 54px; gap: 8px; margin-bottom: 36px; }
+  .hero h1 { font-size: clamp(44px, 7vw, 84px); line-height: .98; font-weight: 800; letter-spacing: -0.035em; }
+  .hero h1 em { font-style: normal; color: var(--gold); }
+  .hero .lede { color: var(--muted); font-size: clamp(17px, 1.6vw, 20px); max-width: 30ch; margin-top: 24px; }
+  .cta-row { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 36px; align-items: center; }
+  .play {
+    display: inline-flex; align-items: center; gap: 12px; padding: 12px 22px 12px 18px; border-radius: 14px;
+    background: var(--text); color: #0a0a0a; text-decoration: none; line-height: 1.15;
+    box-shadow: 0 18px 50px -20px rgba(238,205,43,.45);
+    transition: transform .2s ease;
+  }
+  .play:hover { transform: translateY(-2px); }
+  .play svg { width: 26px; height: 26px; flex: none; }
+  .play small { display: block; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; opacity: .7; }
+  .play strong { font-size: 18px; font-weight: 700; }
+  .ghost { color: var(--text); font-weight: 600; text-decoration: none; padding: 12px 6px; border-bottom: 1px solid var(--line-strong); }
+  .ghost:hover { border-color: var(--gold); }
+  .facts { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 36px; font-family: var(--mono); font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  .facts span::before { content: "■"; color: var(--gold); margin-right: 8px; font-size: 9px; vertical-align: 2px; }
+
+  /* Phones */
+  .phone {
+    position: relative; width: 100%; max-width: 300px; aspect-ratio: 720 / 1458;
+    border-radius: 38px; padding: 9px; background: #050505;
+    border: 1px solid var(--line-strong);
+    box-shadow: 0 40px 100px -40px rgba(0,0,0,.9), inset 0 0 0 1px rgba(255,255,255,.04);
+  }
+  .phone img { width: 100%; height: 100%; object-fit: cover; object-position: top; border-radius: 30px; }
+  .hero-phones { position: relative; display: flex; justify-content: center; min-height: 560px; }
+  .hero-phones .phone.back { position: absolute; right: 52%; top: 48px; max-width: 250px; transform: rotate(-7deg); opacity: .55; filter: saturate(.7); }
+  .hero-phones .phone.front { max-width: 300px; margin-left: 22%; box-shadow: 0 40px 120px -30px rgba(238,205,43,.22), 0 0 0 1px var(--line); }
+  @media (max-width: 880px) {
+    .hero { grid-template-columns: 1fr; padding-top: 48px; }
+    .hero-phones { min-height: 0; padding-block: 12px 20px; }
+    .hero-phones .phone.front { margin-left: 30%; max-width: 250px; }
+    .hero-phones .phone.back { max-width: 200px; right: 46%; }
+  }
+
+  /* ---------- Sections ---------- */
+  section.block { padding-block: 96px; border-top: 1px solid var(--line); }
+  .sec-head { display: grid; grid-template-columns: 240px 1fr; gap: 32px; margin-bottom: 48px; }
+  .sec-head h2 { font-size: clamp(30px, 4vw, 44px); line-height: 1.08; font-weight: 800; letter-spacing: -0.025em; }
+  .sec-head p { color: var(--muted); font-size: 17px; max-width: 58ch; margin-top: 14px; }
+  @media (max-width: 760px) { .sec-head { grid-template-columns: 1fr; gap: 12px; } section.block { padding-block: 72px; } }
+
+  /* ---------- Directions demo ---------- */
+  .dir { display: grid; grid-template-columns: auto 1fr; gap: 56px; align-items: center; }
+  .grid-demo {
+    --c: 52px;
+    display: grid; grid-template-columns: repeat(7, var(--c)); grid-template-rows: repeat(7, var(--c));
+    padding: 10px; border-radius: 14px; background: #1c1a0f; border: 1px solid rgba(238,205,43,.25);
+    gap: 0;
+  }
+  .cell { border: 1px solid rgba(238,205,43,.09); display: grid; place-items: center; font-weight: 700; font-size: calc(var(--c) * .42); color: var(--gold); }
+  .cell.open { background: #232320; border-color: rgba(255,255,255,.12); color: var(--text); }
+  .cell.open.on { color: var(--green); }
+  .cell.open.cursor { background: #274457; outline: 2px solid var(--gold); outline-offset: -2px; }
+  .cell.open.lit { background: #2c2a1c; }
+  .dir-list { display: grid; gap: 14px; }
+  .dir-btn {
+    display: grid; grid-template-columns: 44px 1fr; gap: 16px; align-items: center; text-align: left;
+    padding: 18px 20px; border-radius: 14px; border: 1px solid var(--line); background: transparent; color: var(--text);
+    font: inherit; cursor: pointer; transition: border-color .2s, background .2s;
+  }
+  .dir-btn:hover { border-color: var(--line-strong); }
+  .dir-btn[aria-pressed="true"] { border-color: var(--gold-line); background: var(--gold-soft); }
+  .dir-btn .arrow { width: 44px; height: 44px; border-radius: 10px; display: grid; place-items: center; background: var(--raised); color: var(--gold); font-size: 22px; font-weight: 700; }
+  .dir-btn b { display: block; font-family: var(--mono); letter-spacing: .12em; font-size: 15px; }
+  .dir-btn span.s { color: var(--muted); font-size: 14px; }
+  .dir-note { color: var(--faint); font-size: 13.5px; margin-top: 6px; }
+  .dir-keys { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+  .dir-keys span { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; padding: 6px 12px; border-radius: 100px; border: 1px solid var(--line-strong); color: var(--muted); }
+  @media (max-width: 880px) { .dir { grid-template-columns: 1fr; gap: 32px; } .grid-demo { justify-self: center; } }
+  @media (max-width: 440px) { .grid-demo { --c: 42px; } }
+
+  /* ---------- Screens strip ---------- */
+  .strip {
+    display: grid; grid-auto-flow: column; grid-auto-columns: minmax(220px, 250px); gap: 28px;
+    overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 20px;
+    scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent;
+  }
+  .strip figure { margin: 0; scroll-snap-align: start; display: grid; gap: 18px; }
+  .strip .phone { max-width: none; border-radius: 32px; padding: 7px; }
+  .strip .phone img { border-radius: 26px; }
+  .strip figcaption b { display: block; font-size: 15px; font-weight: 700; }
+  .strip figcaption span { color: var(--muted); font-size: 14px; }
+  .strip figcaption i { font-style: normal; font-family: var(--mono); font-size: 11px; color: var(--gold); letter-spacing: .12em; display: block; margin-bottom: 6px; }
+
+  /* ---------- Features ---------- */
+  .features { display: grid; grid-template-columns: repeat(2, 1fr); column-gap: 64px; }
+  .feat { display: grid; grid-template-columns: 40px 1fr; gap: 18px; padding-block: 26px; border-top: 1px solid var(--line); }
+  .feat .ic { width: 40px; height: 40px; border-radius: 10px; background: var(--raised); border: 1px solid var(--line); display: grid; place-items: center; color: var(--gold); }
+  .feat .ic svg { width: 20px; height: 20px; }
+  .feat h3 { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+  .feat p { color: var(--muted); font-size: 15px; margin-top: 6px; max-width: 46ch; }
+  @media (max-width: 760px) { .features { grid-template-columns: 1fr; } }
+
+  /* ---------- Free ---------- */
+  .free { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: 20px; background: var(--surface); overflow: hidden; }
+  .free > div { padding: 36px 32px; }
+  .free > div + div { border-left: 1px solid var(--line); }
+  .free .n { font-size: clamp(56px, 7vw, 80px); font-weight: 800; line-height: 1; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
+  .free .n.g { color: var(--gold); }
+  .free h3 { font-size: 17px; margin-top: 18px; }
+  .free p { color: var(--muted); font-size: 14.5px; margin-top: 6px; }
+  .free-foot { color: var(--muted); font-size: 15px; margin-top: 24px; max-width: 70ch; }
+  @media (max-width: 760px) { .free { grid-template-columns: 1fr; } .free > div + div { border-left: 0; border-top: 1px solid var(--line); } }
+
+  /* ---------- Download ---------- */
+  .get { display: grid; grid-template-columns: auto 1fr; gap: 48px; align-items: center; padding: 56px; border-radius: 28px;
+    background: radial-gradient(120% 140% at 0% 0%, rgba(238,205,43,.14), transparent 55%), var(--surface); border: 1px solid var(--gold-line); }
+  .get img.icon { width: 148px; height: 148px; border-radius: 22.5%; box-shadow: 0 24px 60px -24px rgba(238,205,43,.45); }
+  .get h2 { font-size: clamp(30px, 4vw, 46px); font-weight: 800; letter-spacing: -0.025em; line-height: 1.05; }
+  .get p { color: var(--muted); margin-top: 12px; max-width: 52ch; }
+  .get .cta-row { margin-top: 28px; }
+  .signin { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+  .signin span { font-size: 13px; padding: 6px 12px; border-radius: 100px; border: 1px solid var(--line-strong); color: var(--muted); }
+  @media (max-width: 760px) { .get { grid-template-columns: 1fr; padding: 32px 24px; gap: 28px; } .get img.icon { width: 104px; height: 104px; } }
+
+  /* ---------- Footer ---------- */
+  footer { padding-block: 48px 64px; border-top: 1px solid var(--line); margin-top: 96px; }
+  footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 24px 48px; align-items: flex-start; }
+  footer .wm { --s: 24px; }
+  footer .small { color: var(--faint); font-size: 13px; margin-top: 14px; }
+  footer nav { display: flex; flex-wrap: wrap; gap: 12px 28px; font-size: 14px; }
+  footer nav a { color: var(--muted); text-decoration: none; }
+  footer nav a:hover { color: var(--gold); }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .play { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="wm" href="#" aria-label="Cruxe home"><span>C</span><span>R</span><span>U</span><span>X</span><span>E</span></a>
+    <nav aria-label="Main">
+      <a class="link" href="#directions">How it plays</a>
+      <a class="link" href="#screens">Screens</a>
+      <a class="link" href="#features">Features</a>
+      <a class="btn-sm" href="#get">Get the app</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="hero">
+    <div>
+      <div class="wm" aria-hidden="true"><span>C</span><span>R</span><span>U</span><span>X</span><span>E</span></div>
+      <p class="eyebrow">Daily crossword for Android</p>
+      <h1 style="margin-top:14px">The <em>elite</em> crossword.</h1>
+      <p class="lede">A new set every day. Made properly, and not especially forgiving.</p>
+      <div class="cta-row">
+        <a class="play" href="https://play.google.com/store/apps/details?id=com.cruxe.app">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#34a853" d="M3.6 1.8 13.8 12 3.6 22.2c-.4-.2-.6-.7-.6-1.2V3c0-.5.2-1 .6-1.2Z"/><path fill="#fbbc04" d="m17.2 8.6 3.5 2c.9.5.9 2.2 0 2.7l-3.5 2L13.8 12Z"/><path fill="#ea4335" d="M13.8 12 3.6 22.2c.4.2.9.2 1.4-.1l12.2-6.8Z"/><path fill="#4285f4" d="M3.6 1.8c.4-.3 1-.3 1.4-.1l12.2 6.9L13.8 12Z"/></svg>
+          <span><small>Get it on</small><strong>Google Play</strong></span>
+        </a>
+        <a class="ghost" href="#directions">See how it plays</a>
+      </div>
+      <div class="facts"><span>No ads, ever</span><span>Daily Challenge free</span><span>6×6 to 12×12</span></div>
+    </div>
+    <div class="hero-phones">
+      <div class="phone back"><img src="assets/screens/home.jpg" alt="" loading="eager"></div>
+      <div class="phone front"><img src="assets/screens/solving.jpg" alt="A Cruxe puzzle in progress: HORSES entered backwards and GRAZING entered upwards on a 10 by 10 grid" loading="eager"></div>
+    </div>
+  </section>
+
+  <section class="block" id="directions">
+    <div class="sec-head">
+      <p class="eyebrow">How it plays</p>
+      <div>
+        <h2>Not just across and down.</h2>
+        <p>Some Cruxe answers read backwards. Some read upwards. An arrow on every clue tells you which way it runs, so the grid is fair. You just have to stop assuming.</p>
+      </div>
+    </div>
+    <div class="dir">
+      <div class="grid-demo" id="grid" role="img" aria-label="Crossword grid with HORSES written right to left and GRAZING written bottom to top, crossing at the letter R"></div>
+      <div>
+        <div class="dir-keys" aria-hidden="true"><span>→ ACROSS</span><span>↓ DOWN</span><span>← BACK</span><span>↑ UP</span></div>
+        <div class="dir-list">
+          <button class="dir-btn" type="button" id="btn-back" aria-pressed="false" data-word="back">
+            <span class="arrow">←</span>
+            <span><b>HORSES</b><span class="s">Reads backwards, right to left. You'll type it as S-E-S-R-O-H.</span></span>
+          </button>
+          <button class="dir-btn" type="button" id="btn-up" aria-pressed="false" data-word="up">
+            <span class="arrow">↑</span>
+            <span><b>GRAZING</b><span class="s">Reads upwards, from the bottom of the column to the top.</span></span>
+          </button>
+        </div>
+        <p class="dir-note">Both from one real Cruxe puzzle, <em>Domesticated Animals</em>. Tap one to watch it fill in.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="screens">
+    <div class="sec-head">
+      <p class="eyebrow">Screens</p>
+      <div>
+        <h2>One sitting, start to finish.</h2>
+        <p>From signing in to the short read waiting at the end of every puzzle. These are screenshots from the app itself.</p>
+      </div>
+    </div>
+    <div class="strip" tabindex="0" aria-label="App screenshots, scroll sideways for more">
+      <figure>
+        <div class="phone"><img src="assets/screens/welcome.jpg" alt="Cruxe welcome screen with Continue with Google and an email code option" loading="lazy"></div>
+        <figcaption><i>Sign in</i><b>One account, every device</b><span>Google or an emailed code. Your streak and coins follow you.</span></figcaption>
+      </figure>
+      <figure>
+        <div class="phone"><img src="assets/screens/home.jpg" alt="Home screen showing the Daily Challenge and today's collection of 18 puzzles across 5 categories" loading="lazy"></div>
+        <figcaption><i>Home</i><b>Today's Daily Challenge</b><span>Always free, always waiting at the top.</span></figcaption>
+      </figure>
+      <figure>
+        <div class="phone"><img src="assets/screens/collection.jpg" alt="Today's collection, filterable by difficulty and grid size" loading="lazy"></div>
+        <figcaption><i>Collection</i><b>Pick your size and difficulty</b><span>Filter the day's set from Easy to Expert, 6×6 to 12×12.</span></figcaption>
+      </figure>
+      <figure>
+        <div class="phone"><img src="assets/screens/solving.jpg" alt="Solving a puzzle with a backwards clue selected" loading="lazy"></div>
+        <figcaption><i>Solve</i><b>Four directions, one arrow</b><span>Switch direction with a tap. Hints are there if you need them.</span></figcaption>
+      </figure>
+      <figure>
+        <div class="phone"><img src="assets/screens/solved.jpg" alt="Puzzle solved screen showing time, accuracy, points and coins earned" loading="lazy"></div>
+        <figcaption><i>Score</i><b>Graded on how you solved it</b><span>Time, accuracy and hints used turn into points and coins.</span></figcaption>
+      </figure>
+      <figure>
+        <div class="phone"><img src="assets/screens/takeaway.jpg" alt="Takeaway screen with a short paragraph linking the puzzle's answers" loading="lazy"></div>
+        <figcaption><i>Takeaway</i><b>A short read to finish</b><span>Each puzzle ends with a paragraph that ties its answers together.</span></figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="block" id="features">
+    <div class="sec-head">
+      <p class="eyebrow">What's inside</p>
+      <div>
+        <h2>Built for people who like the puzzle.</h2>
+        <p>Clean grids, clues with a bit of bite, and nothing between you and the next answer.</p>
+      </div>
+    </div>
+    <div class="features">
+      <div class="feat">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg></div>
+        <div><h3>A new set, every day</h3><p>A Daily Challenge plus a full collection across General, History, Technology, Entertainment and Sports.</p></div>
+      </div>
+      <div class="feat">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg></div>
+        <div><h3>Four tiers, four sizes</h3><p>Easy, Medium, Hard and Expert, from a gentle 6×6 to a properly demanding 12×12.</p></div>
+      </div>
+      <div class="feat">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0 0 12 3Z"/></svg></div>
+        <div><h3>Hints you earn</h3><p>Reveal a letter, uncover a word, or check the grid for mistakes. Hints cost coins, and you earn coins by solving. Nobody has to pay to finish a puzzle.</p></div>
+      </div>
+      <div class="feat">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2s5 4.5 5 10a5 5 0 0 1-10 0c0-2 1-3.5 1-3.5S9 11 11 11c0-4 1-9 1-9Z"/></svg></div>
+        <div><h3>Streaks that forgive, once</h3><p>Solve daily and your streak and daily bonus grow. Miss a day and you can restore it, free once a month.</p></div>
+      </div>
+      <div class="feat">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4ZM7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4"/></svg></div>
+        <div><h3>Graded S to D</h3><p>Every solve is scored on difficulty, speed and how few hints you used. Climb the global leaderboard.</p></div>
+      </div>
+      <div class="feat">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 5h16M4 10h16M4 15h10M4 20h7"/></svg></div>
+        <div><h3>A takeaway with every puzzle</h3><p>Finish a grid and get a short paragraph on its theme, with the answers you just found worked into it.</p></div>
+      </div>
+      <div class="feat">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 8.5a15 15 0 0 1 20 0M5.5 12a10 10 0 0 1 13 0M9 15.5a5 5 0 0 1 6 0M12 19h.01M3 3l18 18"/></svg></div>
+        <div><h3>Plays offline</h3><p>Solve on a train or a plane. Progress and rewards sync when you reconnect.</p></div>
+      </div>
+      <div class="feat">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/></svg></div>
+        <div><h3>No ads. Ever.</h3><p>Not between puzzles, not for rewards, not anywhere. Coin packs are entirely optional.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="free">
+    <div class="sec-head">
+      <p class="eyebrow">Free to play</p>
+      <div>
+        <h2>Play your set. Come back tomorrow.</h2>
+        <p>No timer counting down, no lives to wait for.</p>
+      </div>
+    </div>
+    <div class="free">
+      <div><div class="n g">1</div><h3>Daily Challenge</h3><p>Free every day, for everyone.</p></div>
+      <div><div class="n">+3</div><h3>More free puzzles</h3><p>Pick any three from the day's collection.</p></div>
+      <div><div class="n">0</div><h3>Ads</h3><p>Not one, anywhere in the app.</p></div>
+    </div>
+    <p class="free-foot">Want more in one sitting? Coins unlock extra puzzles. You earn them by solving, and you can buy packs if you'd rather not wait.</p>
+  </section>
+
+  <section id="get" style="padding-top:24px">
+    <div class="get">
+      <img class="icon" src="assets/icon.png" alt="Cruxe app icon" width="148" height="148">
+      <div>
+        <p class="eyebrow">Get Cruxe</p>
+        <h2 style="margin-top:12px">Today's set is already waiting.</h2>
+        <p>Cruxe is on Android through Google Play. Sign in once and your streak, coins and history follow you to any device.</p>
+        <div class="cta-row">
+          <a class="play" href="https://play.google.com/store/apps/details?id=com.cruxe.app">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#34a853" d="M3.6 1.8 13.8 12 3.6 22.2c-.4-.2-.6-.7-.6-1.2V3c0-.5.2-1 .6-1.2Z"/><path fill="#fbbc04" d="m17.2 8.6 3.5 2c.9.5.9 2.2 0 2.7l-3.5 2L13.8 12Z"/><path fill="#ea4335" d="M13.8 12 3.6 22.2c.4.2.9.2 1.4-.1l12.2-6.8Z"/><path fill="#4285f4" d="M3.6 1.8c.4-.3 1-.3 1.4-.1l12.2 6.9L13.8 12Z"/></svg>
+            <span><small>Get it on</small><strong>Google Play</strong></span>
+          </a>
+        </div>
+        <div class="signin"><span>Sign in with Google</span><span>Or an emailed code</span><span>Android only for now</span></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div>
+      <div class="wm" aria-hidden="true"><span>C</span><span>R</span><span>U</span><span>X</span><span>E</span></div>
+      <p class="small">© 2026 Cruxe. The elite crossword.</p>
+    </div>
+    <nav aria-label="Legal and support">
+      <a href="https://samcladson.github.io/cruxe/privacy.html" target="_blank" rel="noopener">Privacy Policy</a>
+      <a href="https://samcladson.github.io/cruxe/terms.html" target="_blank" rel="noopener">Terms of Service</a>
+      <a href="https://samcladson.github.io/cruxe/account-deletion.html" target="_blank" rel="noopener">Delete your account</a>
+      <a href="mailto:samcladson08@gmail.com">Support</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+(function () {
+  // 7×7 slice of the real "Domesticated Animals" grid.
+  // HORSES runs right to left along row 5; GRAZING runs bottom to top up column 3.
+  var N = 7;
+  var back = [[5,5,'H'],[5,4,'O'],[5,3,'R'],[5,2,'S'],[5,1,'E'],[5,0,'S']];
+  var up   = [[6,3,'G'],[5,3,'R'],[4,3,'A'],[3,3,'Z'],[2,3,'I'],[1,3,'N'],[0,3,'G']];
+  var words = { back: back, up: up };
+  var grid = document.getElementById('grid');
+  var cells = {};
+  var open = {};
+  back.concat(up).forEach(function (p) { open[p[0] + ',' + p[1]] = p[2]; });
+  for (var r = 0; r < N; r++) for (var c = 0; c < N; c++) {
+    var d = document.createElement('div');
+    var k = r + ',' + c;
+    d.className = 'cell' + (open[k] ? ' open on' : '');
+    if (open[k]) d.textContent = open[k];
+    grid.appendChild(d);
+    cells[k] = d;
+  }
+
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var timers = [];
+  var buttons = document.querySelectorAll('.dir-btn');
+
+  function clearTimers() { timers.forEach(clearTimeout); timers = []; }
+  function resetLook() {
+    Object.keys(cells).forEach(function (k) {
+      var el = cells[k];
+      el.classList.remove('lit', 'cursor');
+      if (open[k]) { el.textContent = open[k]; el.classList.add('on'); }
+    });
+  }
+
+  function play(name) {
+    clearTimers(); resetLook();
+    buttons.forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.word === name ? 'true' : 'false'); });
+    var w = words[name];
+    w.forEach(function (p) { var el = cells[p[0] + ',' + p[1]]; el.classList.add('lit'); if (!reduce) { el.textContent = ''; el.classList.remove('on'); } });
+    if (reduce) return;
+    w.forEach(function (p, i) {
+      timers.push(setTimeout(function () {
+        if (i > 0) { var prev = w[i - 1]; cells[prev[0] + ',' + prev[1]].classList.remove('cursor'); }
+        var el = cells[p[0] + ',' + p[1]];
+        el.classList.add('cursor');
+        el.textContent = p[2];
+        el.classList.add('on');
+      }, 380 + i * 260));
+    });
+    timers.push(setTimeout(function () {
+      var last = w[w.length - 1]; cells[last[0] + ',' + last[1]].classList.remove('cursor');
+    }, 380 + w.length * 260 + 400));
+  }
+
+  buttons.forEach(function (b) { b.addEventListener('click', function () { play(b.dataset.word); }); });
+})();
+</script>
+</body>
 </html>

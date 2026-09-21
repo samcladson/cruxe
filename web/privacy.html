@@ -1,146 +1,120 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Cruxe — Privacy Policy</title>
-    <style>
-      :root {
-        --bg: #0a0a0a;
-        --text: #f8f8f6;
-        --muted: #a1a1a1;
-        --gold: #eecd2b;
-        --border: rgba(255, 255, 255, 0.08);
-      }
-      * { box-sizing: border-box; }
-      body {
-        margin: 0;
-        padding: 2.5rem 1.25rem 4rem;
-        background: var(--bg);
-        color: var(--text);
-        font: 16px/1.7 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-          Helvetica, Arial, sans-serif;
-      }
-      main { max-width: 42rem; margin: 0 auto; }
-      a { color: var(--gold); }
-      h1 { font-size: 1.9rem; margin: 0 0 0.4rem; }
-      h2 { font-size: 1.15rem; margin: 2.25rem 0 0.6rem; }
-      .updated { color: var(--muted); font-size: 0.9rem; margin-bottom: 2rem; }
-      ul { padding-left: 1.2rem; }
-      li { margin: 0.5rem 0; }
-      footer {
-        margin-top: 3rem;
-        padding-top: 1.5rem;
-        border-top: 1px solid var(--border);
-        color: var(--muted);
-        font-size: 0.875rem;
-      }
-    </style>
-  </head>
-  <body>
-    <main>
-      <h1>Privacy Policy</h1>
-      <p class="updated">Cruxe &middot; Last updated: September 2026</p>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Cruxe Privacy Policy</title>
+<meta name="description" content="What Cruxe collects, why, and who processes it.">
+<meta name="theme-color" content="#0a0a0a">
+<link rel="icon" href="assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap">
+<link rel="stylesheet" href="assets/legal.css">
+</head>
+<body>
 
-      <p>
-        This policy explains what Cruxe collects, why, and who processes it. It
-        mirrors the policy shown inside the app; if the two ever disagree,
-        please tell us and we will correct it.
-      </p>
+<header class="top">
+  <div class="wrap">
+    <a class="wm" href="./" aria-label="Cruxe home"><span>C</span><span>R</span><span>U</span><span>X</span><span>E</span></a>
+    <nav aria-label="Main">
+      <a class="link" href="privacy.html" aria-current="page">Privacy</a>
+      <a class="link" href="terms.html">Terms</a>
+      <a class="link" href="account-deletion.html">Delete account</a>
+      <a class="btn-sm" href="./#get">Get the app</a>
+    </nav>
+  </div>
+</header>
 
-      <h2>1. What we collect</h2>
-      <ul>
-        <li>
-          <strong>Account data.</strong> An account is required to play. You
-          create one with Google, Apple, or a one-time code sent to your email
-          address. We store your email address, the name your provider gives us
-          (if any), and an account identifier, so your progress follows you to
-          any device you sign in on.
-        </li>
-        <li>
-          <strong>Feedback you send.</strong> If you use Send feedback in the
-          app, we store what you write along with your account identifier, app
-          version and device platform, so we can reproduce the problem and
-          reply. It is never shown to other players.
-        </li>
-        <li>
-          <strong>Gameplay data.</strong> Puzzle completions, scores, solve
-          times, streaks and coin balance. These make the leaderboard and your
-          statistics work.
-        </li>
-        <li>
-          <strong>Purchase records.</strong> If you buy a coin pack, we record
-          that it happened so the coins can be granted and a refund honoured.
-          We never see your card details — Google Play handles payment.
-        </li>
-        <li>
-          <strong>Diagnostics.</strong> Crash reports and basic device
-          information (model, OS version), plus a record of which screens and
-          actions preceded a crash. Your device <em>name</em> is deliberately
-          removed before anything is sent.
-        </li>
-      </ul>
+<main class="wrap">
+  <div class="doc-head">
+    <p class="eyebrow">Legal</p>
+    <h1>Privacy Policy</h1>
+    <p class="lede">This policy explains what Cruxe collects, why, and who processes it. It mirrors the policy shown inside the app; if the two ever disagree, please tell us and we will correct it.</p>
+    <div class="meta"><span>Last updated September 2026</span><span>No ads, no ad SDKs</span><span>We never sell your data</span></div>
+  </div>
 
-      <h2>2. What we never collect</h2>
-      <p>
-        No location, contacts, photos, microphone, calendar, browsing history,
-        or advertising identifier. Cruxe contains no advertising and no
-        advertising SDK.
-      </p>
+  <div class="doc">
+    <nav class="toc" aria-label="On this page">
+      <p>On this page</p>
+      <ol>
+        <li><a href="#collect">What we collect</a></li>
+        <li><a href="#never">What we never collect</a></li>
+        <li><a href="#processors">Who processes your data</a></li>
+        <li><a href="#public">Your display name is public</a></li>
+        <li><a href="#deleting">Deleting your data</a></li>
+        <li><a href="#children">Children</a></li>
+        <li><a href="#contact">Contact</a></li>
+      </ol>
+    </nav>
 
-      <h2>3. Who processes your data</h2>
-      <ul>
-        <li><strong>Supabase</strong> — authentication and database hosting.</li>
-        <li>
-          <strong>RevenueCat</strong> — validating in-app purchases. Receives
-          your account identifier and purchase history.
-        </li>
-        <li>
-          <strong>Sentry</strong> — crash reporting and diagnostics. Receives
-          device model, OS version and your account identifier.
-        </li>
-        <li>
-          <strong>Google or Apple Sign-In</strong> — only if you choose to link
-          an account.
-        </li>
-      </ul>
-      <p>
-        We do not sell your data, and we do not share it for advertising.
-      </p>
+    <article>
+      <section id="collect">
+        <h2><span class="num">01</span>What we collect</h2>
+        <ul>
+          <li><strong>Account data.</strong> An account is required to play. You create one with Google, Apple, or a one-time code sent to your email address. We store your email address, the name your provider gives us (if any), and an account identifier, so your progress follows you to any device you sign in on.</li>
+          <li><strong>Feedback you send.</strong> If you use Send feedback in the app, we store what you write along with your account identifier, app version and device platform, so we can reproduce the problem and reply. It is never shown to other players.</li>
+          <li><strong>Gameplay data.</strong> Puzzle completions, scores, solve times, streaks and coin balance. These make the leaderboard and your statistics work.</li>
+          <li><strong>Purchase records.</strong> If you buy a coin pack, we record that it happened so the coins can be granted and a refund honoured. We never see your card details — Google Play handles payment.</li>
+          <li><strong>Diagnostics.</strong> Crash reports and basic device information (model, OS version), plus a record of which screens and actions preceded a crash. Your device <em>name</em> is deliberately removed before anything is sent.</li>
+        </ul>
+      </section>
 
-      <h2>4. Your display name is public</h2>
-      <p>
-        The name you choose appears on the global leaderboard alongside your
-        score and streak. Nothing else about you is shown. You can change it at
-        any time in your profile.
-      </p>
+      <section id="never">
+        <h2><span class="num">02</span>What we never collect</h2>
+        <p>No location, contacts, photos, microphone, calendar, browsing history, or advertising identifier. Cruxe contains no advertising and no advertising SDK.</p>
+      </section>
 
-      <h2>5. Deleting your data</h2>
-      <p>
-        Open Cruxe, go to <strong>Profile &rarr; Delete account</strong>. This
-        is immediate and permanent: your profile, progress, streak, coin
-        balance and leaderboard entry are erased. Full instructions, including
-        what to do if you no longer have the app installed, are on the
-        <a href="./account-deletion.html">account deletion page</a>.
-      </p>
-      <p>
-        Purchase records may be retained in anonymised form where tax and
-        accounting law requires it. They cannot be linked back to you.
-      </p>
+      <section id="processors">
+        <h2><span class="num">03</span>Who processes your data</h2>
+        <ul>
+          <li><strong>Supabase</strong> — authentication and database hosting.</li>
+          <li><strong>RevenueCat</strong> — validating in-app purchases. Receives your account identifier and purchase history.</li>
+          <li><strong>Sentry</strong> — crash reporting and diagnostics. Receives device model, OS version and your account identifier.</li>
+          <li><strong>Google or Apple Sign-In</strong> — only if you choose to link an account.</li>
+        </ul>
+        <p>We do not sell your data, and we do not share it for advertising.</p>
+      </section>
 
-      <h2>6. Children</h2>
-      <p>
-        Cruxe is not directed at children and we do not knowingly collect data
-        from anyone under 13.
-      </p>
+      <section id="public">
+        <h2><span class="num">04</span>Your display name is public</h2>
+        <p>The name you choose appears on the global leaderboard alongside your score and streak. Nothing else about you is shown. You can change it at any time in your profile.</p>
+      </section>
 
-      <h2>7. Contact</h2>
-      <p>
-        Questions about your data:
-        <a href="mailto:samcladson08@gmail.com">samcladson08@gmail.com</a>
-      </p>
+      <section id="deleting">
+        <h2><span class="num">05</span>Deleting your data</h2>
+        <p>Open Cruxe, go to <strong>Profile &rarr; Delete account</strong>. This is immediate and permanent: your profile, progress, streak, coin balance and leaderboard entry are erased. Full instructions, including what to do if you no longer have the app installed, are on the <a href="account-deletion.html">account deletion page</a>.</p>
+        <p>Purchase records may be retained in anonymised form where tax and accounting law requires it. They cannot be linked back to you.</p>
+      </section>
 
-      <footer><a href="./">&larr; Back to Cruxe</a></footer>
-    </main>
-  </body>
+      <section id="children">
+        <h2><span class="num">06</span>Children</h2>
+        <p>Cruxe is not directed at children and we do not knowingly collect data from anyone under 13.</p>
+      </section>
+
+      <section id="contact">
+        <h2><span class="num">07</span>Contact</h2>
+        <p>Questions about your data: <a href="mailto:samcladson08@gmail.com">samcladson08@gmail.com</a></p>
+      </section>
+    </article>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div>
+      <a class="wm" href="./" aria-label="Cruxe home"><span>C</span><span>R</span><span>U</span><span>X</span><span>E</span></a>
+      <p class="small">© 2026 Cruxe. The elite crossword.</p>
+    </div>
+    <nav aria-label="Legal and support">
+      <a href="./">Home</a>
+      <a href="privacy.html" aria-current="page">Privacy Policy</a>
+      <a href="terms.html">Terms of Service</a>
+      <a href="account-deletion.html">Delete your account</a>
+      <a href="mailto:samcladson08@gmail.com">Support</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
 </html>

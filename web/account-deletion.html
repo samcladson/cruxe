@@ -1,150 +1,113 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Delete Your Cruxe Account</title>
-    <style>
-      :root {
-        --bg: #0a0a0a;
-        --card: #141414;
-        --text: #f8f8f6;
-        --muted: #a1a1a1;
-        --gold: #eecd2b;
-        --border: rgba(255, 255, 255, 0.08);
-      }
-      * { box-sizing: border-box; }
-      body {
-        margin: 0;
-        padding: 2rem 1.25rem 4rem;
-        background: var(--bg);
-        color: var(--text);
-        font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-          Helvetica, Arial, sans-serif;
-      }
-      main { max-width: 42rem; margin: 0 auto; }
-      h1 { font-size: 1.65rem; margin: 0 0 0.35rem; letter-spacing: -0.01em; }
-      h2 { font-size: 1.1rem; margin: 2.25rem 0 0.6rem; }
-      .sub { color: var(--muted); margin: 0 0 2rem; }
-      .card {
-        background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 1.25rem 1.5rem;
-        margin: 1rem 0;
-      }
-      ol, ul { padding-left: 1.25rem; margin: 0.5rem 0; }
-      li { margin: 0.35rem 0; }
-      code {
-        background: rgba(255, 255, 255, 0.07);
-        padding: 0.1rem 0.4rem;
-        border-radius: 4px;
-        font-size: 0.9em;
-      }
-      a { color: var(--gold); }
-      .warn {
-        border-left: 3px solid var(--gold);
-        padding-left: 1rem;
-        color: var(--muted);
-      }
-      footer {
-        margin-top: 3rem;
-        padding-top: 1.5rem;
-        border-top: 1px solid var(--border);
-        color: var(--muted);
-        font-size: 0.875rem;
-      }
-      table { border-collapse: collapse; width: 100%; margin-top: 0.5rem; }
-      th, td {
-        text-align: left;
-        padding: 0.5rem 0.75rem 0.5rem 0;
-        border-bottom: 1px solid var(--border);
-        vertical-align: top;
-      }
-      th { color: var(--muted); font-weight: 600; font-size: 0.85rem; }
-    </style>
-  </head>
-  <body>
-    <main>
-      <h1>Delete Your Cruxe Account</h1>
-      <p class="sub">Cruxe &middot; developed by Sam Cladson</p>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Delete Your Cruxe Account</title>
+<meta name="description" content="How to delete your Cruxe account and what data is removed.">
+<meta name="theme-color" content="#0a0a0a">
+<link rel="icon" href="assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap">
+<link rel="stylesheet" href="assets/legal.css">
+</head>
+<body>
 
-      <h2>Delete from inside the app</h2>
-      <div class="card">
-        <ol>
-          <li>Open <strong>Cruxe</strong></li>
-          <li>Go to the <strong>Profile</strong> tab</li>
-          <li>Scroll to <strong>Delete account</strong></li>
-          <li>Confirm when prompted</li>
-        </ol>
-        <p style="margin-bottom: 0">
-          Deletion is immediate and permanent. No waiting period, no
-          reactivation.
-        </p>
-      </div>
+<header class="top">
+  <div class="wrap">
+    <a class="wm" href="./" aria-label="Cruxe home"><span>C</span><span>R</span><span>U</span><span>X</span><span>E</span></a>
+    <nav aria-label="Main">
+      <a class="link" href="privacy.html">Privacy</a>
+      <a class="link" href="terms.html">Terms</a>
+      <a class="link" href="account-deletion.html" aria-current="page">Delete account</a>
+      <a class="btn-sm" href="./#get">Get the app</a>
+    </nav>
+  </div>
+</header>
 
-      <h2>If you no longer have the app installed</h2>
-      <div class="card">
-        <p style="margin-top: 0">
-          Email <a href="mailto:samcladson08@gmail.com">samcladson08@gmail.com</a>
-          from the address linked to your account, with the subject
-          <code>Cruxe account deletion</code>. Requests are actioned within 30
-          days.
-        </p>
-        <p style="margin-bottom: 0">
-          If you signed in anonymously and never linked Google or Apple, there
-          is no identifier that ties the account to you, so we cannot locate it
-          from an email. In that case reinstall the app and delete from within
-          it, or simply leave it — anonymous accounts hold no personal data.
-        </p>
-      </div>
+<main class="wrap">
+  <div class="doc-head">
+    <p class="eyebrow">Your data</p>
+    <h1>Delete your Cruxe account</h1>
+    <p class="lede">Deletion is immediate and permanent. No waiting period, no reactivation.</p>
+    <div class="meta"><span>Cruxe</span><span>Developed by Sam Cladson</span></div>
+  </div>
 
-      <h2>What is deleted</h2>
-      <table>
-        <tr>
-          <th>Data</th>
-          <th>What happens</th>
-        </tr>
-        <tr>
-          <td>Account and sign-in identity</td>
-          <td>Deleted immediately</td>
-        </tr>
-        <tr>
-          <td>Display name and profile</td>
-          <td>Deleted immediately</td>
-        </tr>
-        <tr>
-          <td>Puzzle history, scores, streaks</td>
-          <td>Deleted immediately</td>
-        </tr>
-        <tr>
-          <td>Coin balance and transaction history</td>
-          <td>Deleted immediately</td>
-        </tr>
-        <tr>
-          <td>Leaderboard entry</td>
-          <td>Removed immediately</td>
-        </tr>
-        <tr>
-          <td>Purchase receipts</td>
-          <td>
-            Retained in anonymised form where tax and accounting law requires
-            it. These cannot be linked back to you.
-          </td>
-        </tr>
-      </table>
+  <div class="doc">
+    <nav class="toc" aria-label="On this page">
+      <p>On this page</p>
+      <ol>
+        <li><a href="#in-app">Delete from inside the app</a></li>
+        <li><a href="#no-app">If you no longer have the app</a></li>
+        <li><a href="#deleted">What is deleted</a></li>
+        <li><a href="#before">Before you delete</a></li>
+      </ol>
+    </nav>
 
-      <h2 style="margin-top: 2rem">Before you delete</h2>
-      <p class="warn">
-        Any coins remaining in your balance, including purchased coins, are
-        forfeited and cannot be refunded or transferred. Deleting your account
-        does not cancel or refund past purchases. This cannot be undone.
-      </p>
+    <article>
+      <section id="in-app">
+        <h2>Delete from inside the app</h2>
+        <div class="card">
+          <ol class="steps">
+            <li><span>Open <strong>Cruxe</strong></span></li>
+            <li><span>Go to the <strong>Profile</strong> tab</span></li>
+            <li><span>Scroll to <strong>Delete account</strong></span></li>
+            <li><span>Confirm when prompted</span></li>
+          </ol>
+          <p>Deletion is immediate and permanent. No waiting period, no reactivation.</p>
+        </div>
+      </section>
 
-      <footer>
-        Questions about your data:
-        <a href="mailto:samcladson08@gmail.com">samcladson08@gmail.com</a>
-      </footer>
-    </main>
-  </body>
+      <section id="no-app">
+        <h2>If you no longer have the app installed</h2>
+        <div class="card">
+          <p>Email <a href="mailto:samcladson08@gmail.com?subject=Cruxe%20account%20deletion">samcladson08@gmail.com</a> from the address linked to your account, with the subject <code>Cruxe account deletion</code>. Requests are actioned within 30 days.</p>
+          <p>Every Cruxe account is created with Google, Apple, or an email code, so we can find yours from the address you write from. If you signed in with Apple and chose Hide My Email, say so in your message and include your Cruxe display name so we can locate the account.</p>
+        </div>
+      </section>
+
+      <section id="deleted">
+        <h2>What is deleted</h2>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Data</th><th>What happens</th></tr></thead>
+            <tbody>
+              <tr><td>Account and sign-in identity</td><td class="ok">Deleted immediately</td></tr>
+              <tr><td>Display name and profile</td><td class="ok">Deleted immediately</td></tr>
+              <tr><td>Puzzle history, scores, streaks</td><td class="ok">Deleted immediately</td></tr>
+              <tr><td>Coin balance and transaction history</td><td class="ok">Deleted immediately</td></tr>
+              <tr><td>Leaderboard entry</td><td class="ok">Removed immediately</td></tr>
+              <tr><td>Purchase receipts</td><td class="ok">Retained in anonymised form where tax and accounting law requires it. These cannot be linked back to you.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="before">
+        <h2>Before you delete</h2>
+        <p class="warn">Any coins remaining in your balance, including purchased coins, are forfeited and cannot be refunded or transferred. Deleting your account does not cancel or refund past purchases. This cannot be undone.</p>
+        <p>Questions about your data: <a href="mailto:samcladson08@gmail.com">samcladson08@gmail.com</a></p>
+      </section>
+    </article>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div>
+      <a class="wm" href="./" aria-label="Cruxe home"><span>C</span><span>R</span><span>U</span><span>X</span><span>E</span></a>
+      <p class="small">© 2026 Cruxe. The elite crossword.</p>
+    </div>
+    <nav aria-label="Legal and support">
+      <a href="./">Home</a>
+      <a href="privacy.html">Privacy Policy</a>
+      <a href="terms.html">Terms of Service</a>
+      <a href="account-deletion.html" aria-current="page">Delete your account</a>
+      <a href="mailto:samcladson08@gmail.com">Support</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
 </html>
