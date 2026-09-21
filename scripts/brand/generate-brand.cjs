@@ -14,8 +14,8 @@
  *
  * Every backdrop is "ambient": a fine dot grid under soft light in the app's
  * colours, fogged before it reaches the content. Only where a motif earns its
- * place (welcome, home) do answer blocks sit on the grid — straight squares, gold
- * where two answers cross — and profile gets a ring of particles.
+ * place — the welcome screen — do answer blocks sit on the grid: straight
+ * squares, gold where two answers cross.
  *
  * SVG is the source of truth; PNGs are rendered from it.
  *
@@ -195,19 +195,6 @@ function answers(across, down, d0, d1) {
   return out;
 }
 
-/* Particles --------------------------------------------------------------- */
-
-/** A dot of the grid lit brighter. */
-const litDot = (x, y, o = 1, r = 1.7) =>
-  o <= 0.03 ? "" : `<circle cx="${r2(x)}" cy="${r2(y)}" r="${r}" fill="${INK}" fill-opacity="${r2(0.38 * o)}"/>`;
-
-/** A gold particle with a soft halo. */
-const goldDot = (x, y, o = 1, r = 2.2) =>
-  o <= 0.03
-    ? ""
-    : `<circle cx="${r2(x)}" cy="${r2(y)}" r="${r2(r * 3.2)}" fill="${GOLD}" fill-opacity="${r2(0.1 * o)}"/>` +
-      `<circle cx="${r2(x)}" cy="${r2(y)}" r="${r}" fill="${GOLD}" fill-opacity="${r2(0.85 * o)}"/>`;
-
 /* Ambient ----------------------------------------------------------------- */
 
 /**
@@ -240,7 +227,7 @@ const BACKDROPS = {
         [370, 60, 300, BLUE, 0.07],
         [340, 720, 280, PURPLE, 0.05],
       ],
-      focus: [240, 200, 560, 0.15],
+      focus: [195, 330, 760, 0.3],
       blocks: answers([2, 2, 7], [6, 0, 6], 70, 270),
     }),
 
@@ -251,18 +238,17 @@ const BACKDROPS = {
         [70, 60, 230, GOLD, 0.08],
         [380, 760, 260, PURPLE, 0.05],
       ],
-      focus: [80, 80, 520, 0.12],
+      focus: [195, 300, 740, 0.3],
     }),
 
-  /** Home: a crossing in the corner, where the day starts. */
+  /** Home: gold light where the day starts, a cool counterweight lower down. */
   home: () =>
     ambient({
       lights: [
         [330, 30, 240, GOLD, 0.09],
         [20, 460, 260, BLUE, 0.05],
       ],
-      focus: [300, 80, 470, 0.12],
-      blocks: answers([5, 1, 4], [7, 0, 4], 50, 220),
+      focus: [220, 320, 760, 0.3],
     }),
 
   /** In-game: the dot grid kept to the top and a vignette. Nothing competes with the grid. */
@@ -277,7 +263,7 @@ const BACKDROPS = {
         [195, -30, 300, GOLD, 0.06],
         [380, 820, 280, BLUE, 0.04],
       ],
-      focus: [195, 40, 420, 0.1],
+      focus: [195, 260, 640, 0.25],
       dotOpacity: 0.08,
     });
     return { defs: [...b.defs, vdef], body: b.body + `<rect width="${W}" height="${H}" fill="url(#${vid})"/>` };
@@ -291,7 +277,7 @@ const BACKDROPS = {
         [30, 300, 260, PURPLE, 0.055],
         [370, 640, 260, GREEN, 0.045],
       ],
-      focus: [220, 260, 540, 0.14],
+      focus: [195, 360, 760, 0.3],
     }),
 
   /** Leaderboard: light rising from the bottom corner, where the climb ends. */
@@ -301,35 +287,18 @@ const BACKDROPS = {
         [370, 660, 260, GOLD, 0.09],
         [20, 110, 240, BLUE, 0.045],
       ],
-      focus: [290, 560, 540, 0.12],
+      focus: [220, 440, 780, 0.3],
     }),
 
-  /** Profile: rings of particles orbiting the avatar; the inner one fills two-thirds like the progress ring. */
-  profile() {
-    const cx = 195;
-    const cy = 150;
-    const orbit = (r, n, phase = -90) =>
-      Array.from({ length: n }, (_, k) => {
-        const a = ((phase + (360 / n) * k) * Math.PI) / 180;
-        return [cx + r * Math.cos(a), cy + r * Math.sin(a), k];
-      });
-    const head = Math.floor(30 * 0.66) - 1;
-    let particles = "";
-    for (const [x, y, k] of orbit(110, 30)) {
-      if (k === head) particles += goldDot(x, y, 1, 2.3);
-      else particles += litDot(x, y, k < head ? 1 : 0.3, k < head ? 1.8 : 1.4);
-    }
-    for (const [x, y] of orbit(152, 38, -85)) particles += litDot(x, y, 0.45, 1.4);
-    for (const [x, y] of orbit(196, 46)) particles += litDot(x, y, y > 330 ? 0.12 : 0.25, 1.2);
-    return ambient({
+  /** Profile: a gold halo behind the avatar, purple lower down. */
+  profile: () =>
+    ambient({
       lights: [
-        [195, 150, 230, GOLD, 0.08],
+        [195, 178, 230, GOLD, 0.08],
         [380, 440, 260, PURPLE, 0.05],
       ],
-      focus: [195, 170, 400, 0.12],
-      blocks: particles,
-    });
-  },
+      focus: [195, 330, 760, 0.3],
+    }),
 
   /** Store: the warmest light in the app. */
   store: () =>
@@ -338,7 +307,7 @@ const BACKDROPS = {
         [326, 96, 250, GOLD, 0.11],
         [30, 540, 260, GOLD, 0.04],
       ],
-      focus: [300, 120, 480, 0.12],
+      focus: [230, 320, 760, 0.3],
     }),
 
   /** Activity: cool light, fading down the page like time. */
@@ -348,7 +317,7 @@ const BACKDROPS = {
         [370, 90, 220, BLUE, 0.06],
         [20, 260, 240, GOLD, 0.05],
       ],
-      focus: [200, 150, 520, 0.12],
+      focus: [195, 340, 760, 0.3],
     }),
 
   /** Lesson / success: the brightest light in the app, with a green note of "correct". */
@@ -359,7 +328,7 @@ const BACKDROPS = {
         [50, 710, 260, GREEN, 0.05],
         [370, 640, 240, BLUE, 0.04],
       ],
-      focus: [195, 260, 480, 0.12],
+      focus: [195, 360, 760, 0.3],
     }),
 };
 

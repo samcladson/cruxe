@@ -845,10 +845,7 @@ const styles = StyleSheet.create({
     paddingVertical: 24,
     marginTop: 4,
     marginBottom: 32,
-    backgroundColor: theme.colors.bgSecondary,
-    borderRadius: theme.borderRadius.card,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.05)",
+    // No card: the avatar sits directly on the backdrop's particle rings.
   },
   avatarGlow: {
     width: 80,

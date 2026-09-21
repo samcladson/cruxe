@@ -20,6 +20,12 @@ const API_KEYS = {
 let revenueCatReady = false;
 
 let offeringsConfigWarningLogged = false;
+let testStoreNoticeLogged = false;
+
+const IS_STORE_BUILD = process.env.EXPO_PUBLIC_ENV === "production";
+
+/** Test Store keys start with `test_`; store keys with `goog_` / `appl_`. */
+const isTestStoreKey = (key: string) => key.startsWith("test_");
 
 function isOfferingsNotConfiguredError(error: unknown): boolean {
   if (error == null || typeof error !== "object") return false;
@@ -44,6 +50,16 @@ function isOfferingsNotConfiguredError(error: unknown): boolean {
 function installRevenueCatLogHandler(): void {
   Purchases.setLogHandler((logLevel, message) => {
     const t = String(message);
+    // Expected in dev and preview builds: .env carries a Test Store key until
+    // the Play app is connected. Production builds never get here with one
+    // (see initRevenueCat), so this only quiets the console.
+    if (/Test Store API key/i.test(t)) {
+      if (!testStoreNoticeLogged) {
+        testStoreNoticeLogged = true;
+        console.log("[RevenueCat] Test Store key in use (not for production).");
+      }
+      return;
+    }
     if (
       t.includes("Test Store") &&
       (t.includes("no Test Store products") ||
@@ -80,39 +96,42 @@ function installRevenueCatLogHandler(): void {
 
 /**
  * Initializes the RevenueCat SDK on app startup.
- * Skips configuration when keys are missing (avoids 401 Invalid API Key spam in dev).
+ * Skips configuration when keys are missing (avoids 401 Invalid API Key spam in
+ * dev), and refuses a Test Store key outside development.
  */
 export async function initRevenueCat(): Promise<void> {
   try {
-    Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.DEBUG : LOG_LEVEL.WARN);
+    const key =
+      Platform.OS === "ios" ? API_KEYS.apple : Platform.OS === "android" ? API_KEYS.google : "";
+    const envVar =
+      Platform.OS === "ios"
+        ? "EXPO_PUBLIC_REVENUECAT_IOS_API_KEY"
+        : "EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY";
 
-    if (Platform.OS === "ios") {
-      if (!API_KEYS.apple) {
-        console.warn(
-          "[RevenueCat] Skipping: set EXPO_PUBLIC_REVENUECAT_IOS_API_KEY in .env",
-        );
-        revenueCatReady = false;
-        return;
-      }
-      Purchases.configure({ apiKey: API_KEYS.apple });
-      revenueCatReady = true;
-      installRevenueCatLogHandler();
-      return;
-    }
-    if (Platform.OS === "android") {
-      if (!API_KEYS.google) {
-        console.warn(
-          "[RevenueCat] Skipping: set EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY in .env",
-        );
-        revenueCatReady = false;
-        return;
-      }
-      Purchases.configure({ apiKey: API_KEYS.google });
-      revenueCatReady = true;
-      installRevenueCatLogHandler();
-      return;
-    }
     revenueCatReady = false;
+    if (Platform.OS !== "ios" && Platform.OS !== "android") return;
+
+    if (!key) {
+      console.warn(`[RevenueCat] Skipping: set ${envVar} in .env`);
+      return;
+    }
+
+    // RevenueCat: a build configured with a Test Store key must never ship —
+    // it cannot sell anything. Fail loudly instead of quietly selling nothing.
+    // Only the store build is checked (eas.json sets EXPO_PUBLIC_ENV there);
+    // preview builds deliberately test against the Test Store.
+    if (IS_STORE_BUILD && isTestStoreKey(key)) {
+      const error = new Error(`${envVar} is a Test Store key in a production build`);
+      console.error("[RevenueCat]", error.message);
+      reportError("purchases", error);
+      return;
+    }
+
+    // Before configure(), so the SDK's start-up logs go through the filter.
+    installRevenueCatLogHandler();
+    Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.DEBUG : LOG_LEVEL.WARN);
+    Purchases.configure({ apiKey: key });
+    revenueCatReady = true;
   } catch (error) {
     console.error("[RevenueCat] Initialization failed:", error);
     // Every purchase in the app is now impossible; never let this be silent.

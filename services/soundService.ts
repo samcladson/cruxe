@@ -1,14 +1,14 @@
 /**
  * soundService.ts — Lightweight audio feedback for Cruxe.
  *
- * Uses expo-av to play short sound effects at key gameplay moments.
+ * Uses expo-audio to play short sound effects at key gameplay moments.
  * Respects the user's soundEnabled setting from settingsStore.
  *
  * Sounds are preloaded on first use and cached for instant playback.
  * All methods are fire-and-forget — audio errors never block gameplay.
  */
 
-import { Audio } from "expo-av";
+import { AudioPlayer, createAudioPlayer, setAudioModeAsync } from "expo-audio";
 import { useSettingsStore } from "../stores/settingsStore";
 
 // ─── Sound definitions ───────────────────────────────────────────────
@@ -27,7 +27,7 @@ type SoundName = keyof typeof SOUND_FILES;
 
 // ─── Preloaded sound cache ───────────────────────────────────────────
 
-const soundCache = new Map<SoundName, Audio.Sound>();
+const soundCache = new Map<SoundName, AudioPlayer>();
 let audioConfigured = false;
 
 /**
@@ -37,10 +37,10 @@ let audioConfigured = false;
 async function ensureAudioConfigured(): Promise<void> {
   if (audioConfigured) return;
   try {
-    await Audio.setAudioModeAsync({
-      playsInSilentModeIOS: false,
-      shouldDuckAndroid: true,
-      staysActiveInBackground: false,
+    await setAudioModeAsync({
+      playsInSilentMode: false,
+      interruptionMode: "duckOthers",
+      shouldPlayInBackground: false,
     });
     audioConfigured = true;
   } catch {
@@ -51,18 +51,16 @@ async function ensureAudioConfigured(): Promise<void> {
 /**
  * Loads a sound into cache if not already loaded.
  */
-async function loadSound(name: SoundName): Promise<Audio.Sound | null> {
+async function loadSound(name: SoundName): Promise<AudioPlayer | null> {
   const existing = soundCache.get(name);
   if (existing) return existing;
 
   try {
     await ensureAudioConfigured();
-    const { sound } = await Audio.Sound.createAsync(SOUND_FILES[name], {
-      shouldPlay: false,
-      volume: 0.6,
-    });
-    soundCache.set(name, sound);
-    return sound;
+    const player = createAudioPlayer(SOUND_FILES[name]);
+    player.volume = 0.6;
+    soundCache.set(name, player);
+    return player;
   } catch {
     return null;
   }
@@ -80,8 +78,8 @@ export async function playSound(name: SoundName): Promise<void> {
     if (!sound) return;
 
     // Rewind to start in case it was played before
-    await sound.setPositionAsync(0);
-    await sound.playAsync();
+    await sound.seekTo(0);
+    sound.play();
   } catch {
     // Silently fail — audio should never crash the app
   }
@@ -101,7 +99,7 @@ export async function preloadSounds(): Promise<void> {
 export async function unloadSounds(): Promise<void> {
   for (const [, sound] of soundCache) {
     try {
-      await sound.unloadAsync();
+      sound.remove();
     } catch {
       // ignore
     }

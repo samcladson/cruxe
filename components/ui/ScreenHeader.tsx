@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 8,
     paddingBottom: 20,
-    backgroundColor: theme.colors.bgPrimary,
+    // Transparent, so the screen's backdrop runs up behind the title.
     zIndex: 20,
   },
   navRow: {

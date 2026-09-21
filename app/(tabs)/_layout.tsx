@@ -81,13 +81,6 @@ export default function TabLayout() {
           href: null,
         }}
       />
-      {/* Hide the archived full home screen from the tab bar */}
-      <Tabs.Screen
-        name="index_full"
-        options={{
-          href: null,
-        }}
-      />
     </Tabs>
   );
 }

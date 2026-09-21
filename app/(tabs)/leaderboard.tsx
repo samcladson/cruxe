@@ -438,18 +438,17 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: theme.colors.bgPrimary,
   },
+  // No sheet behind the list: the rows sit directly on the screen's backdrop.
   listSection: {
     paddingHorizontal: 24,
-    backgroundColor: theme.colors.bgSecondary,
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
     paddingTop: 32,
     minHeight: 500,
   },
   listRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: theme.colors.bgPrimary,
+    // Translucent, so the backdrop's light and dots read through each row.
+    backgroundColor: "rgba(26, 26, 26, 0.72)",
     padding: 16,
     borderRadius: 16,
     marginBottom: 12,

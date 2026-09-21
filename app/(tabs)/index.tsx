@@ -793,7 +793,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 8,
     paddingBottom: 16,
-    backgroundColor: "rgba(10, 10, 10, 0.95)",
     zIndex: 20,
   },
   topBar: {

@@ -56,9 +56,10 @@ Two worth knowing the reason for, because a reviewer may ask:
   fingerprint, no push token. There is no ads SDK; the app is IAP-only by
   decision. `expo-notifications` is used for *local* reminders only and never
   calls `getExpoPushTokenAsync`.
-- **Audio — not collected.** `expo-av` declares `RECORD_AUDIO` in its own
-  manifest, but `android.blockedPermissions` in `app.json` strips it and the
-  app only plays bundled sound effects.
+- **Audio — not collected.** `expo-audio` declares `RECORD_AUDIO` in its own
+  manifest, but `android.blockedPermissions` in `app.json` strips it (and the
+  config plugin runs with `recordAudioAndroid: false`); the app only plays
+  bundled sound effects.
 
 ---
 

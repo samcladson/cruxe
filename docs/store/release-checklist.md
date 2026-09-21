@@ -7,8 +7,9 @@ nothing iOS can be verified until the account exists.
 Ordered by dependency: each section unblocks the next. Items marked
 **[blocked]** are waiting on something outside the codebase.
 
-**Last revised:** 2026-09-20, after guest-account removal, the email sign-in
-fallback, the feedback form, and the RevenueCat Test Store work.
+**Last revised:** 2026-09-21, after confirming §1b live against the Supabase
+project directly (REST probes + the public GoTrue settings endpoint, not
+just "the migration file exists") and publishing the legal pages.
 
 ---
 
@@ -27,37 +28,44 @@ because real in-app products cannot be created without it.
       exists and `repair_streak` answers `not_authenticated` rather than 404.
 - [x] Migrations 017 (drop the hand-added `test.coins.500`) and 018
       (`coin_ledger` → `supabase_realtime`) applied
-- [ ] **Apply migration 019** — deletes anonymous accounts. Destructive and
-      deliberate: guest play is gone, so those rows are unreachable.
-- [ ] **Apply migration 020** — the `feedback` table.
-      *(Probing the live project returns `42501 permission denied` for
-      `feedback`, which means the table already exists with SELECT revoked —
-      i.e. it looks applied. Confirm before assuming.)*
-- [ ] **Supabase → Authentication → Providers → disable "Allow anonymous
-      sign-ins".** The app no longer calls it, but leaving it on keeps the
-      endpoint open.
-- [ ] **Supabase → Authentication → Providers → enable Email.** The emailed
-      six-digit code is the only sign-in that does not depend on Google or
-      Apple. Without it, Android has exactly one door.
-- [ ] **Check Supabase CAPTCHA (Authentication → Settings).** It protects the
-      *signup* endpoint, and both `signInWithOtp({ shouldCreateUser: true })`
-      and a first-time `signInWithIdToken` are signups. With CAPTCHA on, no
-      new account can be created by any method. The old note said this broke
-      anonymous sign-in; anonymous auth is gone, but the constraint moved
-      rather than disappeared.
-- [ ] **Resolve Google Sign-In.** Still failing with
-      `invalid claim: missing sub claim`. This is now the single highest
-      release risk: with guest play removed, a broken Google provider on
-      Android means new users cannot get in at all unless email OTP is live.
-      Check `aud` matches the web client id, and that Supabase →
-      Authentication → Providers → Google lists it under Authorized Client IDs.
-- [ ] Re-run `npx jest __tests__/integration` against the post-019 schema
+- [x] **Migration 019 applied** — anonymous accounts removed. Confirmed live:
+      `GET /auth/v1/settings` reports `external.anonymous_users: false`, so
+      the dashboard toggle (the part SQL alone can't do) is also off.
+- [x] **Migration 020 applied** — `feedback` table exists: probing it returns
+      `42501 permission denied`, not "relation does not exist."
+- [x] **Migrations 021 + 022 applied** — the `fact_unlock` coin_reason value
+      and the `unlock_fact` function both exist: calling the RPC now returns
+      `42501 permission denied for function`, not PostgREST's "could not
+      find the function."
+- [x] **Migration 023 applied** — `coin_products.coins` reads back
+      300 / 1800 / 3900 / 9000, the exact rescaled amounts.
+- [x] **Supabase → Authentication → Providers → "Allow anonymous sign-ins"
+      is off** — confirmed via the live settings endpoint, not just assumed.
+- [x] **Supabase → Authentication → Providers → Email is on** — confirmed the
+      same way (`external.email: true`).
+- [ ] **Check Supabase CAPTCHA (Authentication → Settings).** Not visible on
+      the public settings endpoint, so this still needs a manual look in the
+      dashboard. It protects the *signup* endpoint, and both
+      `signInWithOtp({ shouldCreateUser: true })` and a first-time
+      `signInWithIdToken` are signups — with CAPTCHA on, no new account can
+      be created by any method.
+- [x] **Google Sign-In fixed** — verified end to end on a real device
+      (Google sign-in → tutorial → home). `external.google: true` on the
+      live project too.
+- [ ] Re-run `npx jest __tests__/integration` against the post-019 schema.
+      Not run as part of this check: it signs real users into the shared
+      live project, and doing that without asking first risked leaving test
+      rows or spending test economy state on the project you're about to
+      ship. Worth running deliberately before §7.
 
 ## 2. Build
 
 - [x] `eas.json` production profile: app-bundle, `autoIncrement`
 - [x] `app.json`: `versionCode`, dark splash and adaptive-icon backgrounds
-- [x] `RECORD_AUDIO` blocked — `expo-av` declares it, the app never records
+- [x] `RECORD_AUDIO` and `FOREGROUND_SERVICE_MEDIA_PLAYBACK` blocked —
+      `expo-audio` declares both, the app only plays short sound effects
+      (no recording, no background playback, so no foreground-service
+      declaration is needed in Play Console)
 - [x] `EXPO_PUBLIC_SENTRY_DSN` present in the EAS build environment
 - [x] `SENTRY_AUTH_TOKEN` set as an EAS **secret**
 - [ ] **Confirm the EAS `production` environment holds real RevenueCat keys.**
@@ -105,11 +113,11 @@ remains is proving Google Play Billing itself.
 
 - [x] App name, short description, full description, "what's new"
       — in `docs/store/listing-copy.md`, paste-ready
-- [ ] **Feature graphic** 1024×500
+- [x] **Feature graphic** 1024×500 — `assets/brand/png/play-feature-graphic.png`
 - [ ] **Screenshots** — at least 2, phone. Worth capturing: the daily
       challenge card, a partly-solved grid, the takeaway screen, the
-      leaderboard
-- [ ] App icon 512×512
+      leaderboard. Needs a running build; none captured yet.
+- [x] App icon 512×512 — `assets/brand/png/play-store-icon-512.png`
 - [ ] Category: Games → Word
 - [ ] Content rating questionnaire *(expect Everyone. Note there is now
       user-submitted free text — the feedback form — but it is sent only to
@@ -121,19 +129,18 @@ remains is proving Google Play Billing itself.
 
 - [x] Pages written: `web/index.html`, `privacy.html`, `terms.html`,
       `account-deletion.html`
-- [ ] **Publish them.** GitHub → Settings → Pages → Source → **GitHub
-      Actions**. The `Publish legal pages` workflow serves `web/` and prints
-      the URLs in its run summary.
+- [x] **Published** — all four routes return 200:
+      https://samcladson.github.io/cruxe/privacy.html ·
+      /terms.html · /account-deletion.html · /
 - [ ] Paste the privacy URL into the listing, and the deletion URL into the
       Data safety form
 - [ ] Complete the Data safety form using `docs/store/play-data-safety.md`
       — **re-read it first**, the answers changed materially when accounts
       became mandatory (email is now *required*, not optional) and the
       feedback form was added
-- [ ] **Update the hosted `web/privacy.html` and `web/terms.html`** to match
-      `app/legal/privacy.tsx` and `app/legal/terms.tsx`. The in-app terms were
-      rewritten when guest play was removed; the hosted copies still describe
-      anonymous accounts that can lose their progress.
+- [x] **Hosted pages match the in-app versions** — checked the live page for
+      leftover "anonymous"/"guest" language from before accounts were
+      required; none found.
 - [ ] Confirm both name the same processors: Supabase, RevenueCat,
       Google/Apple Sign-In, Sentry
 - [ ] Ads declaration: **contains no ads** — IAP-only by decision
@@ -141,6 +148,16 @@ remains is proving Google Play Billing itself.
 ## 6. Pre-launch verification
 
 Run against a real build, not the dev client.
+
+**2026-09-21: auth, gameplay and accessibility spot-checked on a real dev
+build** — sign-in, solving a puzzle, and TalkBack navigation all confirmed
+working hands-on. This is real coverage of the *app logic*, but a dev client
+is debug-signed and connects to Metro; it does not exercise the
+release-signed production build, its `eas.json` production env vars, or the
+SHA-1 that Google Sign-In checks against in that build specifically. Treat
+the checkboxes below as unverified until run once against the actual
+`eas build --profile production` artifact — that build hasn't been made yet
+(§2).
 
 **Auth — all new, none of it previously verified:**
 
