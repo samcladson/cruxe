@@ -5,60 +5,129 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { theme } from "../../constants/theme";
 
+/**
+ * Privacy Policy, shown from Profile.
+ *
+ * This must stay in step with web/privacy.html, which tells readers it mirrors
+ * the copy in the app. They had drifted: the hosted page carried four
+ * disclosures this screen did not — what we never collect, that the display
+ * name is public on the leaderboard, the under-13 statement, and a contact
+ * address. Those are the half a reader is most likely to want, so they are
+ * added here rather than removed there.
+ *
+ * When editing either copy, edit both.
+ */
 export default function PrivacyPolicyScreen() {
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
       <Stack.Screen options={{ headerShown: false }} />
-      
-      <ScreenHeader title="Privacy Policy" subtitle="Last updated September 2026" showBack />
+
+      <ScreenHeader
+        title="Privacy Policy"
+        subtitle="Last updated September 2026"
+        showBack
+      />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        
+
         <Text style={styles.paragraph}>
-          Welcome to Cruxe. Your privacy is important to us. This Privacy Policy explains how we collect, use, and protect your information when you use our mobile application.
+          This policy explains what Cruxe collects, why, and who processes it. It mirrors the policy
+          published on our website; if the two ever disagree, please tell us and we will correct it.
         </Text>
 
-        <Text style={styles.sectionTitle}>1. Information We Collect</Text>
-        <Text style={styles.paragraph}>
-          We collect minimal information necessary to provide you with the Cruxe crossword experience. This includes:
-        </Text>
+        <Text style={styles.sectionTitle}>1. What we collect</Text>
         <View style={styles.bulletList}>
-          <Text style={styles.bullet}>• <Text style={styles.bold}>Account Data:</Text> An account is required to play. You create one with Google, Apple, or a one-time code sent to your email address. We store your email address, the name your provider supplies (if any), and an authentication token via Supabase, so your progress follows you to any device you sign in on.</Text>
-          <Text style={styles.bullet}>• <Text style={styles.bold}>Gameplay Data:</Text> We store your puzzle completion times, scores, current streak, and coin balance to maintain the integrity of the leaderboard and your personal statistics.</Text>
-          <Text style={styles.bullet}>• <Text style={styles.bold}>Device & Usage Data:</Text> We may collect anonymous diagnostic data to help us identify bugs and improve the app&apos;s performance.</Text>
-          <Text style={styles.bullet}>• <Text style={styles.bold}>Feedback You Send:</Text> If you use Send feedback, we store what you write along with your account identifier, app version and device platform, so we can reproduce the problem and reply. It is never shown to other players.</Text>
+          <Text style={styles.bullet}>
+            • <Text style={styles.bold}>Account data.</Text> An account is required to play. You
+            create one with Google, Apple, or a one-time code sent to your email address. We store
+            your email address, the name your provider gives us (if any), and an account identifier,
+            so your progress follows you to any device you sign in on.
+          </Text>
+          <Text style={styles.bullet}>
+            • <Text style={styles.bold}>Feedback you send.</Text> If you use Send feedback in the
+            app, we store what you write along with your account identifier, app version and device
+            platform, so we can reproduce the problem and reply. It is never shown to other players.
+          </Text>
+          <Text style={styles.bullet}>
+            • <Text style={styles.bold}>Gameplay data.</Text> Puzzle completions, scores, solve
+            times, streaks and coin balance. These make the leaderboard and your statistics work.
+          </Text>
+          <Text style={styles.bullet}>
+            • <Text style={styles.bold}>Purchase records.</Text> If you buy a coin pack, we record
+            that it happened so the coins can be granted and a refund honoured. We never see your
+            card details &mdash; the app store handles payment.
+          </Text>
+          <Text style={styles.bullet}>
+            • <Text style={styles.bold}>Diagnostics.</Text> Crash reports and basic device
+            information (model, OS version), plus a record of which screens and actions preceded a
+            crash. Your device name is deliberately removed before anything is sent.
+          </Text>
         </View>
 
-        <Text style={styles.sectionTitle}>2. How We Use Your Information</Text>
+        <Text style={styles.sectionTitle}>2. What we never collect</Text>
         <Text style={styles.paragraph}>
-          We use your information exclusively to:
+          No location, contacts, photos, microphone, calendar, browsing history, or advertising
+          identifier. Cruxe contains no advertising and no advertising SDK.
         </Text>
+        <Text style={styles.paragraph}>
+          Your data is never used to generate puzzles or to train any AI model. Puzzles are created
+          centrally before anyone plays them, from a fixed list of subjects, and nothing you do in
+          the app feeds into that.
+        </Text>
+
+        <Text style={styles.sectionTitle}>3. Who processes your data</Text>
         <View style={styles.bulletList}>
-          <Text style={styles.bullet}>• Save and sync your game progress across devices.</Text>
-          <Text style={styles.bullet}>• Process in-app purchases and manage your virtual coin balance.</Text>
-          <Text style={styles.bullet}>• Display your rank on global leaderboards (using your chosen Display Name).</Text>
-          <Text style={styles.bullet}>• Provide customer support and respond to inquiries.</Text>
+          <Text style={styles.bullet}>
+            • <Text style={styles.bold}>Supabase</Text> &mdash; authentication and database hosting.
+          </Text>
+          <Text style={styles.bullet}>
+            • <Text style={styles.bold}>RevenueCat</Text> &mdash; validating in-app purchases.
+            Receives your account identifier and purchase history.
+          </Text>
+          <Text style={styles.bullet}>
+            • <Text style={styles.bold}>Sentry</Text> &mdash; crash reporting and diagnostics.
+            Receives device model, OS version and your account identifier. We do not send your
+            device name, puzzle answers, or authentication tokens.
+          </Text>
+          <Text style={styles.bullet}>
+            • <Text style={styles.bold}>Google or Apple Sign-In</Text> &mdash; only if you choose to
+            link an account.
+          </Text>
         </View>
-
-        <Text style={styles.sectionTitle}>3. Third-Party Services</Text>
         <Text style={styles.paragraph}>
-          Cruxe utilizes trusted third-party services to operate the app:
-        </Text>
-        <View style={styles.bulletList}>
-          <Text style={styles.bullet}>• <Text style={styles.bold}>Supabase:</Text> For secure authentication and database hosting.</Text>
-          <Text style={styles.bullet}>• <Text style={styles.bold}>RevenueCat:</Text> To securely process and validate your in-app coin purchases. RevenueCat retains purchase history associated with your account identifier.</Text>
-          <Text style={styles.bullet}>• <Text style={styles.bold}>Google/Apple Sign-In:</Text> For authenticating your identity if you choose to link an account.</Text>
-          <Text style={styles.bullet}>• <Text style={styles.bold}>Sentry:</Text> For crash reporting and performance diagnostics. Reports include device model, OS version, and your account identifier so we can correlate one user&apos;s crashes. We do not send your device name, puzzle answers, or authentication tokens.</Text>
-        </View>
-
-        <Text style={styles.sectionTitle}>4. Data Security & Deletion</Text>
-        <Text style={styles.paragraph}>
-          We take reasonable measures to protect your information. You have the right to request the deletion of your account and associated data at any time. If you use a linked account, you can revoke access at the OS level (iOS Settings or Google Account Settings).
+          We do not sell your data, and we do not share it for advertising.
         </Text>
 
-        <Text style={styles.sectionTitle}>5. Contact Us</Text>
+        <Text style={styles.sectionTitle}>4. Your display name is public</Text>
         <Text style={styles.paragraph}>
-          If you have any questions or concerns regarding this Privacy Policy, please contact our support team.
+          The name you choose appears on the global leaderboard alongside your score and streak.
+          Nothing else about you is shown. You can change it at any time in your profile.
+        </Text>
+
+        <Text style={styles.sectionTitle}>5. Deleting your data</Text>
+        <Text style={styles.paragraph}>
+          Go to Profile &rarr; Delete account. This is immediate and permanent: your profile,
+          progress, streak, coin balance and leaderboard entry are erased. If you use a linked
+          account, you can also revoke access at the OS level (iOS Settings or Google Account
+          Settings).
+        </Text>
+        <Text style={styles.paragraph}>
+          Purchase records may be retained in anonymised form where tax and accounting law requires
+          it. They cannot be linked back to you.
+        </Text>
+
+        <Text style={styles.sectionTitle}>6. Children</Text>
+        <Text style={styles.paragraph}>
+          Cruxe is not directed at children and we do not knowingly collect data from anyone under
+          13.
+        </Text>
+
+        <Text style={styles.sectionTitle}>7. Contact</Text>
+        <Text style={styles.paragraph}>
+          Questions about your data:{" "}
+          <Text style={styles.email} selectable>
+            samcladson08@gmail.com
+          </Text>
         </Text>
 
         <View style={{ height: 40 }} />
@@ -102,6 +171,9 @@ const styles = StyleSheet.create({
   },
   bold: {
     fontWeight: "bold",
+    color: theme.colors.textPrimary,
+  },
+  email: {
     color: theme.colors.textPrimary,
   },
 });
