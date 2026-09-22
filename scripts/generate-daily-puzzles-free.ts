@@ -1,10 +1,8 @@
 /**
  * generate-daily-puzzles-free.ts — Free Tier daily puzzle generation script.
- * 
- * Specifically designed to respect Gemini 2.5 Flash Free Tier limits (5 RPM, 20 RPD).
- * Instead of generating 101 puzzles per day, this generates exactly 19 puzzles per day,
- * rotating through 80 grid/difficulty combinations across a 4-5 day cycle so players
- * always get fresh content without hitting API error 429.
+ *
+ * Generates 19 puzzles per day, rotating through 80 grid/difficulty
+ * combinations across a 4-5 day cycle so players always get fresh content.
  *
  * Runs in GitHub Actions.
  *
@@ -23,13 +21,39 @@ import { SYLLABUS } from "../constants/syllabus";
 import { SyllabusTopic } from "../constants/syllabusTypes";
 import { assignTopics, TopicUsage } from "./lib/assignTopics";
 import { Lesson, validateLesson } from "./lib/validateLesson";
+import {
+  shouldGround,
+  countGrounded,
+  groundingEnabled,
+} from "./lib/groundingPolicy";
+
+/**
+ * The generation model.
+ *
+ * Gemini 3.1 Flash-Lite, chosen over the newer 3.8 Flash on quota rather than
+ * quality: 3.8 Flash allows 20 requests a day on the free tier, which a single
+ * day's 19 puzzles plus one retry would exceed. Flash-Lite allows 500 a day at
+ * 15 RPM, and Google rates it above the 2.5 Flash this replaced.
+ *
+ * The old 2.5 Flash is not sold to new projects and carries a January 2025
+ * knowledge cutoff, which left the prompt asking a model about a "today" it
+ * could not see — 20 months of guessing presented to players as current.
+ */
+const MODEL_ID = "gemini-3.1-flash-lite";
+
+/**
+ * Pause between calls. The free tier allows 15 requests per minute (one every
+ * 4s); 5s holds us at 12 RPM, leaving headroom for the retry path to fire
+ * without compounding into a second 429.
+ */
+const CALL_SPACING_MS = 5000;
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Retries a Gemini call on rate limits and transient server errors.
  *
- * The free tier allows 5 requests per minute, so a burst reliably 429s. That
+ * The free tier allows 15 requests per minute, so a burst reliably 429s. That
  * used to lose the puzzle outright; waiting a few seconds converts a lost
  * puzzle into a slow one. Non-retryable failures (a bad prompt, an auth
  * error) still fail immediately rather than burning the daily quota.
@@ -46,7 +70,7 @@ async function withRetry<T>(
     } catch (err) {
       lastErr = err;
       if (!(err as any)?.retryable || i === attempts - 1) throw err;
-      const wait = 15000 * (i + 1); // 15s, then 30s - clears a 5 RPM window
+      const wait = 15000 * (i + 1); // 15s, then 30s - clears a 15 RPM window
       console.warn(
         `   Retrying ${label} in ${wait / 1000}s (${i + 1}/${attempts - 1}): ` +
           `${(err as Error).message.substring(0, 80)}`,
@@ -151,19 +175,21 @@ const GRID_SIZES: Record<
 // ═══════════════════════════════════════════════════════════════════
 
 /**
- * Generates crossword words and clues via the Gemini 2.5 Flash REST API.
+ * Generates crossword words and clues via the Gemini 3.1 Flash-Lite REST API.
  *
- * Uses a date-aware, quality-enforced prompt identical in logic to the in-app
- * geminiService.ts — ensuring daily pre-generated puzzles feel as fresh and
- * culturally relevant as on-demand premium puzzles.
+ * Uses a date-aware, quality-enforced prompt so daily pre-generated puzzles
+ * feel fresh and culturally relevant rather than merely correct.
  *
- * No Google Search grounding is used — zero extra cost, free-tier safe.
+ * Google Search grounding is decided per puzzle rather than globally, and is
+ * currently off for every one of them because a free-tier project has no
+ * search quota — see scripts/lib/groundingPolicy.ts.
  *
  * @param category  - Puzzle category (e.g. "technology", "sports")
  * @param difficulty - Puzzle difficulty level
  * @param gridSize  - Size of the crossword grid (6, 8, 10, or 12)
  * @param apiKey    - Gemini API key
  * @param today     - ISO date string (YYYY-MM-DD) injected into the prompt
+ * @param grounded  - Whether to let the model search the live web
  * @returns Array of GeneratedClue objects ready for database storage
  */
 async function generatePuzzleWords(
@@ -174,11 +200,12 @@ async function generatePuzzleWords(
   today: string,
   topic: SyllabusTopic | null,
   angle: string,
+  grounded: boolean,
 ): Promise<{ words: GeneratedClue[]; rawLesson: unknown }> {
   const settings = GRID_SIZES[gridSize];
   const wordCount = settings.maxWords;
   const maxLength = settings.maxWordLength;
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_ID}:generateContent?key=${apiKey}`;
 
   // A puzzle is about a subject, not merely in a category. The brief is what
   // turns a bag of category-adjacent words into something a player can learn
@@ -218,7 +245,28 @@ async function generatePuzzleWords(
       ].join("\n")
     : "";
 
-  // Identical prompt logic to geminiService.ts — date-aware, quality-enforced
+  // Freshness is asked for differently depending on whether the model can
+  // actually look it up. Demanding "what is trending today" from training
+  // data alone invites confident invention — the model has no way to know it
+  // is out of date, and a fabricated award winner ships to players as fact.
+  // Grounded calls get the hard instruction; the rest are pointed at material
+  // that does not decay, which they can genuinely deliver.
+  const freshness = grounded
+    ? `━━━ FRESHNESS & RELEVANCE ━━━
+Search for what is genuinely current, talked-about, and culturally significant in the \
+"${category}" space as of ${today}, and build from what you find.
+Think: recent events, people in the news, viral moments, award winners, record-breakers, product \
+launches, chart-toppers, ongoing storylines, notable headlines, breakthrough moments.
+At least 40% of words should connect to something that is verifiably in the conversation right now.
+Never state a fact you did not find — an invented headline is worse than an older one.`
+    : `━━━ RESONANCE ━━━
+Favour material with staying power in the "${category}" space: the people, works, events and \
+terms that a well-read solver would recognise and enjoy seeing.
+Think: landmark moments, defining figures, enduring works, turning points, ideas that changed \
+the field.
+Do NOT guess at very recent news, rankings or releases. If you are not certain something is \
+accurate, choose something you are certain of — a confident wrong fact is the worst outcome here.`;
+
   const prompt = `${brief}You are the puzzle editor of an award-winning crossword publication renowned for \
 puzzles that feel sharp, current, and culturally alive — the kind solvers share because a clue \
 made them groan and grin at the same time.
@@ -227,12 +275,7 @@ Today's date: ${today}
 Category: ${category}
 Grid: ${gridSize}×${gridSize} | Words needed: ${wordCount} | Max word length: ${maxLength} letters
 
-━━━ FRESHNESS & RELEVANCE ━━━
-Draw on your knowledge of what is currently trending, talked-about, and culturally significant \
-in the "${category}" space as of ${today}.
-Think: recent events, people in the news, viral moments, award winners, record-breakers, product \
-launches, chart-toppers, ongoing storylines, notable headlines, breakthrough moments.
-At least 40% of words should connect to something that feels zeitgeist-relevant right now.
+${freshness}
 
 ━━━ WORD QUALITY — ZERO TOLERANCE POLICY ━━━
 PERMANENTLY BANNED crossword filler (never use these or anything of this character):
@@ -279,8 +322,23 @@ Return a JSON object with ${topic ? '"takeaway" and ' : ""}a "words" array of ex
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
+      // Google documents Gemini 3 as supporting structured output alongside
+      // the search tool, which 2.5 did not. Untested here: the free tier has
+      // no search quota, so the grounded path 429s before the schema is
+      // exercised. Confirm this combination returns parseable JSON the first
+      // time GEMINI_GROUNDING is switched on.
+      ...(grounded ? { tools: [{ google_search: {} }] } : {}),
       generationConfig: {
-        temperature: 0.95,
+        // No temperature. Gemini 3 expects the default of 1.0, and Google
+        // warns that lowering it can cause looping or degraded output. The
+        // previous 0.95 was tuned for 2.5 and is actively harmful here; the
+        // variety it used to buy now comes from thinking plus the topic brief.
+        thinkingConfig: {
+          // Clue writing is a small creative problem that rewards a second
+          // pass over word choice, and at 19 puzzles a day we are nowhere
+          // near any quota where thinking tokens matter.
+          thinkingLevel: "medium",
+        },
         responseMimeType: "application/json",
         responseSchema: {
           type: "OBJECT",
@@ -484,7 +542,7 @@ function buildRotatingManifest(targetDate: string): PuzzleSpec[] {
     isDailyChallenge: true,
   });
 
-  return specs; // 19 total: 18 category + 1 daily challenge (under 20 RPD free-tier limit)
+  return specs; // 19 total: 18 category + 1 daily challenge (of 500 RPD free-tier limit)
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -568,6 +626,16 @@ async function main() {
     process.exit(0);
   }
 
+  // Grounded calls are metered separately from the request quota, so the count
+  // belongs in the run output: a manifest change that quietly multiplies them
+  // should be visible here rather than discovered when the allowance runs out.
+  const grounding = groundingEnabled();
+  console.log(
+    grounding
+      ? `🔎 Grounded (live web search): ${countGrounded(missing, true)} of ${missing.length}\n`
+      : `🔎 Grounding off — set GEMINI_GROUNDING=1 once the project has billing\n`,
+  );
+
   // ── Assign a subject to each puzzle before generating any of them ──────
   // Done up front so "no topic twice today" holds across the whole run, and
   // so a failure partway through does not leave the rotation half-advanced.
@@ -596,8 +664,8 @@ async function main() {
     errors = 0;
   const errorDetails: string[] = [];
 
-  // For the Free Tier, we DO NOT use Promise.all. 
-  // We process sequentially, adding a strict 15-second delay to guarantee we stay below 5 RPM.
+  // Sequential rather than Promise.all: the free tier meters requests per
+  // minute, so a burst 429s where a paced queue does not.
   for (let i = 0; i < missing.length; i++) {
     const spec = missing[i];
     const label = `[${i + 1}/${missing.length}] ${spec.category}/${spec.difficulty}/${spec.gridSize}x${spec.gridSize}/v${spec.variant}`;
@@ -613,6 +681,7 @@ async function main() {
       const assignment = assignmentBySpec.get(spec);
       const topic = assignment?.topic ?? null;
       const angle = assignment?.angle ?? "";
+      const grounded = shouldGround(spec, grounding);
 
       const { words, rawLesson } = await withRetry(label, () =>
         generatePuzzleWords(
@@ -623,6 +692,7 @@ async function main() {
           targetDate,
           topic,
           angle,
+          grounded,
         ),
       );
       if (words.length < 3)
@@ -736,11 +806,13 @@ async function main() {
       console.error(` ❌ Error: ${errMsg}`);
     }
 
-    // Rate Limit Throttle: Wait 15.5 seconds between requests (roughly ~3.8 Requests Per Minute)
-    // Only hit the delay if there are still puzzles left to generate
+    // Rate limit throttle — see CALL_SPACING_MS.
+    // Only hit the delay if there are still puzzles left to generate.
     if (i < missing.length - 1) {
-      console.log(`   ⏱️  Throttling APIs: Sleeping for 15.5 seconds to respect 5 RPM limit...`);
-      await delay(15500); 
+      console.log(
+        `   ⏱️  Throttling: sleeping ${CALL_SPACING_MS / 1000}s to stay under 15 RPM...`,
+      );
+      await delay(CALL_SPACING_MS);
     }
   }
 

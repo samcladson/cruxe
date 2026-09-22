@@ -1,13 +1,14 @@
 # Cruxe — store release checklist
 
-Android is the near-term target. An Apple Developer account is being obtained,
-so iOS is no longer out of scope — the app code is ready for it (see §8), but
-nothing iOS can be verified until the account exists.
+Android and iOS are now parallel tracks. The Apple Developer account exists
+as of 2026-09-23, so §8 is unblocked and its slow, serial steps (Service ID,
+App Store Connect record, TestFlight processing) should be started alongside
+the Android work rather than after it.
 
 Ordered by dependency: each section unblocks the next. Items marked
 **[blocked]** are waiting on something outside the codebase.
 
-**Last revised:** 2026-09-21, after confirming §1b live against the Supabase
+**Last revised:** 2026-09-23 (Apple account, Gemini model swap); 2026-09-21, after confirming §1b live against the Supabase
 project directly (REST probes + the public GoTrue settings endpoint, not
 just "the migration file exists") and publishing the legal pages.
 
@@ -236,14 +237,14 @@ the checkboxes below as unverified until run once against the actual
 - [ ] Add testers, install from the Play link, repeat §6
 - [ ] Promote to production
 
-## 8. iOS **[blocked on an Apple Developer account]**
+## 8. iOS
 
 The app code is ready; none of this is app work.
 
 - [x] `expo-apple-authentication` installed, `usesAppleSignIn: true`
 - [x] `signInWithApple()` implemented with SHA-256 nonce replay protection and
       first-authorisation name capture, gated to `Platform.OS === "ios"`
-- [ ] Apple Developer Program membership
+- [x] Apple Developer Program membership — enrolled 2026-09-23
 - [ ] Sign in with Apple: Service ID + key, configured in Supabase →
       Authentication → Providers → Apple
 - [ ] App Store Connect app record, bundle id `com.cruxe.app`
@@ -266,9 +267,16 @@ Deliberate, recorded so they are decisions rather than oversights.
   are labelled; secondary screens are not, and dynamic type is unsupported
   because every font size is a fixed number. Reduced motion *is* honoured on
   the takeaway screen.
-- **No puzzle buffer.** The Gemini free tier allows 20 requests/day against 19
-  puzzles, so generating days ahead is impossible without a paid tier. A
-  failed run fails loudly, but the day is still thin until re-run.
+- **No puzzle buffer — but no longer for quota reasons.** Resolved 2026-09-23:
+  the generator moved to `gemini-3.1-flash-lite`, whose free tier allows 500
+  requests/day against 19 puzzles. The buffer is now a one-line workflow
+  change (`for OFFSET in 0 1 2`) plus a raised job timeout. Still off only
+  because it has not been turned on and watched yet.
+- **Clues are not grounded in the live web.** Google Search grounding returns
+  429 on a free-tier project regardless of request quota; it needs billing.
+  The policy is written and gated behind `GEMINI_GROUNDING`. Until then the
+  prompt asks for durable material rather than current events, because a
+  model guessing at recent news invents it.
 - **No rate limit on feedback.** One account could insert many rows. Acceptable
   pre-launch; the fix is a trigger capping rows per user per hour, not a
   client-side check.

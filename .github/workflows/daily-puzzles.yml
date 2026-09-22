@@ -5,8 +5,9 @@ name: Generate Daily Puzzles
 # Also available as a manual trigger via workflow_dispatch for specific dates.
 # Runs the script directly in Node.js — no Edge Functions, no timeouts.
 #
-# NOTE: Currently running the `-free` variant to stay within Gemini 2.5 Flash Free Tier limits (20 RPD).
-# To upgrade to the full 101-puzzle daily suite, swap `generate-daily-puzzles-free.ts` with `generate-daily-puzzles.ts`.
+# NOTE: Runs the `-free` variant, which is the only current generator — it alone
+# carries the topic/lesson system (subject briefs, per-word facts, takeaways).
+# `generate-daily-puzzles.ts` predates all of that and must NOT be swapped in.
 on:
   schedule:
     - cron: "5 0 * * *"
@@ -40,6 +41,11 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # Google Search grounding. Unset means off, which is correct on a
+          # free-tier project: the search quota there is zero, so a grounded
+          # call 429s immediately. Set the repo variable to 1 once billing is
+          # enabled — see scripts/lib/groundingPolicy.ts.
+          GEMINI_GROUNDING: ${{ vars.GEMINI_GROUNDING }}
         run: |
           # Generate puzzles for today, tomorrow, and day-after-tomorrow (UTC).
           # This creates a rolling buffer that ensures every timezone (up to UTC+14)
@@ -49,14 +55,18 @@ jobs:
             echo "Manual run for specific date: ${{ github.event.inputs.date }}"
             npx tsx scripts/generate-daily-puzzles-free.ts "${{ github.event.inputs.date }}"
           else
-            # FOR FREE TIER: Only generate exactly 1 day (Today/OFFSET 0), 
-            # to prevent hitting the 20 RPD limit.
+            # Generates one day (OFFSET 0), 19 puzzles.
             #
-            # 🔔 UPGRADE INSTRUCTIONS (When moving to Paid Gemini Tier):
-            # 1. Change `for OFFSET in 0; do` to `for OFFSET in 0 1 2; do`
-            # 2. Change `generate-daily-puzzles-free.ts` below to `generate-daily-puzzles.ts`
-            # 
-            # This will instantly restore the 3-day buffer of 101 puzzles per day!
+            # 🔔 TO ADD A TIMEZONE BUFFER: change `for OFFSET in 0; do` to
+            # `for OFFSET in 0 1 2; do`. Generation is idempotent, so in steady
+            # state only the newest date costs calls (19); only a cold start or
+            # a gap costs 3x (57). Both fit the 500/day quota easily.
+            #
+            # Timing, from a measured 14.5s for the largest grid plus 5s
+            # spacing: 19 calls ≈ 6 min, 57 ≈ 18 min. A 57-call run therefore
+            # fits the 30-minute timeout above, but not with much room for the
+            # retry path (15s then 30s per retry), so raise timeout-minutes to
+            # 60 at the same time as widening the loop.
             for OFFSET in 0; do
               DATE=$(date -u -d "+${OFFSET} days" +%Y-%m-%d)
               echo ""
@@ -95,7 +105,7 @@ jobs:
           echo "Puzzles in database for ${DATE}: ${COUNT}"
 
           if [ "${COUNT}" -lt 5 ]; then
-            echo "::error title=No puzzles for today::Only ${COUNT} puzzles exist for ${DATE}. Players will silently be served an older day's set. Check the generate step for Gemini quota (20/day) or API key problems."
+            echo "::error title=No puzzles for today::Only ${COUNT} puzzles exist for ${DATE}. Players will silently be served an older day's set. Check the generate step for Gemini quota (500/day) or API key problems."
             exit 1
           fi
 
