@@ -74,7 +74,7 @@ because real in-app products cannot be created without it.
       set 2026-09-21 and confirmed with `eas env:list production`). `.env`
       keeps the `test_…` key for local development on purpose. A production
       build configured with a Test Store key refuses to start purchases
-      (see `initRevenueCat`). No iOS key yet — that waits on the Apple account.
+      (see `initRevenueCat`). The iOS key (`appl_…`) is still to be set — see §8b.
 - [x] **Every `EXPO_PUBLIC_*` value the app reads is in EAS**, for both the
       `production` and `preview` environments. EAS builds from git-tracked
       files, and `.env` is git-ignored, so a value that exists only in `.env`
@@ -239,19 +239,146 @@ the checkboxes below as unverified until run once against the actual
 
 ## 8. iOS
 
-The app code is ready; none of this is app work.
+This section used to read "the app code is ready; none of this is app work."
+That was wrong: reading the repo on 2026-09-23 turned up four config gaps,
+all now fixed (§8a). It also listed only the portal steps, omitting the Paid
+Apps agreement, the App Privacy labels, screenshots, and the fact that an
+app requiring an account has no obvious way to give a reviewer one (§8c).
+
+### 8a. Config — done 2026-09-23
 
 - [x] `expo-apple-authentication` installed, `usesAppleSignIn: true`
 - [x] `signInWithApple()` implemented with SHA-256 nonce replay protection and
       first-authorisation name capture, gated to `Platform.OS === "ios"`
+- [x] **`ITSAppUsesNonExemptEncryption: false`** in `app.json` → `ios.infoPlist`.
+      Without it every TestFlight build stalls in App Store Connect waiting
+      for the export-compliance question to be answered by hand.
+- [x] **`supportsTablet: false`.** It was `true`, which is a promise: Apple
+      reviews on iPad and iPad screenshots become mandatory. Every font size
+      in the app is a fixed number and the layout is phone-tuned, so this was
+      an accidental commitment, not a decision. Revisit deliberately later.
+- [x] **`iosClientId` passed to `GoogleSignin.configure()`**, from
+      `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`. Android needs only its package +
+      SHA-1 registered; iOS must be handed its own client id at configure
+      time, and without it Google Sign-In fails on iOS the way Android failed
+      with `DEVELOPER_ERROR`.
+- [x] `submit.production.ios` block in `eas.json` — with `TODO_` placeholders
+      for `appleId` / `ascAppId` / `appleTeamId`, so `eas submit` fails loudly
+      naming the missing value rather than prompting for it silently.
+
+### 8b. Portal setup
+
+Apple's serial steps are slow. Start the agreement and the Service ID first.
+
 - [x] Apple Developer Program membership — enrolled 2026-09-23
-- [ ] Sign in with Apple: Service ID + key, configured in Supabase →
-      Authentication → Providers → Apple
+- [ ] **Paid Apps agreement signed, plus tax and banking details.** Until this
+      clears, StoreKit returns *no products* and the store looks empty for
+      reasons nothing in the app can report. This is the iOS twin of the §1
+      Play payments profile, and it is the step most likely to quietly cost a
+      week.
+- [ ] **iOS OAuth client** in Google Cloud for bundle id `com.cruxe.app`,
+      same project as the Android clients. Then:
+      - [ ] set `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` in `.env` **and in EAS**
+            (`production` + `preview` — see the §2 rule; a var that exists
+            only in `.env` is absent from the build)
+      - [ ] replace `iosUrlScheme` in `app.json` with the **reversed iOS
+            client id**. It currently holds the reversed *web* client id,
+            which is not a valid scheme for this and will not work.
+- [x] **Apple provider enabled in Supabase** — confirmed live 2026-09-23:
+      `GET /auth/v1/settings` reports `external.apple: true`, the same way
+      §1b confirmed the others, not just "the toggle looked on."
+      **Still unverified: the Client IDs field.** Its contents are not exposed
+      on the public settings endpoint, so it needs a manual look. It must hold
+      `com.cruxe.app`. If it is empty or wrong, the provider still reports
+      `true` here and sign-in fails only on device, with
+      `Unacceptable audience in id_token` — an error that names neither
+      Supabase nor the field you have to fix.
+- [ ] Sign in with Apple in Supabase → Authentication → Providers → Apple:
+      put `com.cruxe.app` in **Client IDs**. That is all.
+      **No Service ID and no `.p8` secret key** — an earlier draft of this
+      line asked for both, which was wrong. Those are for the web OAuth
+      redirect flow; `signInWithApple()` uses `signInWithIdToken`, the native
+      flow, where Supabase only verifies the token's `aud` against Client IDs.
+      The key becomes necessary only if Apple sign-in is ever added to the
+      web build or to Android.
 - [ ] App Store Connect app record, bundle id `com.cruxe.app`
 - [ ] Four consumables in App Store Connect with the **same** product ids as
-      Play, so `coin_products` stays four rows rather than eight
-- [ ] RevenueCat App Store app + offering
-- [ ] iOS build, TestFlight, repeat §6 on device
+      Play, so `coin_products` stays four rows rather than eight:
+      `com.cruxe.coins.starter` / `.plus` / `.pro` / `.elite`
+- [ ] RevenueCat App Store app, products attached to the **same `default`
+      offering** as the Play and Test Store products
+- [ ] `EXPO_PUBLIC_REVENUECAT_IOS_API_KEY` (the `appl_…` public key) set in
+      the EAS `production` environment
+- [ ] Fill the three `TODO_` values in `eas.json` once the ASC record exists
+
+### 8c. Review submission
+
+- [ ] **App Privacy labels** in App Store Connect. Same underlying facts as
+      `play-data-safety.md`, different form — and Apple asks one question Play
+      does not: *Data Used to Track You*. The answer is **none** (no ads, no
+      ad SDK, no ATT prompt, nothing shared with data brokers). Processors are
+      the same four: Supabase, RevenueCat, Google/Apple Sign-In, Sentry.
+- [ ] **App Review notes: say no demo account is needed.** An account is
+      required to play and there is no password auth — only Google, Apple, and
+      an emailed code. A reviewer cannot receive the OTP and will not sign in
+      with a Google account handed to them, so the only path that works is the
+      one already on the device. Write, verbatim:
+
+      > No demo account is required. On the welcome screen, tap **Sign in with
+      > Apple** and use the reviewer Apple ID already signed in on the device.
+      > Google sign-in and an emailed one-time code are alternatives.
+
+      Without this note the app is rejected under 2.1 for an unusable login,
+      and the rejection text will not explain why.
+- [ ] **Screenshots** — 6.9" iPhone required. The existing six are 1080×1920
+      (a 16:9 Android ratio) and are the wrong aspect for iPhone; regenerate
+      via `npm run brand:store` at the iPhone size rather than uploading these
+      letterboxed. No iPad set needed now that `supportsTablet` is false.
+- [ ] Age rating questionnaire — same answers as the Play content rating
+- [ ] Privacy policy URL (the published GitHub Pages one) into the listing
+
+### 8d. Build and verify **[blocked on a device]**
+
+**There is no iOS test device.** No iPhone, no Mac, so no simulator either.
+Every box in this subsection needs hands on hardware, and none of them can be
+signed off without it. This — not the code and not the Apple account — is what
+now gates the iOS launch, so it is worth solving early rather than discovering
+at submission time. Realistic routes, best first:
+
+1. **A cheap used iPhone.** Anything on iOS 13+ runs Sign in with Apple. This
+   is also the only route that helps with *future* releases and with support.
+2. **A TestFlight tester who owns one.** Needs the App Store Connect record
+   first, and every fix is a new build plus processing plus a round trip
+   through someone else's attention. Workable, slow, and poor for debugging.
+3. **A rented cloud Mac** (MacinCloud, Scaleway) for a simulator. Fine for
+   Apple sign-in and layout, useless for §3-style purchase testing — StoreKit
+   does not behave like a real device in the simulator.
+
+A device farm (BrowserStack, AWS Device Farm) looks like the obvious answer
+and is not: signing into a real Apple ID on a shared, wiped device is normally
+blocked, which is precisely the thing being tested.
+
+**Do this now anyway — it needs no device:** run
+`eas build -p ios --profile production`. An App Store build requires no
+registered UDID, and running it early pays for itself three times: it makes
+EAS provision credentials and create the App ID with the Sign in with Apple
+capability (§8b), it flushes out the first-time native build failures below
+while there is no deadline, and it leaves an `.ipa` ready for TestFlight the
+moment a device appears.
+
+- [ ] **First `eas build -p ios` will probably fail once or twice.** iOS has
+      never been built here — `/ios` is git-ignored and prebuild has not run
+      for it, so no native iOS issue has ever surfaced. `react-native-worklets`
+      / Reanimated 4 and `lottie-react-native` are the usual suspects. Budget
+      for it; this is not a sign anything is wrong.
+- [ ] TestFlight build installs and **opens** — the Android lesson (version
+      code 4 opened to a crash because an env var was missing from EAS)
+      applies here unchanged
+- [ ] Repeat §6 on a real device, paying attention to the iOS-only paths:
+      Sign in with Apple, the `padding` keyboard behaviour, and the 88pt tab
+      bar
+- [ ] Purchase a consumable in the TestFlight sandbox and confirm the coins
+      arrive; force-quit immediately after one and confirm they still arrive
 
 ---
 

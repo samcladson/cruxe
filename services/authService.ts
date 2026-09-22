@@ -10,6 +10,7 @@
  * account rather than linking an identity onto an existing one.
  */
 
+import { Platform } from "react-native";
 import * as Sentry from "@sentry/react-native";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import {
@@ -60,8 +61,27 @@ if (!process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID) {
   );
 }
 
+/**
+ * The iOS client id, from an *iOS* OAuth client in the same Google Cloud
+ * project (bundle id com.cruxe.app). iOS differs from Android here: Android
+ * needs only the package + SHA-1 registered, but iOS must be handed its own
+ * client id at configure time, and the plugin's `iosUrlScheme` in app.json
+ * must be that same client's *reversed* id. There is no fallback on purpose —
+ * a wrong id fails at sign-in with nothing useful in the error.
+ */
+const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || "";
+
+if (Platform.OS === "ios" && !GOOGLE_IOS_CLIENT_ID) {
+  console.warn(
+    "[Auth] EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID is not set — Google Sign-In " +
+      "will fail on iOS. Create an iOS OAuth client for com.cruxe.app, set " +
+      "this var, and put its reversed id in app.json as `iosUrlScheme`.",
+  );
+}
+
 GoogleSignin.configure({
   webClientId: GOOGLE_WEB_CLIENT_ID,
+  ...(GOOGLE_IOS_CLIENT_ID ? { iosClientId: GOOGLE_IOS_CLIENT_ID } : {}),
   offlineAccess: true,
 });
 
@@ -402,11 +422,19 @@ async function signInWithProviderToken(
 
 /**
  * Initiates native Apple Sign-In, creating or entering the matching account.
- * Uses a crypto nonce to prevent replay attacks per Apple guidelines.
+ *
+ * Apple is sent SHA-256(rawNonce) and embeds it in the identity token; Supabase
+ * is sent rawNonce and checks the hash matches. That is what stops a stolen
+ * token being replayed, so the nonce has to be unguessable: 256 bits from the
+ * platform CSPRNG, not `Math.random()`, which is neither cryptographic nor
+ * seeded unpredictably.
  */
 export async function signInWithApple(): Promise<SocialAuthResult> {
   try {
-    const rawNonce = Math.random().toString(36).substring(2, 10);
+    const nonceBytes = await Crypto.getRandomBytesAsync(32);
+    const rawNonce = Array.from(nonceBytes)
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
     const hashedNonce = await Crypto.digestStringAsync(
       Crypto.CryptoDigestAlgorithm.SHA256,
       rawNonce,

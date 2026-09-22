@@ -32,6 +32,11 @@
       "android": {
         "track": "internal",
         "releaseStatus": "draft"
+      },
+      "ios": {
+        "appleId": "TODO_APPLE_ACCOUNT_EMAIL",
+        "ascAppId": "TODO_APP_STORE_CONNECT_APP_ID",
+        "appleTeamId": "TODO_APPLE_TEAM_ID"
       }
     }
   }
