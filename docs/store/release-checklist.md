@@ -68,17 +68,39 @@ because real in-app products cannot be created without it.
       declaration is needed in Play Console)
 - [x] `EXPO_PUBLIC_SENTRY_DSN` present in the EAS build environment
 - [x] `SENTRY_AUTH_TOKEN` set as an EAS **secret**
-- [ ] **Confirm the EAS `production` environment holds real RevenueCat keys.**
-      `.env` currently carries a `test_…` Test Store key for both platforms,
-      and RevenueCat is explicit that a build configured with one must never
-      be submitted. This is the failure mode where a shipped app cannot sell
-      anything.
-- [ ] `npx eas build --platform android --profile production` succeeds
-- [ ] **Register the release SHA-1 with Google.** Debug and EAS release builds
-      are signed with different keys; Google Sign-In fails with
-      `DEVELOPER_ERROR` for any unregistered package + SHA-1 pair. Get it via
-      `npx eas credentials` (Android → keystore), and add the Play App
-      Signing SHA-1 from Setup → App integrity too.
+- [x] **EAS `production` environment holds the real Android RevenueCat key**
+      (`EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY`, a `goog_…` public SDK key,
+      set 2026-09-21 and confirmed with `eas env:list production`). `.env`
+      keeps the `test_…` key for local development on purpose. A production
+      build configured with a Test Store key refuses to start purchases
+      (see `initRevenueCat`). No iOS key yet — that waits on the Apple account.
+- [x] **Every `EXPO_PUBLIC_*` value the app reads is in EAS**, for both the
+      `production` and `preview` environments. EAS builds from git-tracked
+      files, and `.env` is git-ignored, so a value that exists only in `.env`
+      is simply absent from the build. Version code 4 shipped without
+      `EXPO_PUBLIC_SUPABASE_URL` / `_ANON_KEY` and closed on launch
+      (`createClient("", "")` throws at import); confirmed by extracting its JS
+      bundle, which held the `goog_` key and Sentry DSN but no Supabase URL.
+      Fixed 2026-09-22. **When adding a new `EXPO_PUBLIC_` variable, add it to
+      EAS too** (`eas env:create`), not just `.env`. The Gemini key stays out:
+      only the generation scripts use it.
+- [x] `npx eas build --platform android --profile production` succeeds *and the
+      build opens*. Version code 5 (2026-09-22), installed from the internal
+      testing track (installer `com.android.vending`), opens and stays open
+      with no crash in logcat. Version code 4 crashed on launch (above). A
+      first report that v5 also closed turned out to be an older install: the
+      same bundle sideloaded ran fine, and a fresh install from Play did too.
+- [x] **Signing SHA-1s registered with Google** as Android OAuth clients for
+      `com.cruxe.app`. Google Sign-In fails with `DEVELOPER_ERROR` for any
+      unregistered package + SHA-1 pair, and each key signs a different kind of
+      install:
+      - `5E:8F:16:06:…:F6:25` — debug key, dev builds
+      - `2F:0D:9D:E5:…:D8:94` — EAS upload key, builds installed from EAS
+      - `31:FC:DB:DC:18:48:73:AB:CA:B3:BE:25:63:5B:C7:43:9F:B5:E8:E8` — **Play
+        App Signing**, anything installed from Play (added 2026-09-22 as
+        "Android production"). Found under Protected with Play → Play Store
+        protection, or the bundle's Downloads tab.
+      - `D4:99:27:6F:…:57:90` — internal app sharing only; not registered.
 - [ ] Install the resulting AAB/APK and complete a full run-through (§6)
 
 ## 3. In-app products **[blocked on §1]**
@@ -101,8 +123,10 @@ remains is proving Google Play Billing itself.
 - [ ] **Activate** each one. New products default to inactive, and an inactive
       product returns nothing to the app — the most common cause of "the store
       is empty" on Android.
-- [ ] Import them into a RevenueCat Offering built on the **Play** app, not
-      the Test Store, and make it Current
+- [x] Imported into RevenueCat and attached, alongside the Test Store
+      products, to the four packages of the `default` offering, so one
+      Current offering serves both the `test_` and `goog_` keys. *(Starter
+      and Plus confirmed from a screenshot; Pro and Elite reported.)*
 - [ ] Swap the app to the production RevenueCat key and repeat the purchase
 - [ ] Force-quit immediately after a purchase and confirm the coins still
       arrive — this is what the webhook exists to guarantee
@@ -114,9 +138,19 @@ remains is proving Google Play Billing itself.
 - [x] App name, short description, full description, "what's new"
       — in `docs/store/listing-copy.md`, paste-ready
 - [x] **Feature graphic** 1024×500 — `assets/brand/png/play-feature-graphic.png`
-- [ ] **Screenshots** — at least 2, phone. Worth capturing: the daily
-      challenge card, a partly-solved grid, the takeaway screen, the
-      leaderboard. Needs a running build; none captured yet.
+- [x] **Screenshots** — six 1080×1920 images in `assets/store/screenshots/`,
+      built by `npm run brand:store` from the web page's screens section (the
+      same images from `web/assets/screens/`, same phone frame and captions),
+      24-bit PNG, no alpha. Not yet uploaded to Play Console.
+- [ ] **Retake two captures**: replace them in `web/assets/screens/` and rerun
+      `npm run brand:store`. The takeaway
+      (after the LessonScreen fix below, so the paragraph shows in full) and the
+      solved screen (the current one shows 33% accuracy).
+- [ ] **Confirm the takeaway fix on a device.** The stored takeaway was complete
+      (390 characters, ending "…interactive PLAY.") but the last line was
+      clipped on screen. `LessonScreen` now wraps a plain Text in the animated
+      view and no longer sets `textAlign: "justify"`; whether that cures it is
+      unconfirmed until it is seen on Android.
 - [x] App icon 512×512 — `assets/brand/png/play-store-icon-512.png`
 - [ ] Category: Games → Word
 - [ ] Content rating questionnaire *(expect Everyone. Note there is now

@@ -25,6 +25,7 @@
  */
 const fs = require("fs");
 const path = require("path");
+const { toRgbPng } = require("./png.cjs");
 
 const ROOT = path.resolve(__dirname, "../..");
 const OUT = path.join(ROOT, "assets/brand");
@@ -541,33 +542,33 @@ function main() {
   const fontFiles = ["400Regular/Manrope_400Regular.ttf", "600SemiBold/Manrope_600SemiBold.ttf", "700Bold/Manrope_700Bold.ttf"].map(
     (f) => path.join(FONT_DIR, f),
   );
-  const render = (svg, width, rel) => {
-    const png = new Resvg(svg, {
+  // opaque: write 24-bit RGB. Play wants no alpha on the feature graphic and
+  // the App Store rejects it on the app icon; see png.cjs.
+  const render = (svg, width, rel, opaque = false) => {
+    const rendered = new Resvg(svg, {
       fitTo: { mode: "width", value: width },
       font: { fontFiles, loadSystemFonts: false, defaultFontFamily: FONT_UI },
-    })
-      .render()
-      .asPng();
-    write(rel, png);
+    }).render();
+    write(rel, opaque ? toRgbPng(rendered) : rendered.asPng());
   };
   const both = (name, svg, sizes) => {
     write(`svg/${name}.svg`, svg);
-    for (const [w, file] of sizes) render(svg, w, `png/${file}`);
+    for (const [w, file, opaque] of sizes) render(svg, w, `png/${file}`, opaque);
   };
 
   both("icon", ICONS.icon(), [
-    [1024, "icon.png"],
+    [1024, "icon.png", true],
     [512, "play-store-icon-512.png"],
     [48, "favicon.png"],
   ]);
-  both("icon-outline", ICONS.iconOutline(), [[1024, "icon-outline.png"]]);
+  both("icon-outline", ICONS.iconOutline(), [[1024, "icon-outline.png", true]]);
   both("adaptive-foreground", ICONS.adaptiveForeground(), [[1024, "adaptive-icon.png"]]);
   both("adaptive-background", ICONS.adaptiveBackground(), [[1024, "adaptive-icon-background.png"]]);
   both("adaptive-monochrome", ICONS.monochrome(), [[1024, "adaptive-icon-monochrome.png"]]);
   both("notification-icon", ICONS.notification(), [[96, "notification-icon.png"]]);
   both("splash-icon", ICONS.splash(), [[1024, "splash-icon.png"]]);
   both("wordmark", ICONS.wordmark(), [[1040, "wordmark.png"]]);
-  both("feature-graphic", ICONS.featureGraphic(), [[1024, "play-feature-graphic.png"]]);
+  both("feature-graphic", ICONS.featureGraphic(), [[1024, "play-feature-graphic.png", true]]);
 
   // Backdrops: standalone SVGs, previews, and a TS module for react-native-svg.
   const module = [];

@@ -18,12 +18,14 @@ findable — "crossword" is the search term people actually type.
 ## Short description (80 max)
 
 ```
-A new set of handcrafted crosswords every day. Beautifully made, properly hard.
+A new set of crosswords every day. Beautifully made, properly hard.
 ```
 
-*78 characters.* This is the line shown in search results and is the only copy
+*67 characters.* This is the line shown in search results and is the only copy
 most people read. It leads with the daily habit and closes on difficulty,
-because "properly hard" self-selects the audience who will stay.
+because "properly hard" self-selects the audience who will stay. It says
+"crosswords", not "handcrafted": the puzzles are generated with Gemini, and
+Play's metadata policy penalizes claims that misdescribe the app.
 
 ---
 

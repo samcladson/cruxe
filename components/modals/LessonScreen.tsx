@@ -119,15 +119,15 @@ export function LessonScreen({
         </Animated.Text>
 
         {takeaway ? (
-          <Animated.Text
-            entering={rise(STEP_MS * 2)}
-            style={styles.takeaway}
-            // Android only justifies when the break strategy allows it, and
-            // ignores textAlign: "justify" otherwise. Harmless on iOS.
-            textBreakStrategy="highQuality"
-          >
-            {takeaway}
-          </Animated.Text>
+          // The entrance animates a wrapper, and the paragraph is a plain Text.
+          // The paragraph's last line ("PLAY." on a line of its own) was being
+          // cut off on Android although the stored takeaway was complete.
+          // Animating the Text itself with justified alignment is the suspect:
+          // both are gone here (the alignment never rendered justified anyway).
+          // Confirm on a device that the paragraph now ends in full.
+          <Animated.View entering={rise(STEP_MS * 2)}>
+            <Text style={styles.takeaway}>{takeaway}</Text>
+          </Animated.View>
         ) : null}
 
         {facts.map(({ reference, word, fact, locked }, i) => (
@@ -236,7 +236,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 25,
     color: theme.colors.textSecondary,
-    textAlign: "justify",
     // The gap before the first fact is what separates the two halves of this
     // screen, in place of a rule or a container.
     marginBottom: 44,
