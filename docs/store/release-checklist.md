@@ -176,8 +176,10 @@ remains is proving Google Play Billing itself.
 - [x] **Hosted pages match the in-app versions** — checked the live page for
       leftover "anonymous"/"guest" language from before accounts were
       required; none found.
-- [ ] Confirm both name the same processors: Supabase, RevenueCat,
-      Google/Apple Sign-In, Sentry
+- [x] Confirm both name the same processors: Supabase, RevenueCat,
+      Google/Apple Sign-In, Sentry — done by `fix(legal)` (c7fde2b) and
+      checked 2026-09-23: `app/legal/privacy.tsx` and `web/privacy.html`
+      now name the same five. Re-check if either file is edited alone.
 - [ ] Ads declaration: **contains no ads** — IAP-only by decision
 
 ## 6. Pre-launch verification
@@ -394,11 +396,14 @@ Deliberate, recorded so they are decisions rather than oversights.
   are labelled; secondary screens are not, and dynamic type is unsupported
   because every font size is a fixed number. Reduced motion *is* honoured on
   the takeaway screen.
-- **No puzzle buffer — but no longer for quota reasons.** Resolved 2026-09-23:
-  the generator moved to `gemini-3.1-flash-lite`, whose free tier allows 500
-  requests/day against 19 puzzles. The buffer is now a one-line workflow
-  change (`for OFFSET in 0 1 2`) plus a raised job timeout. Still off only
-  because it has not been turned on and watched yet.
+- **Puzzle buffer: turned on, not yet observed.** The quota reason is gone
+  (`gemini-3.1-flash-lite`, 500 requests/day against 19 puzzles), and the
+  buffer is no longer pending either — `653e776` put `for OFFSET in 0 1 2`
+  into the workflow and raised the job timeout to 60 minutes. What is still
+  unproven is a *run*: three days of generation is roughly triple the API
+  calls and triple the wall time of the single-day job that used to fit in
+  30 minutes, and no completed run has been checked. Confirm the next
+  scheduled run finished before treating the buffer as real.
 - **Clues are not grounded in the live web.** Google Search grounding returns
   429 on a free-tier project regardless of request quota; it needs billing.
   The policy is written and gated behind `GEMINI_GROUNDING`. Until then the
