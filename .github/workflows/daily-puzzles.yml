@@ -21,7 +21,10 @@ on:
 jobs:
   generate:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Three dates at ~19s per puzzle is ~18 minutes when every slot is empty,
+    # which is only the first run and any run after a long gap. Steady state
+    # is one date and a few minutes. The headroom is for the retry path.
+    timeout-minutes: 60
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -47,32 +50,49 @@ jobs:
           # enabled — see scripts/lib/groundingPolicy.ts.
           GEMINI_GROUNDING: ${{ vars.GEMINI_GROUNDING }}
         run: |
-          # Generate puzzles for today, tomorrow, and day-after-tomorrow (UTC).
-          # This creates a rolling buffer that ensures every timezone (up to UTC+14)
-          # always has puzzles for their local date.
-          # The script is idempotent — existing dates are skipped (0 Gemini API calls).
+          # Generate puzzles for today, tomorrow and day-after-tomorrow (UTC).
+          #
+          # Why three dates and not one. A player's day rolls over at their
+          # local midnight, not at 00:05 UTC, so anyone east of UTC reaches a
+          # date this job has not generated yet — 5.5 hours of it in IST, up
+          # to 14+ hours at UTC+14. During that window they fall back to
+          # yesterday's set. Generating ahead closes that hole.
+          #
+          # The second reason matters more. The script is idempotent per
+          # SLOT, not per date: it reads what already exists and generates
+          # only the gaps. With a three-day window every date is attempted on
+          # three consecutive nights, so a run that dies partway is repaired
+          # the next night instead of staying broken for good. Before this,
+          # 45% of days were complete and one (2026-09-19) was missing
+          # entirely, because a failed run had no second chance.
+          #
+          # Cost: 57 calls only when all three dates are empty (first run, or
+          # after a gap); 19 in steady state, since the two nearer dates are
+          # already full. The free tier allows 500/day.
           if [ -n "${{ github.event.inputs.date }}" ]; then
             echo "Manual run for specific date: ${{ github.event.inputs.date }}"
             npx tsx scripts/generate-daily-puzzles-free.ts "${{ github.event.inputs.date }}"
           else
-            # Generates one day (OFFSET 0), 19 puzzles.
-            #
-            # 🔔 TO ADD A TIMEZONE BUFFER: change `for OFFSET in 0; do` to
-            # `for OFFSET in 0 1 2; do`. Generation is idempotent, so in steady
-            # state only the newest date costs calls (19); only a cold start or
-            # a gap costs 3x (57). Both fit the 500/day quota easily.
-            #
-            # Timing, from a measured 14.5s for the largest grid plus 5s
-            # spacing: 19 calls ≈ 6 min, 57 ≈ 18 min. A 57-call run therefore
-            # fits the 30-minute timeout above, but not with much room for the
-            # retry path (15s then 30s per retry), so raise timeout-minutes to
-            # 60 at the same time as widening the loop.
-            for OFFSET in 0; do
+            # Each date's status is captured rather than relied on implicitly:
+            # without this the step would report only the LAST date's exit
+            # code, so a failure on today or tomorrow would be masked by the
+            # day-after-tomorrow succeeding — the opposite of the loud failure
+            # this job is supposed to produce.
+            FAILED=""
+            for OFFSET in 0 1 2; do
               DATE=$(date -u -d "+${OFFSET} days" +%Y-%m-%d)
               echo ""
               echo "━━━ Generating for ${DATE} (UTC+${OFFSET}d) ━━━"
-              npx tsx scripts/generate-daily-puzzles-free.ts "${DATE}"
+              if ! npx tsx scripts/generate-daily-puzzles-free.ts "${DATE}"; then
+                echo "::warning title=Incomplete generation::${DATE} did not fully generate."
+                FAILED="${FAILED} ${DATE}"
+              fi
             done
+
+            if [ -n "${FAILED}" ]; then
+              echo "::error title=Generation failed::Dates that did not fully generate:${FAILED}. Tomorrow's run retries them, but check the log for the cause."
+              exit 1
+            fi
           fi
 
       # The generator now exits non-zero when fewer than 70% of puzzles are
