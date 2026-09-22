@@ -26,6 +26,7 @@ import {
   countGrounded,
   groundingEnabled,
 } from "./lib/groundingPolicy";
+import { pickDensestBuild } from "./lib/pickDensestBuild";
 
 /**
  * The generation model.
@@ -698,16 +699,23 @@ async function main() {
       if (words.length < 3)
         throw new Error(`Only ${words.length} words returned`);
 
-      // Build the grid once, HERE, so every player gets the identical layout
-      // and the server can verify submissions against a known answer key.
+      // Build the grid HERE, so every player gets the identical layout and
+      // the server can verify submissions against a known answer key.
       // buildPuzzle uses Math.random() on retry attempts, so building it on
       // each client would give every player a different puzzle.
-      const built = buildPuzzle(
-        words,
-        geminiCategory as any,
-        spec.difficulty as any,
-        spec.gridSize as any,
-        undefined,
+      //
+      // Sampled rather than built once: the same words yield grids of
+      // noticeably different fullness run to run, and taking the best of ten
+      // costs about 40ms while removing the sparse tail — see
+      // scripts/lib/pickDensestBuild.ts for the measurements.
+      const built = pickDensestBuild(() =>
+        buildPuzzle(
+          words,
+          geminiCategory as any,
+          spec.difficulty as any,
+          spec.gridSize as any,
+          undefined,
+        ),
       );
       if (!built) {
         throw new Error("Grid construction failed");
