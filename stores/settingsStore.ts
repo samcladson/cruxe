@@ -24,6 +24,9 @@ interface SettingsState {
   dailyReminderEnabled: boolean;
   /** Local hour (0-23) for the daily reminder. */
   dailyReminderHour: number;
+  /** Local minute (0-59) for the daily reminder. Missing from storage on
+   *  installs from before it was settable, where it was always on the hour. */
+  dailyReminderMinute: number;
   /** Warn in the evening when an unplayed day would break the streak. */
   streakWarningEnabled: boolean;
   setHaptics: (enabled: boolean) => void;
@@ -32,6 +35,7 @@ interface SettingsState {
   setHasCompletedOnboarding: (done: boolean) => void;
   setHasSeenReverseHint: (seen: boolean) => void;
   setDailyReminder: (enabled: boolean, hour?: number) => void;
+  setDailyReminderTime: (hour: number, minute: number) => void;
   setStreakWarning: (enabled: boolean) => void;
   /**
    * Returns the app to its first-run state after account deletion.
@@ -56,6 +60,7 @@ export const useSettingsStore = create<SettingsState>()(
       hasSeenReverseHint: false,
       dailyReminderEnabled: false,
       dailyReminderHour: 19,
+      dailyReminderMinute: 0,
       streakWarningEnabled: false,
       setHaptics: (enabled) => set({ hapticsEnabled: enabled }),
       setSound: (enabled) => set({ soundEnabled: enabled }),
@@ -67,6 +72,8 @@ export const useSettingsStore = create<SettingsState>()(
           dailyReminderEnabled: enabled,
           dailyReminderHour: hour ?? st.dailyReminderHour,
         })),
+      setDailyReminderTime: (hour, minute) =>
+        set({ dailyReminderHour: hour, dailyReminderMinute: minute }),
       setStreakWarning: (enabled) => set({ streakWarningEnabled: enabled }),
       resetFirstRun: () =>
         set({

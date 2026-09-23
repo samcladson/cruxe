@@ -18,6 +18,8 @@ import { router } from "expo-router";
 import { CATEGORIES } from "../../constants/categories";
 import { theme } from "../../constants/theme";
 import { FeedbackModal } from "../../components/modals/FeedbackModal";
+import { ReminderTimeModal } from "../../components/modals/ReminderTimeModal";
+import { formatReminderTime } from "../../utils/reminderTime";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useUserStore } from "../../stores/userStore";
 
@@ -42,6 +44,10 @@ import { ScreenBackdrop } from "../../components/ui/ScreenBackdrop";
 export default function ProfileScreen() {
   const profile = useUserStore((state) => state.profile);
   const settings = useSettingsStore();
+  const reminderTime = formatReminderTime(
+    settings.dailyReminderHour,
+    settings.dailyReminderMinute,
+  );
   /**
    * Which account action is currently running, or null.
    *
@@ -60,6 +66,7 @@ export default function ProfileScreen() {
     email: string | null;
   }>({ hasGoogle: false, hasApple: false, email: null });
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [reminderTimeOpen, setReminderTimeOpen] = useState(false);
 
   const refreshLinked = useCallback(async () => {
     const l = await getLinkedProviders();
@@ -197,7 +204,24 @@ export default function ProfileScreen() {
       return;
     }
     settings.setDailyReminder(true);
-    await scheduleDailyReminder(settings.dailyReminderHour, 0);
+    await scheduleDailyReminder(
+      settings.dailyReminderHour,
+      settings.dailyReminderMinute,
+    );
+  };
+
+  /**
+   * Saves a new reminder time. A reminder that is on is moved straight away —
+   * scheduleDailyReminder replaces the existing one by id. One that is off
+   * just remembers the time for when it is turned on.
+   */
+  const handleReminderTime = async (hour: number, minute: number) => {
+    triggerHaptic();
+    setReminderTimeOpen(false);
+    settings.setDailyReminderTime(hour, minute);
+    if (settings.dailyReminderEnabled) {
+      await scheduleDailyReminder(hour, minute);
+    }
   };
 
   const handleStreakWarning = async (enabled: boolean) => {
@@ -430,7 +454,15 @@ export default function ProfileScreen() {
         </Text>
         <View style={styles.settingsGroup}>
           <View style={styles.settingRow}>
-            <View style={styles.settingInfo}>
+            <TouchableOpacity
+              style={styles.settingInfo}
+              onPress={() => {
+                triggerHaptic();
+                setReminderTimeOpen(true);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={`Daily reminder time, ${reminderTime}. Change`}
+            >
               <View style={styles.settingIconWrap}>
                 <Ionicons
                   name="notifications"
@@ -441,10 +473,11 @@ export default function ProfileScreen() {
               <View style={styles.settingTextWrap}>
                 <Text style={styles.settingText}>Daily reminder</Text>
                 <Text style={styles.settingSubtext}>
-                  {settings.dailyReminderHour}:00, when new puzzles land
+                  {reminderTime} ·{" "}
+                  <Text style={styles.settingLink}>Change time</Text>
                 </Text>
               </View>
-            </View>
+            </TouchableOpacity>
             <Switch
               value={settings.dailyReminderEnabled}
               onValueChange={handleDailyReminder}
@@ -831,6 +864,13 @@ export default function ProfileScreen() {
         visible={feedbackOpen}
         onClose={() => setFeedbackOpen(false)}
       />
+      <ReminderTimeModal
+        visible={reminderTimeOpen}
+        hour={settings.dailyReminderHour}
+        minute={settings.dailyReminderMinute}
+        onClose={() => setReminderTimeOpen(false)}
+        onSave={handleReminderTime}
+      />
     </SafeAreaView>
   );
 }
@@ -1040,6 +1080,9 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: theme.colors.textMuted,
     marginTop: 2,
+  },
+  settingLink: {
+    color: theme.colors.accentGold,
   },
   settingText: {
     fontFamily: theme.typography.body.fontFamily,
