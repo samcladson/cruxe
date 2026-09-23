@@ -12,7 +12,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ScreenHeader } from "../../../components/ui/ScreenHeader";
-import { CATEGORIES } from "../../../constants/categories";
 import { theme } from "../../../constants/theme";
 import {
   ActivityItem,
@@ -20,6 +19,7 @@ import {
 } from "../../../services/puzzleService";
 import { useUserStore } from "../../../stores/userStore";
 import { ScreenBackdrop } from "../../../components/ui/ScreenBackdrop";
+import { activityLabel } from "../../../utils/activityLabel";
 
 /**
  * ActivityHistoryScreen — every puzzle this player has completed.
@@ -122,9 +122,7 @@ export default function ActivityHistoryScreen() {
 }
 
 function ActivityRow({ item }: { item: ActivityItem }) {
-  const categoryTitle = CATEGORIES[item.category]?.title || "General";
-  const difficultyTitle =
-    item.difficulty.charAt(0).toUpperCase() + item.difficulty.slice(1);
+  const { heading, detail } = activityLabel(item);
 
   const mins = Math.floor(item.timeTaken / 60);
   const secs = item.timeTaken % 60;
@@ -137,7 +135,7 @@ function ActivityRow({ item }: { item: ActivityItem }) {
       // insights screen looks up — not the puzzle's own id.
       onPress={() => router.push(`/activity/${item.id}` as any)}
       accessibilityRole="button"
-      accessibilityLabel={`${categoryTitle} ${difficultyTitle}, ${Math.round(
+      accessibilityLabel={`${heading}${detail ? `, ${detail}` : ""}, ${Math.round(
         item.accuracy * 100,
       )} percent accuracy, ${time}`}
     >
@@ -149,8 +147,13 @@ function ActivityRow({ item }: { item: ActivityItem }) {
         />
       </View>
       <View style={styles.rowContent}>
-        <Text style={styles.rowTitle}>
-          {categoryTitle} • {difficultyTitle}
+        {detail ? (
+          <Text style={styles.rowDetail} numberOfLines={1}>
+            {detail}
+          </Text>
+        ) : null}
+        <Text style={styles.rowTitle} numberOfLines={1}>
+          {heading}
         </Text>
         <View style={styles.rowMeta}>
           <Text style={styles.metaStrong}>
@@ -202,6 +205,13 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(238, 205, 43, 0.1)",
   },
   rowContent: { flex: 1, minWidth: 0 },
+  rowDetail: {
+    fontSize: 10,
+    letterSpacing: 1,
+    textTransform: "uppercase",
+    color: theme.colors.textMuted,
+    marginBottom: 2,
+  },
   rowTitle: {
     fontFamily: theme.typography.subheading.fontFamily,
     fontSize: 15,

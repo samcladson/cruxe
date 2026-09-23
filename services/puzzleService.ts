@@ -112,6 +112,11 @@ export interface CompletionData {
   category: string;
   difficulty: string;
   gridSize: number;
+  /**
+   * The puzzle's subject, when read back for review. Never sent when
+   * recording — the server owns it on `daily_puzzles`.
+   */
+  title?: string | null;
 }
 
 /**
@@ -536,6 +541,12 @@ export interface ActivityItem {
   id: string;
   /** The puzzle that was solved. For replaying or showing the grid. */
   puzzleId: string;
+  /**
+   * The puzzle's subject. Null for puzzles made before titles existed, and
+   * for ones since removed from `daily_puzzles` (the link is ON DELETE SET
+   * NULL). Name rows with `activityLabel()`, which handles both.
+   */
+  title: string | null;
   category: Category;
   difficulty: Difficulty;
   gridSize: GridSize;
@@ -566,7 +577,8 @@ export async function fetchRecentActivity(
       completed_at,
       category,
       difficulty,
-      grid_size
+      grid_size,
+      daily_puzzles ( title )
     `,
     )
     .eq("user_id", userId)
@@ -584,6 +596,7 @@ export async function fetchRecentActivity(
   const result = data.map((row: any) => ({
     id: row.id,
     puzzleId: row.puzzle_id || "deleted", // Provide a fallback if puzzle was cleaned up
+    title: row.daily_puzzles?.title ?? null,
     category: row.category as Category,
     difficulty: row.difficulty as Difficulty,
     gridSize: row.grid_size as GridSize,
@@ -838,7 +851,7 @@ export async function fetchCompletionById(
 ): Promise<CompletionData | null> {
   const { data, error } = await supabase
     .from("puzzle_completions")
-    .select("*")
+    .select("*, daily_puzzles ( title )")
     .eq("id", id)
     .eq("user_id", userId)
     .maybeSingle();
@@ -863,6 +876,7 @@ export async function fetchCompletionById(
     category: data.category,
     difficulty: data.difficulty,
     gridSize: data.grid_size,
+    title: (data as any).daily_puzzles?.title ?? null,
   };
 }
 

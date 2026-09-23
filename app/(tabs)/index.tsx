@@ -54,6 +54,7 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import { track } from "../../services/analyticsService";
 import { drainPendingSolves } from "../../services/offlineSyncService";
 import { formatCompactNumber } from "../../utils/formatNumber";
+import { activityLabel } from "../../utils/activityLabel";
 import { ScreenBackdrop } from "../../components/ui/ScreenBackdrop";
 
 function PulseDot() {
@@ -717,11 +718,7 @@ export default function HomeScreen() {
             </Text>
           ) : (
             recentActivity.slice(0, 2).map((activity) => {
-              const categoryTitle =
-                CATEGORIES[activity.category]?.title || "General";
-              const difficultyTitle =
-                activity.difficulty.charAt(0).toUpperCase() +
-                activity.difficulty.slice(1);
+              const { heading, detail } = activityLabel(activity);
 
               const mins = Math.floor(activity.timeTaken / 60);
               const secs = activity.timeTaken % 60;
@@ -750,8 +747,13 @@ export default function HomeScreen() {
                     />
                   </View>
                   <View style={styles.activityContent}>
-                    <Text style={styles.activityTitle}>
-                      {categoryTitle} • {difficultyTitle}
+                    {detail ? (
+                      <Text style={styles.activityDetail} numberOfLines={1}>
+                        {detail}
+                      </Text>
+                    ) : null}
+                    <Text style={styles.activityTitle} numberOfLines={1}>
+                      {heading}
                     </Text>
                     <View style={styles.activityMeta}>
                       <Text
@@ -1057,6 +1059,13 @@ const styles = StyleSheet.create({
   },
   activityContent: {
     flex: 1,
+  },
+  activityDetail: {
+    fontSize: 10,
+    letterSpacing: 1,
+    textTransform: "uppercase",
+    color: theme.colors.textMuted,
+    marginBottom: 2,
   },
   activityTitle: {
     fontFamily: theme.typography.heading.fontFamily,

@@ -11,7 +11,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ScreenHeader } from "../../../components/ui/ScreenHeader";
-import { CATEGORIES } from "../../../constants/categories";
 import { theme } from "../../../constants/theme";
 import {
   CompletionData,
@@ -19,6 +18,8 @@ import {
 } from "../../../services/puzzleService";
 import { useUserStore } from "../../../stores/userStore";
 import { ScreenBackdrop } from "../../../components/ui/ScreenBackdrop";
+import { activityLabel } from "../../../utils/activityLabel";
+import { Category } from "../../../types/puzzle.types";
 
 export default function ActivityReviewScreen() {
   const { id } = useLocalSearchParams();
@@ -90,12 +91,11 @@ export default function ActivityReviewScreen() {
     },
   );
 
-  const categoryTitle =
-    CATEGORIES[completion.category as keyof typeof CATEGORIES]?.title ||
-    completion.category;
-  const difficultyTitle =
-    completion.difficulty.charAt(0).toUpperCase() +
-    completion.difficulty.slice(1);
+  const { heading, detail } = activityLabel({
+    title: completion.title ?? null,
+    category: completion.category as Category,
+    difficulty: completion.difficulty,
+  });
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -104,7 +104,7 @@ export default function ActivityReviewScreen() {
 
       <ScreenHeader
         title="Performance Insights"
-        subtitle={`${categoryTitle} • ${difficultyTitle} • ${formattedDate}`}
+        subtitle={[heading, detail, formattedDate].filter(Boolean).join(" • ")}
       />
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
