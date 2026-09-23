@@ -11,6 +11,7 @@ import {
   ViewStyle,
 } from "react-native";
 import { theme } from "../../constants/theme";
+import { SFX } from "../../services/soundService";
 
 interface ButtonProps extends TouchableOpacityProps {
   title: string;
@@ -34,6 +35,7 @@ export function Button({
   const handlePress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (!isLoading && !disabled) {
+      SFX.buttonTap();
       onPress();
     }
   };

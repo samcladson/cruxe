@@ -2,6 +2,7 @@ import { MaterialIcons } from "@expo/vector-icons";
 import * as Crypto from "expo-crypto";
 import React, { useEffect, useMemo, useState } from "react";
 import { SFX } from "../../services/soundService";
+import { checkOutcome } from "../../utils/checkOutcome";
 import {
   Alert,
   Modal,
@@ -163,7 +164,9 @@ export function HintOptionsModal({ visible, onClose }: HintOptionsModalProps) {
       await charge("check_errors");
       checkErrors();
       decrementCheck();
-      SFX.error();
+      // Error tone only if it found one: a clean grid is good news.
+      const grid = usePuzzleStore.getState().activePuzzle?.grid;
+      if (grid) SFX.checkResult(checkOutcome(grid));
       onClose();
     } catch (e: any) {
       Alert.alert("Check unavailable", e.message);

@@ -13,6 +13,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { theme } from "../../constants/theme";
+import { SFX } from "../../services/soundService";
 import { useReducedMotion } from "../../utils/useReducedMotion";
 import { CompletionActions } from "./CompletionActions";
 import { ScreenBackdrop } from "../ui/ScreenBackdrop";
@@ -86,6 +87,7 @@ export function LessonScreen({
     setUnlocking(word);
     try {
       await onUnlock(word);
+      SFX.hint();
     } catch (e: any) {
       Alert.alert("Couldn't unlock", e?.message ?? "Please try again.");
     } finally {

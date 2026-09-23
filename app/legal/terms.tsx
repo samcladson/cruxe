@@ -92,6 +92,11 @@ export default function TermsOfServiceScreen() {
           belong to the creators of Cruxe. You may not copy or modify the app or any part of it,
           extract its source code, or create derivative versions.
         </Text>
+        <Text style={styles.paragraph}>
+          Sound effects are adapted from Google&apos;s Material Design sound resources, &copy;
+          Google, used under the Creative Commons Attribution 4.0 licence
+          (creativecommons.org/licenses/by/4.0). They have been trimmed and level-matched for Cruxe.
+        </Text>
 
         <Text style={styles.sectionTitle}>7. Availability</Text>
         <Text style={styles.paragraph}>

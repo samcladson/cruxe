@@ -13,6 +13,8 @@ import { usePuzzleStore } from "../../stores/puzzleStore";
 import { CrosswordClue, Direction } from "../../types/puzzle.types";
 import { findClueId } from "../../utils/clueId";
 import { hasPlayerInput } from "../../utils/hasPlayerInput";
+import { checkOutcome } from "../../utils/checkOutcome";
+import { SFX } from "../../services/soundService";
 
 interface ClueItemProps {
   clue: CrosswordClue;
@@ -256,6 +258,8 @@ export function CluePanel({
             if (canCheck) {
               checkAnswers();
               decrementCheck();
+              const grid = usePuzzleStore.getState().activePuzzle?.grid;
+              if (grid) SFX.checkResult(checkOutcome(grid));
             }
           }}
         >

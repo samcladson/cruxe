@@ -4,6 +4,7 @@ import React, { useEffect } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Animated, { FadeInDown, FadeOutDown } from "react-native-reanimated";
 import { theme } from "../../constants/theme";
+import { SFX } from "../../services/soundService";
 import { usePuzzleStore } from "../../stores/puzzleStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { Direction } from "../../types/puzzle.types";
@@ -150,6 +151,7 @@ export function ActiveClueBar({
           accessibilityLabel="Open hints"
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            SFX.buttonTap();
             onHintPress?.();
           }}
         >

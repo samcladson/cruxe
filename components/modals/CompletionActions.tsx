@@ -2,6 +2,13 @@ import React from "react";
 import { Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { theme } from "../../constants/theme";
+import { SFX } from "../../services/soundService";
+
+/** Every way off the completion screens answers with the same soft tap. */
+const withTap = (action: () => void) => () => {
+  SFX.buttonTap();
+  action();
+};
 
 interface CompletionActionsProps {
   /**
@@ -30,7 +37,7 @@ export function CompletionActions({
       <View style={styles.wrap}>
         <TouchableOpacity
           style={styles.primaryBtn}
-          onPress={onContinue}
+          onPress={withTap(onContinue)}
           accessibilityRole="button"
           accessibilityLabel="Continue"
         >
@@ -48,7 +55,7 @@ export function CompletionActions({
       <View style={styles.row}>
         <TouchableOpacity
           style={styles.ghostBtn}
-          onPress={onHome}
+          onPress={withTap(onHome)}
           accessibilityRole="button"
           accessibilityLabel="Back to home"
         >
@@ -61,7 +68,7 @@ export function CompletionActions({
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.primaryBtn, styles.primaryInRow]}
-          onPress={onPickAnother}
+          onPress={withTap(onPickAnother)}
           accessibilityRole="button"
           accessibilityLabel="Next puzzle from today's collection"
         >

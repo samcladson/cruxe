@@ -4,6 +4,10 @@
  * Uses expo-audio to play short sound effects at key gameplay moments.
  * Respects the user's soundEnabled setting from settingsStore.
  *
+ * The files are Google's Material Design sounds (CC BY 4.0, credited in the
+ * Terms), trimmed and levelled by scripts/audio/master-sfx.cjs. Relative
+ * levels are set there, per role, so every player here runs at full volume.
+ *
  * Sounds are preloaded on first use and cached for instant playback.
  * All methods are fire-and-forget — audio errors never block gameplay.
  */
@@ -14,13 +18,17 @@ import { useSettingsStore } from "../stores/settingsStore";
 // ─── Sound definitions ───────────────────────────────────────────────
 
 const SOUND_FILES = {
-  cellTap: require("../assets/sounds/cell-tap.mp3"),
-  letterInput: require("../assets/sounds/letter-input.mp3"),
-  wordComplete: require("../assets/sounds/word-complete.mp3"),
-  puzzleComplete: require("../assets/sounds/puzzle-complete.mp3"),
-  error: require("../assets/sounds/error.mp3"),
-  hint: require("../assets/sounds/hint.mp3"),
-  coinEarned: require("../assets/sounds/coin-earned.mp3"),
+  cellTap: require("../assets/sounds/cell-tap.wav"),
+  letterInput1: require("../assets/sounds/letter-input-1.wav"),
+  letterInput2: require("../assets/sounds/letter-input-2.wav"),
+  letterInput3: require("../assets/sounds/letter-input-3.wav"),
+  buttonTap: require("../assets/sounds/button-tap.wav"),
+  wordComplete: require("../assets/sounds/word-complete.m4a"),
+  puzzleComplete: require("../assets/sounds/puzzle-complete.m4a"),
+  streak: require("../assets/sounds/streak.m4a"),
+  error: require("../assets/sounds/error.m4a"),
+  hint: require("../assets/sounds/hint.m4a"),
+  coinEarned: require("../assets/sounds/coin-earned.m4a"),
 } as const;
 
 type SoundName = keyof typeof SOUND_FILES;
@@ -58,7 +66,7 @@ async function loadSound(name: SoundName): Promise<AudioPlayer | null> {
   try {
     await ensureAudioConfigured();
     const player = createAudioPlayer(SOUND_FILES[name]);
-    player.volume = 0.6;
+    player.volume = 1;
     soundCache.set(name, player);
     return player;
   } catch {
@@ -93,28 +101,30 @@ export async function preloadSounds(): Promise<void> {
   await Promise.allSettled(names.map((name) => loadSound(name)));
 }
 
-/**
- * Unloads all cached sounds. Call on app teardown to free memory.
- */
-export async function unloadSounds(): Promise<void> {
-  for (const [, sound] of soundCache) {
-    try {
-      sound.remove();
-    } catch {
-      // ignore
-    }
-  }
-  soundCache.clear();
-}
-
 // ─── Convenience wrappers ────────────────────────────────────────────
+
+/**
+ * Typing cycles through three takes of the same key. One sample fired for
+ * every letter is the "machine gun" that makes game audio sound cheap, and
+ * separate players also let a fast typist's letters overlap instead of each
+ * one cutting off the last.
+ */
+const LETTER_TAKES = ["letterInput1", "letterInput2", "letterInput3"] as const;
+let nextLetterTake = 0;
 
 export const SFX = {
   cellTap: () => playSound("cellTap"),
-  letterInput: () => playSound("letterInput"),
-  wordComplete: () => playSound("wordComplete"),
+  letterInput: () => {
+    const take = LETTER_TAKES[nextLetterTake];
+    nextLetterTake = (nextLetterTake + 1) % LETTER_TAKES.length;
+    return playSound(take);
+  },
+  buttonTap: () => playSound("buttonTap"),
   puzzleComplete: () => playSound("puzzleComplete"),
-  error: () => playSound("error"),
+  streak: () => playSound("streak"),
   hint: () => playSound("hint"),
   coinEarned: () => playSound("coinEarned"),
+  /** After a check: a chime when it found nothing, the error tone if not. */
+  checkResult: (outcome: "clean" | "errors") =>
+    playSound(outcome === "clean" ? "wordComplete" : "error"),
 };

@@ -195,31 +195,41 @@ export function SuccessModal({
 
   useEffect(() => {
     if (phase === "streak") {
+      // Timed to the flame, which springs in after the same 300ms.
+      const flame = setTimeout(() => SFX.streak(), 300);
       flameScale.value = withDelay(
         300,
         withSpring(1, { damping: 12, stiffness: 100 }),
       );
+      return () => clearTimeout(flame);
     }
   }, [phase]);
 
   useEffect(() => {
     if (visible && activePuzzle && phase === "stats") {
-      // Coin counter animation
+      // Coin counter animation. The interval is held out here so cleanup
+      // can reach it: returned from inside the timeout it was never cleared,
+      // and a rerun mid-count left two counters — and two coin sounds.
+      let interval: ReturnType<typeof setInterval> | undefined;
       const coinDelay = setTimeout(() => {
         let current = 0;
         const step = Math.ceil(finalCoins / 30);
-        const interval = setInterval(() => {
+        interval = setInterval(() => {
           current += step;
           if (current >= finalCoins) {
             setDisplayCoins(finalCoins);
             clearInterval(interval);
+            // The counter landing is the moment the coins are "yours".
+            if (finalCoins > 0) SFX.coinEarned();
           } else {
             setDisplayCoins(current);
           }
         }, 30);
-        return () => clearInterval(interval);
       }, 800);
-      return () => clearTimeout(coinDelay);
+      return () => {
+        clearTimeout(coinDelay);
+        clearInterval(interval);
+      };
     } else if (!visible) {
       setDisplayCoins(0);
       flameScale.value = 0;
@@ -241,7 +251,6 @@ export function SuccessModal({
    * set, which is what "pick another" means.
    */
   const handleBrowseMore = () => {
-    SFX.coinEarned();
     onClose();
     router.replace("/collection" as any);
   };
