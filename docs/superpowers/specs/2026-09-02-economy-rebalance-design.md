@@ -97,6 +97,11 @@ Free plays earn the full solve reward and cost nothing.
 **Free allowance:** 3 category puzzles per UTC day, plus the daily challenge,
 which is always free and does not consume a slot.
 
+> **Amended 2026-09-23:** raised to 5 per day (migration 024). The daily
+> challenge rule is unchanged. Reveal-word and streak-repair pricing were
+> considered for length- and streak-scaled prices at the same time and kept
+> flat.
+
 ### 5.2 Hints
 
 | Hint | Old | New |

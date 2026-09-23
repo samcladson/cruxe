@@ -54,17 +54,24 @@ describeIntegration("enter_puzzle allowance", () => {
   const enter = (puzzleId: string) =>
     user.rpc("enter_puzzle", { p_puzzle_id: puzzleId });
 
-  it("grants exactly three free plays per day", async () => {
+  const FREE_PER_DAY = 5;
+
+  /** Uses up today's free plays on mediums[0..4]. */
+  const spendAllowance = async () => {
+    for (let i = 0; i < FREE_PER_DAY; i++) await enter(mediums[i]);
+  };
+
+  it("grants exactly five free plays per day", async () => {
     const a = await enter(mediums[0]);
     expect(a.data.was_free).toBe(true);
     expect(a.data.cost).toBe(0);
-    expect(a.data.free_plays_remaining).toBe(2);
+    expect(a.data.free_plays_remaining).toBe(4);
 
-    const b = await enter(mediums[1]);
-    expect(b.data.free_plays_remaining).toBe(1);
-
-    const c = await enter(mediums[2]);
-    expect(c.data.free_plays_remaining).toBe(0);
+    for (const [i, left] of [[1, 3], [2, 2], [3, 1], [4, 0]]) {
+      const r = await enter(mediums[i]);
+      expect(r.data.was_free).toBe(true);
+      expect(r.data.free_plays_remaining).toBe(left);
+    }
 
     // Balance untouched by free plays
     const { data: row } = await admin
@@ -76,11 +83,9 @@ describeIntegration("enter_puzzle allowance", () => {
   });
 
   it("charges the overflow fee once the allowance is spent", async () => {
-    await enter(mediums[0]);
-    await enter(mediums[1]);
-    await enter(mediums[2]);
+    await spendAllowance();
 
-    const overflow = await enter(mediums[3]);
+    const overflow = await enter(mediums[5]);
     expect(overflow.error).toBeNull();
     expect(overflow.data.was_free).toBe(false);
     expect(overflow.data.cost).toBe(50); // medium
@@ -88,12 +93,10 @@ describeIntegration("enter_puzzle allowance", () => {
   });
 
   it("re-entering a started puzzle is always free", async () => {
-    await enter(mediums[0]);
-    await enter(mediums[1]);
-    await enter(mediums[2]);
-    await enter(mediums[3]); // paid 50, balance 950
+    await spendAllowance();
+    await enter(mediums[5]); // paid 50, balance 950
 
-    const again = await enter(mediums[3]);
+    const again = await enter(mediums[5]);
     expect(again.data.replayed).toBe(true);
     expect(again.data.cost).toBe(0);
     expect(again.data.balance).toBe(950); // not charged twice
@@ -107,19 +110,17 @@ describeIntegration("enter_puzzle allowance", () => {
     const dc = await enter(dailyChallengeId);
     expect(dc.data.cost).toBe(0);
     expect(dc.data.was_free).toBe(false); // did not use a slot
-    expect(dc.data.free_plays_remaining).toBe(3); // untouched
+    expect(dc.data.free_plays_remaining).toBe(5); // untouched
 
     const first = await enter(mediums[0]);
-    expect(first.data.free_plays_remaining).toBe(2);
+    expect(first.data.free_plays_remaining).toBe(4);
   });
 
   it("refuses entry and records nothing when the balance is short", async () => {
     await admin.from("users").update({ coins: 10 }).eq("id", userId);
-    await enter(mediums[0]);
-    await enter(mediums[1]);
-    await enter(mediums[2]);
+    await spendAllowance();
 
-    const broke = await enter(mediums[3]);
+    const broke = await enter(mediums[5]);
     expect(broke.error).not.toBeNull();
     expect(broke.error!.message).toContain("insufficient_coins");
 
@@ -127,14 +128,12 @@ describeIntegration("enter_puzzle allowance", () => {
       .from("puzzle_entries")
       .select("*", { count: "exact", head: true })
       .eq("user_id", userId)
-      .eq("puzzle_id", mediums[3]);
+      .eq("puzzle_id", mediums[5]);
     expect(count).toBe(0);
   });
 
   it("resets the allowance on a new UTC day", async () => {
-    await enter(mediums[0]);
-    await enter(mediums[1]);
-    await enter(mediums[2]);
+    await spendAllowance();
 
     // Backdate today's entries to simulate the date rolling over.
     await admin
@@ -143,17 +142,17 @@ describeIntegration("enter_puzzle allowance", () => {
       .eq("user_id", userId);
 
     const status = await user.rpc("get_play_status");
-    expect(status.data.free_plays_remaining).toBe(3);
+    expect(status.data.free_plays_remaining).toBe(5);
   });
 
   it("reports play status without consuming anything", async () => {
     const before = await user.rpc("get_play_status");
-    expect(before.data.free_plays_per_day).toBe(3);
-    expect(before.data.free_plays_remaining).toBe(3);
+    expect(before.data.free_plays_per_day).toBe(5);
+    expect(before.data.free_plays_remaining).toBe(5);
 
     await enter(mediums[0]);
 
     const after = await user.rpc("get_play_status");
-    expect(after.data.free_plays_remaining).toBe(2);
+    expect(after.data.free_plays_remaining).toBe(4);
   });
 });

@@ -213,7 +213,7 @@ the checkboxes below as unverified until run once against the actual
 - [ ] Solve a real puzzle: score and coins arrive from the server
 - [ ] Airplane mode solve shows "Pending" and syncs on reconnect
 - [ ] Hint with insufficient coins is refused **and reveals nothing**
-- [ ] Three free plays, then the fourth charges
+- [ ] Five free plays, then the sixth charges
 - [ ] Daily challenge is free and does not consume a free play
 - [ ] **CHECK is disabled until you type a letter of your own** (pre-filled
       letters must not enable it)

@@ -51,7 +51,7 @@ shows you an arrow so you always know which way a clue runs.
 
 ━━━ PLAY FREE, EVERY DAY ━━━
 
-The Daily Challenge is always free, and so are three more puzzles a day. No
+The Daily Challenge is always free, and so are five more puzzles a day. No
 timer counting down, no lives to wait for. Play your set, come back tomorrow.
 
 Want more in one sitting? Coins let you keep going.
@@ -105,7 +105,7 @@ change:
 - **"No ads. Ever."** — reflects a deliberate decision recorded in the
   sub-project 2 spec. If rewarded video is ever added, this copy and the Data
   Safety declaration both have to change.
-- **"three more puzzles a day"** — `economy_config.free_plays.per_day` is 3.
+- **"five more puzzles a day"** — `economy_config.free_plays.per_day` is 5.
   If that is retuned, update this line.
 - **"free once a month"** — `economy_config.streak.free_repairs_per_month`.
 - **"Play offline"** — solving works offline; the reward syncs on reconnect
