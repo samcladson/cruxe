@@ -49,12 +49,12 @@ because real in-app products cannot be created without it.
       is off** — confirmed via the live settings endpoint, not just assumed.
 - [x] **Supabase → Authentication → Providers → Email is on** — confirmed the
       same way (`external.email: true`).
-- [ ] **Check Supabase CAPTCHA (Authentication → Settings).** Not visible on
-      the public settings endpoint, so this still needs a manual look in the
-      dashboard. It protects the *signup* endpoint, and both
-      `signInWithOtp({ shouldCreateUser: true })` and a first-time
-      `signInWithIdToken` are signups — with CAPTCHA on, no new account can
-      be created by any method.
+- [x] **Supabase CAPTCHA confirmed disabled** — checked manually in
+      Authentication → Settings, per user report 2026-09-26. It protects the
+      *signup* endpoint, and both `signInWithOtp({ shouldCreateUser: true })`
+      and a first-time `signInWithIdToken` are signups — with CAPTCHA on, no
+      new account could be created by any method, so this was worth confirming
+      before real testers signed up.
 - [x] **Google Sign-In fixed** — verified end to end on a real device
       (Google sign-in → tutorial → home). `external.google: true` on the
       live project too.
@@ -192,35 +192,44 @@ build** — sign-in, solving a puzzle, and TalkBack navigation all confirmed
 working hands-on. This is real coverage of the *app logic*, but a dev client
 is debug-signed and connects to Metro; it does not exercise the
 release-signed production build, its `eas.json` production env vars, or the
-SHA-1 that Google Sign-In checks against in that build specifically. Treat
-the checkboxes below as unverified until run once against the actual
-`eas build --profile production` artifact — that build hasn't been made yet
-(§2).
+SHA-1 that Google Sign-In checks against in that build specifically.
+
+**2026-09-26: re-run against the actual release-signed build**, per user
+report — downloaded from the internal testing track (not the dev client)
+and features/functionality tested hands-on, working. The general checkboxes
+below are marked done on that basis. A few are specifically contrived edge
+cases (airplane mode, force-quitting mid-purchase, rolling `last_played_date`
+back to break a streak, TalkBack) that ordinary use of the app is unlikely to
+exercise on its own — left open below pending confirmation those were
+deliberately tried, rather than assumed from general testing.
 
 **Auth — all new, none of it previously verified:**
 
-- [ ] Cold start with no session lands on **welcome**, not the tabs
-- [ ] Google sign-in → tutorial → home, on a fresh install
+- [x] Cold start with no session lands on **welcome**, not the tabs
+- [x] Google sign-in → tutorial → home, on a fresh install
 - [ ] **Email code**: request, receive, enter, land in the app. This is the
-      fallback that makes Google non-fatal, so it has to be proven.
+      fallback that makes Google non-fatal, so it has to be proven. Not
+      confirmed specifically tried — a deliberate alternative to Google,
+      easy to skip during general testing.
 - [ ] A wrong or expired code is refused without stranding the screen
 - [ ] Sign out returns to welcome; signing back in restores coins and streak
-- [ ] Delete account removes the row and the next launch shows welcome
-- [ ] Profile → Account & Sync shows the right account identity
+- [ ] Delete account removes the row and the next launch shows welcome —
+      destructive and one-way, unlikely to have been tried casually
+- [x] Profile → Account & Sync shows the right account identity
 
 **Gameplay:**
 
-- [ ] Tutorial teaches the reverse-direction mechanic and the arrow appears
-- [ ] Solve a real puzzle: score and coins arrive from the server
+- [x] Tutorial teaches the reverse-direction mechanic and the arrow appears
+- [x] Solve a real puzzle: score and coins arrive from the server
 - [ ] Airplane mode solve shows "Pending" and syncs on reconnect
 - [ ] Hint with insufficient coins is refused **and reveals nothing**
-- [ ] Five free plays, then the sixth charges
-- [ ] Daily challenge is free and does not consume a free play
-- [ ] **CHECK is disabled until you type a letter of your own** (pre-filled
+- [ ] Five free plays, then the sixth charges — needs six puzzles in one day
+- [x] Daily challenge is free and does not consume a free play
+- [x] **CHECK is disabled until you type a letter of your own** (pre-filled
       letters must not enable it)
-- [ ] **Keyboard**: the active row stays visible, and the grid does not draw
+- [x] **Keyboard**: the active row stays visible, and the grid does not draw
       over the title or clue bar
-- [ ] **Clue sheet**: the chevron raises it to half screen and it scrolls
+- [x] **Clue sheet**: the chevron raises it to half screen and it scrolls
 - [ ] A solved puzzle in today's collection opens its **result**, not a
       replayable grid
 - [ ] Break a streak (set `last_played_date` back two days): the repair
@@ -230,15 +239,17 @@ the checkboxes below as unverified until run once against the actual
 - [ ] **Send feedback** submits successfully — the RLS policy is insert-only,
       and a policy that is too tight fails exactly like a network error
 - [ ] TalkBack: the grid is navigable and squares are announced with position
-- [ ] **Typing stays on one axis.** Type through an intersection — the
+- [x] **Typing stays on one axis.** Type through an intersection — the
       highlight must not jump. Backspace back through it — same.
 
 ## 7. Release
 
 - [x] Upload to **internal testing** first (`eas submit` is configured for the
       internal track, draft status) — live 2026-09-25
-- [ ] Add testers, install from the Play link, repeat §6
-- [ ] Promote to production
+- [x] Add testers, install from the Play link, repeat §6 — 6 internal testers
+      added and testing as of 2026-09-26
+- [ ] Promote to production — hold until the still-open §6 items above and
+      the §1/§3 payments/IAP chain are resolved
 
 ## 8. iOS
 
