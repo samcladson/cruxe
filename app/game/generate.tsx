@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import Animated, { FadeIn } from "react-native-reanimated";
 import { theme } from "../../constants/theme";
 import {
   fetchDailyPuzzle,
@@ -166,17 +167,23 @@ export default function GenerateScreen() {
       <Stack.Screen options={{ headerShown: false }} />
 
       {status === "loading" && (
-        <>
+        <Animated.View
+          entering={FadeIn.duration(350)}
+          style={styles.centerGroup}
+        >
           <ActivityIndicator size="large" color={theme.colors.accentGold} />
           <Text style={styles.text}>Loading your puzzle...</Text>
           {subtitle ? (
             <Text style={styles.subtext}>{subtitle}</Text>
           ) : null}
-        </>
+        </Animated.View>
       )}
 
       {status === "error" && (
-        <>
+        <Animated.View
+          entering={FadeIn.duration(250)}
+          style={styles.centerGroup}
+        >
           <Text style={styles.errorIcon}>⚠️</Text>
           <Text style={styles.text}>Couldn't load puzzle</Text>
           <Text style={styles.errorText}>{errorMsg}</Text>
@@ -192,7 +199,7 @@ export default function GenerateScreen() {
           >
             <Text style={styles.retryText}>Go Back</Text>
           </TouchableOpacity>
-        </>
+        </Animated.View>
       )}
     </View>
   );
@@ -205,6 +212,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: 32,
+  },
+  centerGroup: {
+    alignItems: "center",
   },
   text: {
     fontFamily: theme.typography.heading.fontFamily,

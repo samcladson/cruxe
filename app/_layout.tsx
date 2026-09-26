@@ -11,6 +11,7 @@ import {
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import "react-native-reanimated";
+import { enableFreeze } from "react-native-screens";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { useColorScheme } from "@/components/useColorScheme";
@@ -76,6 +77,13 @@ Sentry.init({
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
+
+// Freezes screens once they lose focus — paired with `freezeOnBlur` on the
+// tab navigator. Without it, a backgrounded tab's own infinite animations
+// (the home pulse dot, banners, etc.) keep running on the UI thread and
+// compete with whatever tab is switched to, which is what read as a shaky,
+// stuttering switch rather than an instant one.
+enableFreeze(true);
 
 function RootLayout() {
   const [loaded, error] = useFonts({
@@ -256,11 +264,24 @@ function RootLayoutNav() {
           />
           <Stack.Screen
             name="game/generate"
-            options={{ headerShown: false, animation: "fade" }}
+            options={{
+              headerShown: false,
+              animation: "fade",
+              contentStyle: { backgroundColor: "#0a0a0a" },
+            }}
           />
           <Stack.Screen
             name="game/[puzzleId]"
-            options={{ headerShown: false }}
+            options={{
+              headerShown: false,
+              animation: "fade",
+              // generate.tsx hands off here with router.replace(), which
+              // native-stack animates as a "pop" (backwards) by default —
+              // the mismatch against the fade-in above is what read as an
+              // abrupt, flickery cut to the previous screen.
+              animationTypeForReplace: "push",
+              contentStyle: { backgroundColor: "#0a0a0a" },
+            }}
           />
         </Stack>
       </ThemeProvider>

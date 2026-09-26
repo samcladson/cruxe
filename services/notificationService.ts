@@ -99,7 +99,8 @@ export async function scheduleDailyReminder(
  */
 export async function scheduleStreakWarning(
   streak: number,
-  hour = 20,
+  // 6 hours before the day ends at local midnight.
+  hour = 18,
   minute = 0,
 ): Promise<void> {
   await cancelStreakWarning();

@@ -25,6 +25,7 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
+        freezeOnBlur: true,
         tabBarShowLabel: false,
         tabBarActiveTintColor: "#ffffff",
         tabBarInactiveTintColor: theme.colors.accentGold,
