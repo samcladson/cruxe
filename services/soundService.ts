@@ -18,10 +18,6 @@ import { useSettingsStore } from "../stores/settingsStore";
 // ─── Sound definitions ───────────────────────────────────────────────
 
 const SOUND_FILES = {
-  cellTap: require("../assets/sounds/cell-tap.wav"),
-  letterInput1: require("../assets/sounds/letter-input-1.wav"),
-  letterInput2: require("../assets/sounds/letter-input-2.wav"),
-  letterInput3: require("../assets/sounds/letter-input-3.wav"),
   buttonTap: require("../assets/sounds/button-tap.wav"),
   wordComplete: require("../assets/sounds/word-complete.m4a"),
   puzzleComplete: require("../assets/sounds/puzzle-complete.m4a"),
@@ -103,22 +99,7 @@ export async function preloadSounds(): Promise<void> {
 
 // ─── Convenience wrappers ────────────────────────────────────────────
 
-/**
- * Typing cycles through three takes of the same key. One sample fired for
- * every letter is the "machine gun" that makes game audio sound cheap, and
- * separate players also let a fast typist's letters overlap instead of each
- * one cutting off the last.
- */
-const LETTER_TAKES = ["letterInput1", "letterInput2", "letterInput3"] as const;
-let nextLetterTake = 0;
-
 export const SFX = {
-  cellTap: () => playSound("cellTap"),
-  letterInput: () => {
-    const take = LETTER_TAKES[nextLetterTake];
-    nextLetterTake = (nextLetterTake + 1) % LETTER_TAKES.length;
-    return playSound(take);
-  },
   buttonTap: () => playSound("buttonTap"),
   puzzleComplete: () => playSound("puzzleComplete"),
   streak: () => playSound("streak"),

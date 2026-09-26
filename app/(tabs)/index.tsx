@@ -1,8 +1,8 @@
 import { MaterialIcons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
-import { useFocusEffect } from "@react-navigation/native";
 import {
   ActivityIndicator,
   Alert,
@@ -22,22 +22,13 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { ActivePuzzleConflictModal } from "../../components/modals/ActivePuzzleConflictModal";
 import { AnimatedNumber } from "../../components/ui/AnimatedNumber";
+import { ScreenBackdrop } from "../../components/ui/ScreenBackdrop";
 import { CATEGORIES } from "../../constants/categories";
 import { theme } from "../../constants/theme";
-import {
-  ActivityItem,
-  CollectionSummary,
-  fetchDailyChallenge,
-  fetchRecentActivity,
-  fetchTodayCollectionSummary,
-  getDailyPlayerCount,
-  puzzleTitle,
-  PuzzleMeta,
-} from "../../services/puzzleService";
-import { supabase } from "../../services/supabaseClient";
-import { usePuzzleStore } from "../../stores/puzzleStore";
-import { useUserStore } from "../../stores/userStore";
+import { usePuzzleLauncher } from "../../hooks/usePuzzleLauncher";
+import { track } from "../../services/analyticsService";
 import {
   claimDailyBonus,
   getPlayStatus,
@@ -50,12 +41,23 @@ import {
   cancelStreakWarning,
   scheduleStreakWarning,
 } from "../../services/notificationService";
-import { useSettingsStore } from "../../stores/settingsStore";
-import { track } from "../../services/analyticsService";
 import { drainPendingSolves } from "../../services/offlineSyncService";
-import { formatCompactNumber } from "../../utils/formatNumber";
+import {
+  ActivityItem,
+  CollectionSummary,
+  fetchDailyChallenge,
+  fetchRecentActivity,
+  fetchTodayCollectionSummary,
+  getDailyPlayerCount,
+  PuzzleMeta,
+  puzzleTitle,
+} from "../../services/puzzleService";
+import { supabase } from "../../services/supabaseClient";
+import { usePuzzleStore } from "../../stores/puzzleStore";
+import { useSettingsStore } from "../../stores/settingsStore";
+import { useUserStore } from "../../stores/userStore";
 import { activityLabel } from "../../utils/activityLabel";
-import { ScreenBackdrop } from "../../components/ui/ScreenBackdrop";
+import { formatCompactNumber } from "../../utils/formatNumber";
 
 function PulseDot() {
   const opacity = useSharedValue(0.4);
@@ -96,6 +98,9 @@ export default function HomeScreen() {
   const [repairing, setRepairing] = useState(false);
 
   const [playStatus, setPlayStatus] = useState<PlayStatus | null>(null);
+
+  const { conflictPuzzle, launch, resolveEnd, resolveResume, dismiss } =
+    usePuzzleLauncher();
 
   /**
    * On focus rather than on mount. Two reasons:
@@ -288,7 +293,12 @@ export default function HomeScreen() {
   );
 
   const startDailyPuzzle = () => {
-    if (dailyPuzzle) {
+    if (!dailyPuzzle) {
+      router.push("/game/generate");
+      return;
+    }
+
+    launch(dailyPuzzle.id, () => {
       router.push({
         pathname: "/game/generate",
         params: {
@@ -298,9 +308,7 @@ export default function HomeScreen() {
           size: String(dailyPuzzle.gridSize),
         },
       });
-    } else {
-      router.push("/game/generate");
-    }
+    });
   };
 
   // Helper date formatter
@@ -387,10 +395,17 @@ export default function HomeScreen() {
               color={theme.colors.accentGold}
             />
             <Text style={styles.bonusBannerText}>
-              Daily Bonus: <Text style={{ color: theme.colors.accentGold }}>+{dailyBonusBanner} coins</Text>
+              Daily Bonus:{" "}
+              <Text style={{ color: theme.colors.accentGold }}>
+                +{dailyBonusBanner} coins
+              </Text>
             </Text>
             <TouchableOpacity onPress={() => setDailyBonusBanner(null)}>
-              <MaterialIcons name="close" size={16} color={theme.colors.textMuted} />
+              <MaterialIcons
+                name="close"
+                size={16}
+                color={theme.colors.textMuted}
+              />
             </TouchableOpacity>
           </Animated.View>
         )}
@@ -440,8 +455,8 @@ export default function HomeScreen() {
               color={theme.colors.accentGold}
             />
             <Text style={styles.setCompleteText}>
-              You&apos;ve finished today&apos;s set. New puzzles at midnight.
-              Keep going any time by spending coins.
+              You&apos;ve used today&apos;s free plays. Keep going now with
+              coins. Free plays renew at midnight.
             </Text>
           </View>
         )}
@@ -466,15 +481,19 @@ export default function HomeScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.resumeTitle}>Continue Puzzle</Text>
                 <Text style={styles.resumeMeta}>
-                  {(CATEGORIES[activePuzzle.category]?.title || activePuzzle.category).toUpperCase()}{" "}
-                  • {activePuzzle.difficulty.toUpperCase()} • {activePuzzle.gridSize}x
-                  {activePuzzle.gridSize}
+                  {(
+                    CATEGORIES[activePuzzle.category]?.title ||
+                    activePuzzle.category
+                  ).toUpperCase()}{" "}
+                  • {activePuzzle.difficulty.toUpperCase()} •{" "}
+                  {activePuzzle.gridSize}x{activePuzzle.gridSize}
                 </Text>
               </View>
             </View>
             <View style={styles.resumeRight}>
               <Text style={styles.resumeTimer}>
-                {Math.floor(timer / 60)}:{(timer % 60).toString().padStart(2, "0")}
+                {Math.floor(timer / 60)}:
+                {(timer % 60).toString().padStart(2, "0")}
               </Text>
               <MaterialIcons
                 name="arrow-forward"
@@ -665,7 +684,10 @@ export default function HomeScreen() {
 
         <View style={styles.minimalistCollection}>
           <Text style={styles.collectionText}>
-            <Text style={styles.boldText}>{collectionSummary?.totalPuzzles || "19"} puzzles</Text> across{" "}
+            <Text style={styles.boldText}>
+              {collectionSummary?.totalPuzzles || "19"} puzzles
+            </Text>{" "}
+            across{" "}
             <Text style={styles.boldText}>
               {collectionSummary?.categories.length || "5"} categories
             </Text>{" "}
@@ -782,6 +804,13 @@ export default function HomeScreen() {
 
       {/* Categories modal removed in V1 to focus strictly on Daily Edition */}
 
+      <ActivePuzzleConflictModal
+        visible={conflictPuzzle !== null}
+        activePuzzle={conflictPuzzle}
+        onEnd={resolveEnd}
+        onResume={resolveResume}
+        onDismiss={dismiss}
+      />
     </SafeAreaView>
   );
 }

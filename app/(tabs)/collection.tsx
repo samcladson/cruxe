@@ -30,6 +30,8 @@ import { supabase } from "../../services/supabaseClient";
 import { Difficulty } from "../../types/puzzle.types";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { ScreenBackdrop } from "../../components/ui/ScreenBackdrop";
+import { ActivePuzzleConflictModal } from "../../components/modals/ActivePuzzleConflictModal";
+import { usePuzzleLauncher } from "../../hooks/usePuzzleLauncher";
 
 export default function CollectionScreen() {
   const [puzzles, setPuzzles] = useState<PuzzleMeta[]>([]);
@@ -48,6 +50,9 @@ export default function CollectionScreen() {
       .then(setPlayStatus)
       .catch(() => setPlayStatus(null));
   }, []);
+
+  const { conflictPuzzle, launch, resolveEnd, resolveResume, dismiss } =
+    usePuzzleLauncher();
 
   // Overflow prices come from the server; a bundled copy would drift.
   const [overflowFees, setOverflowFees] = useState<Record<string, number>>({});
@@ -321,30 +326,32 @@ export default function CollectionScreen() {
                         return;
                       }
 
-                      // The server owns the price and the balance check. A
-                      // failure must not start the puzzle.
-                      try {
-                        const { balance } = await enterPuzzle(puzzle.id);
-                        useUserStore.getState().applyServerBalance(balance);
-                        setPlayStatus(await getPlayStatus());
-                      } catch (e: any) {
-                        Alert.alert("Can't start puzzle", e.message, [
-                          { text: "OK", style: "default" },
-                        ]);
-                        return;
-                      }
+                      launch(puzzle.id, async () => {
+                        // The server owns the price and the balance check. A
+                        // failure must not start the puzzle.
+                        try {
+                          const { balance } = await enterPuzzle(puzzle.id);
+                          useUserStore.getState().applyServerBalance(balance);
+                          setPlayStatus(await getPlayStatus());
+                        } catch (e: any) {
+                          Alert.alert("Can't start puzzle", e.message, [
+                            { text: "OK", style: "default" },
+                          ]);
+                          return;
+                        }
 
-                      router.push({
-                        pathname: "/game/generate",
-                        // The loading screen has nothing of its own to go on
-                        // when given only an id, and used to fall back on
-                        // defaults that were usually wrong.
-                        params: {
-                          id: puzzle.id,
-                          title: puzzleTitle(puzzle),
-                          difficulty: puzzle.difficulty,
-                          size: String(puzzle.gridSize),
-                        },
+                        router.push({
+                          pathname: "/game/generate",
+                          // The loading screen has nothing of its own to go
+                          // on when given only an id, and used to fall back
+                          // on defaults that were usually wrong.
+                          params: {
+                            id: puzzle.id,
+                            title: puzzleTitle(puzzle),
+                            difficulty: puzzle.difficulty,
+                            size: String(puzzle.gridSize),
+                          },
+                        });
                       });
                     }}
                   >
@@ -396,6 +403,14 @@ export default function CollectionScreen() {
           <View style={{ height: 40 }} />
         </View>
       </ScrollView>
+
+      <ActivePuzzleConflictModal
+        visible={conflictPuzzle !== null}
+        activePuzzle={conflictPuzzle}
+        onEnd={resolveEnd}
+        onResume={resolveResume}
+        onDismiss={dismiss}
+      />
     </SafeAreaView>
   );
 }
