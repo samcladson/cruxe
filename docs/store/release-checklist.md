@@ -329,7 +329,9 @@ Apple's serial steps are slow. Start the agreement and the Service ID first.
 - [x] `EXPO_PUBLIC_REVENUECAT_IOS_API_KEY` (`appl_znybrmKwCssvYoGeHWySGHXnVql`)
       set in EAS **production** and **preview** — confirmed via
       `eas env:list` 2026-09-26.
-- [ ] Fill the three `TODO_` values in `eas.json` once the ASC record exists
+- [x] Fill the three `TODO_` values in `eas.json` — done 2026-09-26
+      (`appleId`, App Store Connect's numeric app id `6816198273` for
+      `ascAppId`, and Team ID `RH92B5F87N` for `appleTeamId`)
 
 ### 8c. Review submission
 
