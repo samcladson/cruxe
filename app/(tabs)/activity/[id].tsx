@@ -1,20 +1,25 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { router, Stack, useLocalSearchParams } from "expo-router";
-import React, { useEffect, useState } from "react";
+import * as Sharing from "expo-sharing";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { captureRef } from "react-native-view-shot";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ScreenHeader } from "../../../components/ui/ScreenHeader";
+import { ShareCard, ShareCardData } from "../../../components/modals/ShareCard";
 import { theme } from "../../../constants/theme";
 import {
   CompletionData,
   fetchCompletionById,
+  puzzleTitle,
 } from "../../../services/puzzleService";
 import { useUserStore } from "../../../stores/userStore";
 import { ScreenBackdrop } from "../../../components/ui/ScreenBackdrop";
@@ -27,6 +32,9 @@ export default function ActivityReviewScreen() {
 
   const [completion, setCompletion] = useState<CompletionData | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const shareCardRef = useRef<View>(null);
+  const [sharing, setSharing] = useState(false);
 
   useEffect(() => {
     async function loadData() {
@@ -97,6 +105,53 @@ export default function ActivityReviewScreen() {
     difficulty: completion.difficulty,
   });
 
+  const shareCardData: ShareCardData = {
+    puzzleTitle: puzzleTitle(completion),
+    categoryLabel: completion.category.replace(/_/g, " ").toUpperCase(),
+    difficultyLabel: completion.difficulty.toUpperCase(),
+    gridSize: completion.gridSize,
+    time: formatTime(completion.timeTaken),
+    accuracy: Math.round(completion.accuracy * 100),
+    points: completion.score,
+    coins: completion.coinsEarned,
+  };
+
+  /**
+   * Captures the off-screen ShareCard rather than this screen itself, which
+   * carries the back gesture area and section chrome that don't belong in a
+   * shared image.
+   */
+  const handleShare = async () => {
+    if (sharing) return;
+    setSharing(true);
+    try {
+      const available = await Sharing.isAvailableAsync();
+      if (!available) {
+        Alert.alert(
+          "Sharing unavailable",
+          "Sharing isn't supported on this device.",
+        );
+        return;
+      }
+      const uri = await captureRef(shareCardRef, {
+        format: "png",
+        quality: 1,
+        result: "tmpfile",
+      });
+      await Sharing.shareAsync(uri, {
+        mimeType: "image/png",
+        dialogTitle: "Share your result",
+      });
+    } catch {
+      Alert.alert(
+        "Couldn't share",
+        "Something went wrong creating the share image. Try again.",
+      );
+    } finally {
+      setSharing(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <ScreenBackdrop variant="activity" />
@@ -105,7 +160,36 @@ export default function ActivityReviewScreen() {
       <ScreenHeader
         title="Performance Insights"
         subtitle={[heading, detail, formattedDate].filter(Boolean).join(" • ")}
+        right={
+          <TouchableOpacity
+            style={styles.shareBtn}
+            onPress={handleShare}
+            disabled={sharing}
+            accessibilityRole="button"
+            accessibilityLabel="Share your result"
+          >
+            {sharing ? (
+              <ActivityIndicator
+                size="small"
+                color={theme.colors.textSecondary}
+              />
+            ) : (
+              <MaterialIcons
+                name="ios-share"
+                size={16}
+                color={theme.colors.textSecondary}
+              />
+            )}
+            <Text style={styles.shareBtnText}>SHARE</Text>
+          </TouchableOpacity>
+        }
       />
+
+      {/* Rendered off-screen — still laid out for view-shot to capture,
+          never shown to the player. */}
+      <View style={styles.offscreenShareCard} pointerEvents="none">
+        <ShareCard ref={shareCardRef} data={shareCardData} />
+      </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Primary Stats Grid */}
@@ -219,6 +303,28 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingTop: 0,
     paddingBottom: 40,
+  },
+  shareBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+  },
+  shareBtnText: {
+    fontFamily: theme.typography.body.fontFamily,
+    fontSize: 12,
+    color: theme.colors.textSecondary,
+    fontWeight: "bold",
+    letterSpacing: 1,
+  },
+  offscreenShareCard: {
+    position: "absolute",
+    top: 0,
+    left: -9999,
   },
 
   sectionHeader: {

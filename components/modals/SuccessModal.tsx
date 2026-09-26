@@ -1,8 +1,10 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Crypto from "expo-crypto";
-import React, { useEffect, useState } from "react";
+import * as Sharing from "expo-sharing";
+import React, { useEffect, useRef, useState } from "react";
 import {
+  Alert,
   Modal,
   StatusBar,
   ActivityIndicator,
@@ -11,6 +13,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { captureRef } from "react-native-view-shot";
 import Animated, {
   FadeInDown,
   FadeInUp,
@@ -24,9 +27,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { theme } from "../../constants/theme";
 import { LessonScreen, LessonFact } from "./LessonScreen";
 import { CompletionActions } from "./CompletionActions";
+import { ShareCard, ShareCardData } from "./ShareCard";
 import { clueReference } from "../../utils/clueLabel";
 import { unsolvedAnswers } from "../../utils/clueSolved";
 import { fetchUnlockedFacts, unlockFact } from "../../services/economyService";
+import { puzzleTitle } from "../../services/puzzleService";
 import { supabase } from "../../services/supabaseClient";
 import { SFX } from "../../services/soundService";
 import { usePuzzleStore } from "../../stores/puzzleStore";
@@ -92,6 +97,9 @@ export function SuccessModal({
 
   const [displayCoins, setDisplayCoins] = useState(0);
   const [phaseIndex, setPhaseIndex] = useState(0);
+
+  const shareCardRef = useRef<View>(null);
+  const [sharing, setSharing] = useState(false);
 
   // Facts are keyed by answer word. Walking the puzzle's own clues rather
   // than the facts object means they read in the sequence the player solved
@@ -195,8 +203,10 @@ export function SuccessModal({
 
   useEffect(() => {
     if (phase === "streak") {
-      // Timed to the flame, which springs in after the same 300ms.
-      const flame = setTimeout(() => SFX.streak(), 300);
+      // Timed to the flame, which springs in after the same 300ms. Swapped
+      // with the puzzle-solved sound: the streak flame now plays what used
+      // to be the completion sting.
+      const flame = setTimeout(() => SFX.puzzleComplete(), 300);
       flameScale.value = withDelay(
         300,
         withSpring(1, { damping: 12, stiffness: 100 }),
@@ -266,6 +276,62 @@ export function SuccessModal({
   }));
 
   if (!activePuzzle) return null;
+
+  const shareCardData: ShareCardData = {
+    puzzleTitle: puzzleTitle(activePuzzle),
+    categoryLabel: activePuzzle.category.replace(/_/g, " ").toUpperCase(),
+    difficultyLabel: activePuzzle.difficulty.toUpperCase(),
+    gridSize: activePuzzle.gridSize,
+    time: formatTime(timer),
+    accuracy,
+    points: scoreEarned,
+    coins: finalCoins,
+  };
+
+  /**
+   * Captures the off-screen ShareCard rather than the stats screen itself,
+   * which carries buttons and other chrome that don't belong in a shared
+   * image.
+   */
+  const handleShare = async () => {
+    if (sharing) return;
+    setSharing(true);
+    try {
+      const available = await Sharing.isAvailableAsync();
+      if (!available) {
+        Alert.alert(
+          "Sharing unavailable",
+          "Sharing isn't supported on this device.",
+        );
+        return;
+      }
+      const uri = await captureRef(shareCardRef, {
+        format: "png",
+        quality: 1,
+        result: "tmpfile",
+      });
+      await Sharing.shareAsync(uri, {
+        mimeType: "image/png",
+        dialogTitle: "Share your result",
+      });
+    } catch {
+      Alert.alert(
+        "Couldn't share",
+        "Something went wrong creating the share image. Try again.",
+      );
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  // Rendered off-screen — still laid out for view-shot to capture, never
+  // shown to the player. Needed on every phase that offers a share button,
+  // not only the one it happens to be captured from.
+  const offscreenShareCard = (
+    <View style={styles.offscreenShareCard} pointerEvents="none">
+      <ShareCard ref={shareCardRef} data={shareCardData} />
+    </View>
+  );
 
   // ═══════════════════════════════════════════════════════════════════
   // LAST PHASE: WHAT YOU LEARNED
@@ -366,6 +432,8 @@ export function SuccessModal({
       <SafeAreaView style={styles.screen}>
         <ScreenBackdrop variant="success" />
         <StatusBar barStyle="light-content" />
+
+        {offscreenShareCard}
 
         {/* Centres when there is room and scrolls when there is not. The
             stats used to sit in a plain flex:1 box that overflowed its
@@ -529,6 +597,8 @@ export function SuccessModal({
             onContinue={advance}
             onPickAnother={handleBrowseMore}
             onHome={handleFinalReturn}
+            onShare={handleShare}
+            sharing={sharing}
           />
         </Animated.View>
       </SafeAreaView>
@@ -545,6 +615,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.bgPrimary,
     justifyContent: "space-between", // Pushes content and button to edges
+  },
+  offscreenShareCard: {
+    position: "absolute",
+    top: 0,
+    left: -9999,
   },
   centerScroll: {
     flex: 1,

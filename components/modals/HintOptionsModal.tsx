@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { SFX } from "../../services/soundService";
 import { checkOutcome } from "../../utils/checkOutcome";
 import {
+  ActivityIndicator,
   Alert,
   Modal,
   ScrollView,
@@ -57,7 +58,18 @@ export function HintOptionsModal({ visible, onClose }: HintOptionsModalProps) {
   const { profile } = useUserStore();
   const coins = profile.coins;
 
-  const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState<
+    "letter" | "word" | "check" | null
+  >(null);
+  const busy = busyAction !== null;
+  const busyLabel =
+    busyAction === "letter"
+      ? "Revealing letter…"
+      : busyAction === "word"
+        ? "Revealing word…"
+        : busyAction === "check"
+          ? "Checking answers…"
+          : "";
 
   // Display-only prices. The server derives what it actually charges from
   // the same config row, so a stale value here is cosmetic, not exploitable.
@@ -129,7 +141,7 @@ export function HintOptionsModal({ visible, onClose }: HintOptionsModalProps) {
 
   const handleRevealLetter = async () => {
     if (!letterEnabled) return;
-    setBusy(true);
+    setBusyAction("letter");
     try {
       await charge("reveal_letter");
       revealLetter();
@@ -138,13 +150,13 @@ export function HintOptionsModal({ visible, onClose }: HintOptionsModalProps) {
     } catch (e: any) {
       Alert.alert("Hint unavailable", e.message);
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   };
 
   const handleRevealWord = async () => {
     if (!wordEnabled) return;
-    setBusy(true);
+    setBusyAction("word");
     try {
       await charge("reveal_word");
       revealWord();
@@ -153,13 +165,13 @@ export function HintOptionsModal({ visible, onClose }: HintOptionsModalProps) {
     } catch (e: any) {
       Alert.alert("Hint unavailable", e.message);
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   };
 
   const handleCheckErrors = async () => {
     if (!checkEnabled) return;
-    setBusy(true);
+    setBusyAction("check");
     try {
       await charge("check_errors");
       checkErrors();
@@ -171,7 +183,7 @@ export function HintOptionsModal({ visible, onClose }: HintOptionsModalProps) {
     } catch (e: any) {
       Alert.alert("Check unavailable", e.message);
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   };
 
@@ -501,6 +513,15 @@ export function HintOptionsModal({ visible, onClose }: HintOptionsModalProps) {
         <TouchableOpacity style={styles.dismissBtn} onPress={onClose}>
           <Text style={styles.dismissText}>NO THANKS, I'LL KEEP TRYING</Text>
         </TouchableOpacity>
+
+        {/* Busy overlay — the charge is a real network round-trip, and a
+            dimmed button alone reads as "did my tap even register." */}
+        {busy && (
+          <View style={styles.busyOverlay} pointerEvents="auto">
+            <ActivityIndicator size="large" color={theme.colors.accentGold} />
+            <Text style={styles.busyText}>{busyLabel}</Text>
+          </View>
+        )}
       </SafeAreaView>
     </Modal>
   );
@@ -712,6 +733,25 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#22c55e",
     fontWeight: "bold",
+  },
+
+  // Busy overlay
+  busyOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(10,10,10,0.75)",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 14,
+  },
+  busyText: {
+    fontFamily: theme.typography.body.fontFamily,
+    fontSize: 14,
+    color: "#fff",
+    fontWeight: "600",
   },
 
   // Dismiss

@@ -1,5 +1,12 @@
 import React from "react";
-import { Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  ActivityIndicator,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { theme } from "../../constants/theme";
 import { SFX } from "../../services/soundService";
@@ -23,6 +30,46 @@ interface CompletionActionsProps {
   onContinue: () => void;
   onPickAnother: () => void;
   onHome: () => void;
+  /**
+   * Only passed by the stats screen — the streak and lesson screens have
+   * no result to share. Its presence is what decides whether the share
+   * button renders at all.
+   */
+  onShare?: () => void;
+  sharing?: boolean;
+}
+
+/**
+ * The share button sits beside the primary action, never on its own —
+ * labelled the same way HOME is, not just an icon.
+ */
+function ShareButton({
+  onShare,
+  sharing,
+}: {
+  onShare: () => void;
+  sharing: boolean;
+}) {
+  return (
+    <TouchableOpacity
+      style={styles.shareBtn}
+      onPress={onShare}
+      disabled={sharing}
+      accessibilityRole="button"
+      accessibilityLabel="Share your result"
+    >
+      {sharing ? (
+        <ActivityIndicator size="small" color={theme.colors.textSecondary} />
+      ) : (
+        <MaterialIcons
+          name="ios-share"
+          size={18}
+          color={theme.colors.textSecondary}
+        />
+      )}
+      <Text style={styles.shareBtnText}>SHARE</Text>
+    </TouchableOpacity>
+  );
 }
 
 /** The footer of every completion screen: either a way on, or a way out. */
@@ -31,19 +78,24 @@ export function CompletionActions({
   onContinue,
   onPickAnother,
   onHome,
+  onShare,
+  sharing = false,
 }: CompletionActionsProps) {
   if (!isLast) {
     return (
       <View style={styles.wrap}>
-        <TouchableOpacity
-          style={styles.primaryBtn}
-          onPress={withTap(onContinue)}
-          accessibilityRole="button"
-          accessibilityLabel="Continue"
-        >
-          <Text style={styles.primaryBtnText}>CONTINUE</Text>
-          <MaterialIcons name="arrow-forward" size={20} color="#000" />
-        </TouchableOpacity>
+        <View style={styles.row}>
+          {onShare && <ShareButton onShare={onShare} sharing={sharing} />}
+          <TouchableOpacity
+            style={[styles.primaryBtn, onShare && styles.primaryInRow]}
+            onPress={withTap(onContinue)}
+            accessibilityRole="button"
+            accessibilityLabel="Continue"
+          >
+            <Text style={styles.primaryBtnText}>CONTINUE</Text>
+            <MaterialIcons name="arrow-forward" size={20} color="#000" />
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -53,6 +105,7 @@ export function CompletionActions({
   return (
     <View style={styles.wrap}>
       <View style={styles.row}>
+        {onShare && <ShareButton onShare={onShare} sharing={sharing} />}
         <TouchableOpacity
           style={styles.ghostBtn}
           onPress={withTap(onHome)}
@@ -132,5 +185,23 @@ const styles = StyleSheet.create({
   primaryInRow: {
     flex: 1.7,
     width: undefined,
+  },
+  shareBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+  },
+  shareBtnText: {
+    fontFamily: theme.typography.body.fontFamily,
+    fontSize: 14,
+    color: theme.colors.textSecondary,
+    fontWeight: "bold",
+    letterSpacing: 1.2,
   },
 });

@@ -3,6 +3,7 @@ import * as Haptics from "expo-haptics";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -120,7 +121,9 @@ export default function GameScreen() {
     if (useSettingsStore.getState().hapticsEnabled) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
-    SFX.puzzleComplete();
+    // Swapped with the streak-phase sound below: the moment the solved
+    // screen appears now plays what used to be the streak sting.
+    SFX.streak();
 
     try {
       const result = await submitSolve(activePuzzle.id, letters, timer);
@@ -227,7 +230,12 @@ export default function GameScreen() {
   }, [activePuzzle?.isComplete]);
 
   if (!activePuzzle) {
-    return <View style={styles.container} />;
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <ActivityIndicator size="large" color={theme.colors.accentGold} />
+      </View>
+    );
   }
 
   /** Format seconds → MM:SS */
@@ -324,6 +332,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.bgPrimary,
+  },
+  loadingContainer: {
+    justifyContent: "center",
+    alignItems: "center",
   },
   header: {
     flexDirection: "row",
