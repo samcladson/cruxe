@@ -8,16 +8,21 @@ the Android work rather than after it.
 Ordered by dependency: each section unblocks the next. Items marked
 **[blocked]** are waiting on something outside the codebase.
 
-**Last revised:** 2026-09-23 (Apple account, Gemini model swap); 2026-09-21, after confirming §1b live against the Supabase
-project directly (REST probes + the public GoTrue settings endpoint, not
-just "the migration file exists") and publishing the legal pages.
+**Last revised:** 2026-09-25 (internal testing live, store listing details
+reported complete); 2026-09-23 (Apple account, Gemini model swap); 2026-09-21,
+after confirming §1b live against the Supabase project directly (REST probes
+and the public GoTrue settings endpoint, not just "the migration file
+exists") and publishing the legal pages.
 
 ---
 
 ## 1. Account and payments
 
 - [ ] **[blocked]** Play Console → Setup → **Payments profile** verified
-      *(submitted 2026-09-02; verification takes days)*
+      *(submitted 2026-09-02; verification takes days)*. Per Google, this step
+      needs a **deployed/public app URL** to complete — internal testing is
+      now live (2026-09-25), so this should be unblocked; go back and submit
+      that link on the payments profile form if it wasn't already prompted.
 - [ ] Developer account details complete (name, address, contact email)
 
 Nothing in section 3 can be finished until the payments profile clears,
@@ -142,7 +147,7 @@ remains is proving Google Play Billing itself.
 - [x] **Screenshots** — six 1080×1920 images in `assets/store/screenshots/`,
       built by `npm run brand:store` from the web page's screens section (the
       same images from `web/assets/screens/`, same phone frame and captions),
-      24-bit PNG, no alpha. Not yet uploaded to Play Console.
+      24-bit PNG, no alpha. **Uploaded to Play Console** (2026-09-25).
 - [ ] **Retake two captures**: replace them in `web/assets/screens/` and rerun
       `npm run brand:store`. The takeaway
       (after the LessonScreen fix below, so the paragraph shows in full) and the
@@ -153,12 +158,9 @@ remains is proving Google Play Billing itself.
       view and no longer sets `textAlign: "justify"`; whether that cures it is
       unconfirmed until it is seen on Android.
 - [x] App icon 512×512 — `assets/brand/png/play-store-icon-512.png`
-- [ ] Category: Games → Word
-- [ ] Content rating questionnaire *(expect Everyone. Note there is now
-      user-submitted free text — the feedback form — but it is sent only to
-      the developer and is never shown to other users, so it is not UGC in
-      the sense the questionnaire means.)*
-- [ ] Target audience: not directed at children
+- [x] Category: Games → Word — set 2026-09-25
+- [x] Content rating questionnaire — completed 2026-09-25
+- [x] Target audience: not directed at children — declared 2026-09-25
 
 ## 5. Policy and compliance
 
@@ -168,11 +170,10 @@ remains is proving Google Play Billing itself.
       https://samcladson.github.io/cruxe/privacy.html ·
       /terms.html · /account-deletion.html · /
 - [ ] Paste the privacy URL into the listing, and the deletion URL into the
-      Data safety form
-- [ ] Complete the Data safety form using `docs/store/play-data-safety.md`
-      — **re-read it first**, the answers changed materially when accounts
-      became mandatory (email is now *required*, not optional) and the
-      feedback form was added
+      Data safety form — confirm both links were included when the form
+      below was completed; if not, go back and add them
+- [x] Complete the Data safety form using `docs/store/play-data-safety.md`
+      — completed 2026-09-25
 - [x] **Hosted pages match the in-app versions** — checked the live page for
       leftover "anonymous"/"guest" language from before accounts were
       required; none found.
@@ -234,8 +235,8 @@ the checkboxes below as unverified until run once against the actual
 
 ## 7. Release
 
-- [ ] Upload to **internal testing** first (`eas submit` is configured for the
-      internal track, draft status)
+- [x] Upload to **internal testing** first (`eas submit` is configured for the
+      internal track, draft status) — live 2026-09-25
 - [ ] Add testers, install from the Play link, repeat §6
 - [ ] Promote to production
 
@@ -273,11 +274,8 @@ app requiring an account has no obvious way to give a reviewer one (§8c).
 Apple's serial steps are slow. Start the agreement and the Service ID first.
 
 - [x] Apple Developer Program membership — enrolled 2026-09-23
-- [ ] **Paid Apps agreement signed, plus tax and banking details.** Until this
-      clears, StoreKit returns *no products* and the store looks empty for
-      reasons nothing in the app can report. This is the iOS twin of the §1
-      Play payments profile, and it is the step most likely to quietly cost a
-      week.
+- [x] **Paid Apps agreement signed, plus tax and banking details** — done
+      2026-09-26, per user report. Unblocks §3-equivalent IAP work below.
 - [ ] **iOS OAuth client** in Google Cloud for bundle id `com.cruxe.app`,
       same project as the Android clients. Then:
       - [ ] set `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` in `.env` **and in EAS**
@@ -289,28 +287,48 @@ Apple's serial steps are slow. Start the agreement and the Service ID first.
 - [x] **Apple provider enabled in Supabase** — confirmed live 2026-09-23:
       `GET /auth/v1/settings` reports `external.apple: true`, the same way
       §1b confirmed the others, not just "the toggle looked on."
-      **Still unverified: the Client IDs field.** Its contents are not exposed
-      on the public settings endpoint, so it needs a manual look. It must hold
-      `com.cruxe.app`. If it is empty or wrong, the provider still reports
-      `true` here and sign-in fails only on device, with
-      `Unacceptable audience in id_token` — an error that names neither
-      Supabase nor the field you have to fix.
-- [ ] Sign in with Apple in Supabase → Authentication → Providers → Apple:
-      put `com.cruxe.app` in **Client IDs**. That is all.
-      **No Service ID and no `.p8` secret key** — an earlier draft of this
-      line asked for both, which was wrong. Those are for the web OAuth
-      redirect flow; `signInWithApple()` uses `signInWithIdToken`, the native
-      flow, where Supabase only verifies the token's `aud` against Client IDs.
-      The key becomes necessary only if Apple sign-in is ever added to the
-      web build or to Android.
-- [ ] App Store Connect app record, bundle id `com.cruxe.app`
-- [ ] Four consumables in App Store Connect with the **same** product ids as
-      Play, so `coin_products` stays four rows rather than eight:
-      `com.cruxe.coins.starter` / `.plus` / `.pro` / `.elite`
-- [ ] RevenueCat App Store app, products attached to the **same `default`
-      offering** as the Play and Test Store products
-- [ ] `EXPO_PUBLIC_REVENUECAT_IOS_API_KEY` (the `appl_…` public key) set in
-      the EAS `production` environment
+- [x] **Client IDs field confirmed correct** — verified 2026-09-26 via
+      `supabase config diff` (reads the live project config, not just the
+      public settings endpoint): `auth.external.apple.client_id` is
+      `"com.cruxe.app"` and `auth.external.apple.enabled` is `true`. **No
+      dashboard change needed** — Apple auth is fully configured server-side.
+      (Same check also confirmed the Google provider's `client_id` matches
+      the web OAuth client already in use.)
+      **No Service ID and no `.p8` secret key** needed — `signInWithApple()`
+      uses `signInWithIdToken`, the native flow, where Supabase only verifies
+      the token's `aud` against Client IDs. The key becomes necessary only if
+      Apple sign-in is ever added to the web build or to Android.
+- [x] App Store Connect app record, bundle id `com.cruxe.app` — done, per
+      user report 2026-09-26
+- [x] Four consumables created in App Store Connect — done 2026-09-26.
+      **`com.cruxe.coins.starter` could not be reused**: it was created,
+      deleted to fix a typo'd description, and Apple permanently retires a
+      deleted product id. iOS uses `com.cruxe.coins.starter2` instead;
+      Android keeps the original. See migration
+      `025_ios_starter_product_id.sql` (applied live 2026-09-26) — the app
+      buys through RevenueCat Packages, never a hardcoded id, so this
+      required no client code change, only this extra `coin_products` row:
+      | Product ID | Reference name | Price | Coins |
+      |---|---|---|---|
+      | `com.cruxe.coins.starter2` *(iOS only — see note above)* | Starter Pack | $0.99 | 300 |
+      | `com.cruxe.coins.plus` | Plus Pack | $4.99 | 1,800 |
+      | `com.cruxe.coins.pro` | Pro Pack | $9.99 | 3,900 |
+      | `com.cruxe.coins.elite` | Elite Pack | $19.99 | 9,000 |
+      **Still open**: all 4 are in **"Missing Metadata"** — each needs a
+      review screenshot (any screenshot of the shared `store.tsx` screen,
+      from either platform, reused across all 4 — Apple's IAP screenshot is
+      for App Review reference only, never shown to customers) plus a short
+      review note, before they reach "Ready to Submit." Deferred for now;
+      needed before Sandbox purchase testing will work.
+- [x] RevenueCat App Store app created (In-App Purchase key + a separate
+      App Store Connect API key for the product import, both `.p8`), 4
+      products imported — done 2026-09-26. **Confirm**: products attached to
+      the matching packages in the same `default` offering used by Play and
+      Test Store (Starter package → `com.cruxe.coins.starter2` for the App
+      Store product specifically, unlike the other 3 which match Android).
+- [x] `EXPO_PUBLIC_REVENUECAT_IOS_API_KEY` (`appl_znybrmKwCssvYoGeHWySGHXnVql`)
+      set in EAS **production** and **preview** — confirmed via
+      `eas env:list` 2026-09-26.
 - [ ] Fill the three `TODO_` values in `eas.json` once the ASC record exists
 
 ### 8c. Review submission
