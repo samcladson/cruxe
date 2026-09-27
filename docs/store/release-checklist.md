@@ -370,43 +370,31 @@ Apple's serial steps are slow. Start the agreement and the Service ID first.
 - [ ] Age rating questionnaire — same answers as the Play content rating
 - [ ] Privacy policy URL (the published GitHub Pages one) into the listing
 
-### 8d. Build and verify **[blocked on a device]**
+### 8d. Build and verify
 
-**There is no iOS test device.** No iPhone, no Mac, so no simulator either.
-Every box in this subsection needs hands on hardware, and none of them can be
-signed off without it. This — not the code and not the Apple account — is what
-now gates the iOS launch, so it is worth solving early rather than discovering
-at submission time. Realistic routes, best first:
+**A device is now available** — a borrowed iPhone 11 Pro Max, registered
+2026-09-27 for ad-hoc distribution (UDID `00008030-000A78C63680802E`, Apple
+Team `RH92B5F87N`). Still worth getting a permanent one (used iPhone, iOS 13+)
+for ongoing support and future releases, since this one is borrowed.
 
-1. **A cheap used iPhone.** Anything on iOS 13+ runs Sign in with Apple. This
-   is also the only route that helps with *future* releases and with support.
-2. **A TestFlight tester who owns one.** Needs the App Store Connect record
-   first, and every fix is a new build plus processing plus a round trip
-   through someone else's attention. Workable, slow, and poor for debugging.
-3. **A rented cloud Mac** (MacinCloud, Scaleway) for a simulator. Fine for
-   Apple sign-in and layout, useless for §3-style purchase testing — StoreKit
-   does not behave like a real device in the simulator.
-
-A device farm (BrowserStack, AWS Device Farm) looks like the obvious answer
-and is not: signing into a real Apple ID on a shared, wiped device is normally
-blocked, which is precisely the thing being tested.
-
-**Do this now anyway — it needs no device:** run
-`eas build -p ios --profile production`. An App Store build requires no
-registered UDID, and running it early pays for itself three times: it makes
-EAS provision credentials and create the App ID with the Sign in with Apple
-capability (§8b), it flushes out the first-time native build failures below
-while there is no deadline, and it leaves an `.ipa` ready for TestFlight the
-moment a device appears.
-
-- [ ] **First `eas build -p ios` will probably fail once or twice.** iOS has
-      never been built here — `/ios` is git-ignored and prebuild has not run
-      for it, so no native iOS issue has ever surfaced. `react-native-worklets`
-      / Reanimated 4 and `lottie-react-native` are the usual suspects. Budget
-      for it; this is not a sign anything is wrong.
-- [ ] TestFlight build installs and **opens** — the Android lesson (version
-      code 4 opened to a crash because an env var was missing from EAS)
-      applies here unchanged
+- [x] **First `eas build -p ios` failed, as expected — and is now fixed.** Two
+      attempts:
+      1. `iTunes service key is empty` on `eas device:create` — a stale local
+         `eas-cli@18.5.0`; fixed by upgrading to `24.8.0`.
+      2. Actual pod install failure, twice: `AppCheckCore` (pulled in
+         transitively by `@react-native-google-signin/google-signin`) is a
+         Swift pod that can't build as a static library without module maps.
+         First attempt used `expo-build-properties`'s `ios.useModularHeaders`
+         — **not a real option**, checked its actual schema in
+         `node_modules` and it silently did nothing, so the identical error
+         reproduced. Fixed for real with `ios.useFrameworks: "static"`.
+      Build `1a74461a-761e-40b4-b26f-e65e47c38f6d` succeeded 2026-09-27 —
+      first working ad-hoc `.ipa` for this project, installed via the EAS
+      install link directly on the registered device (no TestFlight needed
+      for internal ad-hoc distribution).
+- [ ] Confirm the installed preview build actually **opens** on the device —
+      the Android lesson (version code 4 opened to a crash because an env var
+      was missing from EAS) applies here unchanged
 - [ ] Repeat §6 on a real device, paying attention to the iOS-only paths:
       Sign in with Apple, the `padding` keyboard behaviour, and the 88pt tab
       bar
