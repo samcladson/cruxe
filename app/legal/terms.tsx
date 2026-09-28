@@ -57,8 +57,8 @@ export default function TermsOfServiceScreen() {
 
         <Text style={styles.sectionTitle}>3. Refunds</Text>
         <Text style={styles.paragraph}>
-          Purchases are handled by the app store you bought through and are subject to its refund
-          policy. If a purchase is refunded, the corresponding coins are removed from your balance
+          Purchases are handled by the app store you bought through (Apple App Store or Google Play)
+          and are subject to its refund policy; refund requests go to that store, not to us. If a purchase is refunded, the corresponding coins are removed from your balance
           &mdash; including where they have already been spent, which can leave the balance negative
           until you earn it back.
         </Text>

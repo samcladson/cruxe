@@ -41,7 +41,8 @@ export default function PrivacyPolicyScreen() {
             • <Text style={styles.bold}>Account data.</Text> An account is required to play. You
             create one with Google, Apple, or a one-time code sent to your email address. We store
             your email address, the name your provider gives us (if any), and an account identifier,
-            so your progress follows you to any device you sign in on.
+            so your progress follows you to any device you sign in on. If you use Sign in with Apple
+            and choose Hide My Email, we store only the private relay address Apple gives us.
           </Text>
           <Text style={styles.bullet}>
             • <Text style={styles.bold}>Feedback you send.</Text> If you use Send feedback in the
