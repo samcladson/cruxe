@@ -282,25 +282,34 @@ export function AnimatedSplash({ ready, onVisible, onDone }: AnimatedSplashProps
 }
 
 /**
- * A soft vignette in the page colour: clear through the middle, deepening
- * toward every edge. Its gradient follows the screen's proportions, so it is
- * an oval on a tall phone and reaches all four edges evenly.
+ * A soft circular vignette in the page colour: a round pool of light around
+ * the logo, deepening gently toward the edges and corners. A true circle, its
+ * radius set by the screen's width, rather than a gradient stretched to the
+ * screen's shape. Deliberately light: the edges dim, they do not go black.
  */
+const VIGNETTE_RADIUS_OF_WIDTH = 0.8;
+const VIGNETTE_EDGE_OPACITY = 0.7;
+
 const Vignette = memo(function Vignette() {
+  const { width, height } = useWindowDimensions();
+  const r = width * VIGNETTE_RADIUS_OF_WIDTH;
   return (
-    <Svg width="100%" height="100%">
+    <Svg width={width} height={height}>
       <Defs>
-        {/* r 58%: each edge falls at ~0.86 of the gradient, nearly opaque;
-            the corners are fully covered. */}
-        <RadialGradient id="splashVignette" cx="50%" cy="50%" r="58%">
+        <RadialGradient
+          id="splashVignette"
+          gradientUnits="userSpaceOnUse"
+          cx={width / 2}
+          cy={height / 2}
+          r={r}
+        >
           <Stop offset="0" stopColor={BG} stopOpacity={0} />
-          <Stop offset="0.4" stopColor={BG} stopOpacity={0} />
-          <Stop offset="0.65" stopColor={BG} stopOpacity={0.45} />
-          <Stop offset="0.82" stopColor={BG} stopOpacity={0.88} />
-          <Stop offset="1" stopColor={BG} stopOpacity={1} />
+          <Stop offset="0.5" stopColor={BG} stopOpacity={0} />
+          <Stop offset="0.85" stopColor={BG} stopOpacity={0.4} />
+          <Stop offset="1" stopColor={BG} stopOpacity={VIGNETTE_EDGE_OPACITY} />
         </RadialGradient>
       </Defs>
-      <Rect width="100%" height="100%" fill="url(#splashVignette)" />
+      <Rect width={width} height={height} fill="url(#splashVignette)" />
     </Svg>
   );
 });

@@ -369,11 +369,8 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     borderBottomWidth: 1,
     borderBottomColor: "rgba(255,255,255,0.05)",
-    backgroundColor: theme.colors.bgPrimary,
-    // zIndex alone does not order overlapping siblings on Android; elevation
-    // is what the platform actually reads.
-    zIndex: 20,
-    elevation: 20,
+    // Transparent, so the screen's backdrop shows through. The grid cannot
+    // draw up here: it clips itself at its own top edge when it slides.
   },
   headerLeft: {
     flexDirection: "row",
@@ -413,12 +410,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 14,
     paddingBottom: 10,
-    // Solid, and above the grid. The header and clue bar already are; this
-    // was the transparent gap between them that the rising grid showed
-    // through.
-    backgroundColor: theme.colors.bgPrimary,
-    zIndex: 15,
-    elevation: 15,
   },
   subjectText: {
     fontFamily: theme.typography.subheading.fontFamily,

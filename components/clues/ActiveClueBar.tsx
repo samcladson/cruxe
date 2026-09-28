@@ -190,18 +190,16 @@ const styles = StyleSheet.create({
   containerWrap: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    // The grid slides up under here when the keyboard is open, so this bar
-    // has to be opaque and above it. Without both, the rows being scrolled
-    // out of view are drawn straight over the clue you are answering.
-    backgroundColor: theme.colors.bgPrimary,
-    zIndex: 10,
-    elevation: 10,
+    // Transparent, so the screen's backdrop shows through. The grid slides up
+    // when the keyboard is open, but it clips itself at its own top edge, so
+    // it is never drawn over the clue you are answering.
   },
   card: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#2a2721",
+    // Slightly see-through, so the backdrop reads faintly behind the card.
+    backgroundColor: "rgba(42, 39, 33, 0.86)",
     borderRadius: 10,
     borderWidth: 1,
     borderColor: "rgba(238, 205, 43, 0.2)",

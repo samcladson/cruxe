@@ -85,7 +85,7 @@ const styles = StyleSheet.create({
     right: 0,
     height: DONE_BAR_HEIGHT,
     flexDirection: "row",
-    justifyContent: "flex-end",
+    justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 12,
     backgroundColor: theme.colors.bgSecondary,
