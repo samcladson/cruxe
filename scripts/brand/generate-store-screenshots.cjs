@@ -7,19 +7,12 @@
  * dot grid and gold light.
  *
  *   npm run brand:store        Play Store  → assets/store/screenshots/       1080×1920
- *   npm run brand:store:ios    App Store   → assets/store/screenshots-ios/   1320×2868
  *
- * 24-bit PNG both ways. 1320×2868 is Apple's 6.9" iPhone size, which is the
- * only iPhone set App Store Connect requires now that supportsTablet is false.
+ * 24-bit PNG. The App Store set has its own design, built from real iPhone
+ * captures: see generate-app-store-screenshots.cjs (npm run brand:store:ios).
  *
  * To change a screen, replace its image in web/assets/screens/ (the web page
  * then shows it too) and rerun. Keep captions in step with web/index.html.
- *
- * iPhone captures: a file in assets/store/ios-captures/ with the same name as
- * a web screen (welcome.jpg, home.jpg, …) is used instead of it for the iOS
- * set. The sign-in slide is only in the iOS set if such a capture exists,
- * because the shared welcome screen shows Google alone, and an iPhone listing
- * should show the Sign in with Apple button Apple's own rules require.
  */
 const fs = require("fs");
 const path = require("path");
@@ -28,7 +21,6 @@ const { toRgbPng } = require("./png.cjs");
 
 const ROOT = path.resolve(__dirname, "../..");
 const SRC = path.join(ROOT, "web/assets/screens");
-const IOS_CAPTURES = path.join(ROOT, "assets/store/ios-captures");
 const FONTS = path.join(ROOT, "node_modules/@expo-google-fonts");
 
 // Palette — mirrors web/index.html and constants/theme.ts.
@@ -51,15 +43,6 @@ const PROFILES = {
     phoneY: 560,
     goldY: 1180,
     fogY: 1000,
-  },
-  ios: {
-    dir: "assets/store/screenshots-ios",
-    px: [1320, 2868],
-    phoneH: 1600,
-    phoneY: 600,
-    // The light sits at the phone's middle-upper part, as on the Play set.
-    goldY: 600 + 1600 * 0.48,
-    fogY: 600 + 1600 * 0.34,
   },
 };
 
@@ -104,19 +87,15 @@ function phoneMetrics(profile) {
   };
 }
 
-function imagePath(slide, platform) {
-  if (platform === "ios") {
-    const capture = path.join(IOS_CAPTURES, `${slide.image}.jpg`);
-    if (fs.existsSync(capture)) return capture;
-  }
+function imagePath(slide) {
   return path.join(SRC, `${slide.image}.jpg`);
 }
 
-function slideSvg(slide, profile, platform) {
+function slideSvg(slide, profile) {
   const { PHONE_H, PHONE_W, PAD, RADIUS, SCREEN_RADIUS, PHONE_X, PHONE_Y } = phoneMetrics(profile);
   // Design height keeps the pixel aspect ratio: 1080 wide × (h / w).
   const H = (W * profile.px[1]) / profile.px[0];
-  const img = fs.readFileSync(imagePath(slide, platform)).toString("base64");
+  const img = fs.readFileSync(imagePath(slide)).toString("base64");
   const defs = [];
   let body = `<rect width="${W}" height="${H}" fill="${BG}"/>`;
 
@@ -160,21 +139,8 @@ function slideSvg(slide, profile, platform) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><defs>${defs.join("")}</defs>${body}</svg>`;
 }
 
-// The sign-in slide shows the welcome screen, which differs per platform.
-function slidesFor(platform) {
-  if (platform !== "ios") return SLIDES;
-  return SLIDES.filter(
-    (s) => s.image !== "welcome" || fs.existsSync(path.join(IOS_CAPTURES, "welcome.jpg")),
-  ).map((s) =>
-    s.image === "welcome"
-      ? { ...s, line: ["Apple, Google or an emailed code.", "Your streak and coins follow you."] }
-      : s,
-  );
-}
-
 function main() {
-  const platform = process.argv[2] === "ios" ? "ios" : "play";
-  const profile = PROFILES[platform];
+  const profile = PROFILES.play;
   const [PX_W, PX_H] = profile.px;
   const OUT = path.join(ROOT, profile.dir);
   // Clear anything from earlier layouts, so only this set can be uploaded.
@@ -185,8 +151,8 @@ function main() {
     "manrope/800ExtraBold/Manrope_800ExtraBold.ttf",
     "space-mono/400Regular/SpaceMono_400Regular.ttf",
   ].map((f) => path.join(FONTS, f));
-  for (const slide of slidesFor(platform)) {
-    const rendered = new Resvg(slideSvg(slide, profile, platform), {
+  for (const slide of SLIDES) {
+    const rendered = new Resvg(slideSvg(slide, profile), {
       fitTo: { mode: "width", value: PX_W },
       font: { fontFiles, loadSystemFonts: false, defaultFontFamily: "Manrope" },
     }).render();
