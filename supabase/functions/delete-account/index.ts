@@ -1,9 +1,51 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { SignJWT, importPKCS8 } from "npm:jose@5";
 import { redactPayload } from "../_shared/redactPayload.ts";
+import {
+  AppleRevokeConfig,
+  revokeAppleAuthorization,
+} from "../_shared/appleRevoke.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const RC_SECRET_KEY = Deno.env.get("REVENUECAT_SECRET_API_KEY") ?? "";
+
+/**
+ * Sign in with Apple key, from Apple Developer → Keys. All three must be set
+ * or revocation is skipped (deletion still proceeds). `APPLE_PRIVATE_KEY` is
+ * the `.p8` file's contents; a literal backslash-n sequence is accepted in
+ * place of real newlines, because secrets pasted through some shells lose them.
+ */
+const APPLE_TEAM_ID = Deno.env.get("APPLE_TEAM_ID") ?? "";
+const APPLE_KEY_ID = Deno.env.get("APPLE_KEY_ID") ?? "";
+const APPLE_PRIVATE_KEY = (Deno.env.get("APPLE_PRIVATE_KEY") ?? "").replace(
+  /\\n/g,
+  "\n",
+);
+const APPLE_CLIENT_ID = Deno.env.get("APPLE_CLIENT_ID") ?? "com.cruxe.app";
+
+const appleConfig: AppleRevokeConfig | null =
+  APPLE_TEAM_ID && APPLE_KEY_ID && APPLE_PRIVATE_KEY
+    ? {
+        clientId: APPLE_CLIENT_ID,
+        teamId: APPLE_TEAM_ID,
+        keyId: APPLE_KEY_ID,
+        privateKey: APPLE_PRIVATE_KEY,
+      }
+    : null;
+
+/** Apple's client secret is a short-lived ES256 JWT signed with the `.p8`. */
+async function signAppleClientSecret(cfg: AppleRevokeConfig): Promise<string> {
+  const key = await importPKCS8(cfg.privateKey, "ES256");
+  return await new SignJWT({})
+    .setProtectedHeader({ alg: "ES256", kid: cfg.keyId })
+    .setIssuer(cfg.teamId)
+    .setIssuedAt()
+    .setExpirationTime("5m")
+    .setAudience("https://appleid.apple.com")
+    .setSubject(cfg.clientId)
+    .sign(key);
+}
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -31,6 +73,8 @@ async function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
  *     found. A failure here aborts, with the account still intact.
  *  2. Best-effort RevenueCat subscriber delete — a third party being down
  *     must not block a legal obligation.
+ *  2b. Best-effort Sign in with Apple revocation, from the one-time
+ *     `appleAuthorizationCode` the app fetches fresh at deletion time.
  *  3. Delete the auth user. Cascades clear users, coin_ledger, hint_events,
  *     puzzle_completions, puzzle_entries and streak_repairs.
  */
@@ -42,6 +86,13 @@ Deno.serve(async (req) => {
     "",
   );
   if (!jwt) return json({ error: "unauthenticated" }, 401);
+
+  // Only Apple users on iOS send a code; everyone else posts an empty body.
+  const body = await req.json().catch(() => ({}));
+  const appleAuthorizationCode =
+    typeof body?.appleAuthorizationCode === "string"
+      ? body.appleAuthorizationCode
+      : undefined;
 
   const db = createClient(SUPABASE_URL, SERVICE_KEY, {
     auth: { persistSession: false },
@@ -124,6 +175,21 @@ Deno.serve(async (req) => {
     }
   }
 
+  // ── 2b. Revoke the Sign in with Apple grant (guideline 5.1.1(v)).
+  const apple = await revokeAppleAuthorization(
+    appleAuthorizationCode,
+    appleConfig,
+    { fetchFn: fetch, signClientSecret: signAppleClientSecret },
+  );
+  if (apple.status === "failed") {
+    console.warn("[delete-account] Apple revocation failed", apple.reason);
+  } else if (apple.status === "skipped" && apple.reason === "not_configured") {
+    console.warn(
+      "[delete-account] Apple code supplied but APPLE_TEAM_ID / APPLE_KEY_ID " +
+        "/ APPLE_PRIVATE_KEY are not all set; grant not revoked",
+    );
+  }
+
   // ── 3. Cascades clear users, coin_ledger, hint_events, puzzle_completions,
   //       puzzle_entries and streak_repairs.
   const { error } = await db.auth.admin.deleteUser(userId);
@@ -145,5 +211,7 @@ Deno.serve(async (req) => {
     );
   }
 
-  return json({ ok: true });
+  // `apple` is the revocation outcome, so the app can log it. It carries only
+  // a status and Apple's error text, never a credential.
+  return json({ ok: true, apple });
 });

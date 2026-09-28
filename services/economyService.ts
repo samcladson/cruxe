@@ -293,7 +293,15 @@ export function submitSolve(
 export const syncPurchases = () =>
   invoke<{ credited: number; balance: number }>("sync-purchases", {});
 
-export const deleteAccount = () => invoke<{ ok: boolean }>("delete-account", {});
+/**
+ * `appleAuthorizationCode` is a fresh one-time code from Sign in with Apple,
+ * which the server uses to revoke the Apple grant (guideline 5.1.1(v)).
+ */
+export const deleteAccount = (appleAuthorizationCode?: string) =>
+  invoke<{ ok: boolean; apple?: { status: string; reason?: string } }>(
+    "delete-account",
+    { appleAuthorizationCode },
+  );
 
 /**
  * Display-only prices. A charge always uses the server's own number, so a

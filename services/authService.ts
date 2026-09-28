@@ -881,11 +881,58 @@ export async function deleteAccountAndReset(): Promise<DeleteAccountResult> {
   return run;
 }
 
+/**
+ * For an iOS account with Sign in with Apple linked, asks Apple to confirm
+ * afresh and returns the one-time authorisation code the server needs to
+ * revoke the grant. Apple only issues a code at sign-in, and Supabase's native
+ * flow keeps none, so deletion is the one moment to ask.
+ *
+ * `cancelled` means the user dismissed Apple's sheet: deletion should stop, as
+ * that is a choice, not a failure. Any other failure returns no code — the
+ * account is still deleted, only the Apple-side revocation is lost, because
+ * an Apple outage must not be able to block someone removing their data.
+ */
+async function requestAppleRevocationCode(): Promise<{
+  code?: string;
+  cancelled?: boolean;
+}> {
+  if (Platform.OS !== "ios") return {};
+  const { hasApple } = await getLinkedProviders();
+  if (!hasApple) return {};
+
+  try {
+    const credential = await AppleAuthentication.signInAsync({});
+    return { code: credential.authorizationCode ?? undefined };
+  } catch (e: any) {
+    if (e?.code === "ERR_REQUEST_CANCELED") return { cancelled: true };
+    console.warn("[Auth] Could not get an Apple code for revocation:", e);
+    return {};
+  }
+}
+
 async function deleteAccountInner(): Promise<DeleteAccountResult> {
+  const apple = await requestAppleRevocationCode();
+  if (apple.cancelled) {
+    return {
+      accountDeleted: false,
+      error:
+        "Deleting your account also disconnects Sign in with Apple, so Apple " +
+        "asks you to confirm. Your account was not deleted.",
+    };
+  }
+
   try {
     // Throws on failure, which is what we want: no local data is destroyed
     // unless the server confirms the account is gone.
-    await deleteAccount();
+    const result = await deleteAccount(apple.code);
+    if (Platform.OS === "ios") {
+      console.log(
+        "[Auth] Apple revocation:",
+        `code sent: ${Boolean(apple.code)},`,
+        "server said:",
+        JSON.stringify(result.apple ?? "nothing"),
+      );
+    }
   } catch (e) {
     const reason = e instanceof Error ? e.message : "Could not delete account";
 
