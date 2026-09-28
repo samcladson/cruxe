@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useState } from "react";
+import React, { memo, useEffect, useMemo, useState } from "react";
 import { Platform, StyleSheet, useWindowDimensions, View } from "react-native";
 import Animated, {
   Easing,
@@ -12,21 +12,20 @@ import Animated, {
   withSpring,
   withTiming,
 } from "react-native-reanimated";
-import Svg, { Circle, Defs, RadialGradient, Stop } from "react-native-svg";
 import { ScreenBackdrop } from "./ScreenBackdrop";
+import { RippleCell, rippleRings } from "../../utils/splashRipple";
 
 /**
- * AnimatedSplash — the launch moment: "Four directions", then a ripple of
- * light across the Home page's own background.
+ * AnimatedSplash — the launch moment: "Four directions", then the crossword
+ * ripple.
  *
  * 1. Build-up: the gold centre pops in and the four arms shoot out one at a
  *    time (up, right, down, left: the four ways a Cruxe answer can run).
- * 2. Ripple: Home's backdrop (its soft light and dot-grid particles) fades in,
- *    and soft rings of gold light spread from the logo across it and past the
- *    edges of the screen, with a faint glow lingering at the centre. Kept dim
- *    on purpose: a quiet wash over the particles, not a flash.
- * 3. The splash fades out. Home sits on the very same backdrop, so only its
- *    content appears to arrive.
+ * 2. Ripple: the page background fades in (the same light and dot grid as
+ *    every other screen), and a crossword grid spreads outward from the logo,
+ *    its cells rising ring by ring to a faint gold glow, out to the edges of
+ *    the screen. It stays subtle throughout: there is no bright flash.
+ * 3. The whole thing fades into the app.
  *
  * Where the build-up plays:
  * - Android 12+: the system plays it from the moment the icon is tapped
@@ -37,9 +36,9 @@ import { ScreenBackdrop } from "./ScreenBackdrop";
  *   them static), so the native splash is the dark background alone and this
  *   plays the build-up too.
  *
- * If the app is still loading once the ripple has passed, the logo stays on
- * its backdrop until `ready`, so the fade never reveals a blank screen. With
- * reduced motion on, the finished logo is shown still.
+ * If the app is still loading once the ripple has spread, the logo and the
+ * settled grid stay on screen until `ready`, so the fade never reveals a blank
+ * screen. With reduced motion on, the finished logo is shown still.
  *
  * Logo geometry must match plugins/withAnimatedSplash.js (a test checks this).
  */
@@ -66,23 +65,20 @@ const FIRST_ARM_AT = 200;
 const ARM_STAGGER = 100;
 const BUILD_MS = 800;
 
-/** The ripple: rings of light, one after another. */
-const RING_COUNT = 3;
-const RING_STAGGER_MS = 240;
-const RING_MS = 1400;
-/** A ring's brightest moment. Dim on purpose: a wash, not a flash. */
-const RING_PEAK = 0.32;
-/** The faint glow that lingers at the centre while the rings travel. */
-const CENTRE_GLOW_PEAK = 0.18;
-const BACKDROP_IN_MS = 360;
 /**
- * The ring is drawn once at this radius and scaled up on the GPU, so a
- * screen-filling ripple costs no redraws. Its soft edge widens as it grows,
- * which is how a ripple spreads anyway.
+ * The ripple: one ring of cells after another, every RING_STEP_MS, rises to a
+ * faint glow. There is no bright flash first: the grid only ever reaches this
+ * subtle level, over the dim backdrop.
  */
-const RING_DRAWN_RADIUS = 200;
-/** Fade into the app once the last ring is this far across the screen. */
-const FADE_AT_SHARE = 0.6;
+const RING_STEP_MS = 70;
+const RING_RISE_MS = 520;
+/** How visible a ring's cells get. Dim on purpose: a quiet wash, not a flash. */
+const RING_REST = 0.16;
+const BACKDROP_IN_MS = 420;
+/** Hold the finished grid this long after the last ring has risen. */
+const HOLD_BEFORE_FADE_MS = 200;
+/** The exit: the logo and grid ease out, then the background dissolves. */
+const CONTENT_OUT_MS = 280;
 const FADE_MS = 420;
 
 /**
@@ -110,13 +106,15 @@ interface AnimatedSplashProps {
 export function AnimatedSplash({ ready, onVisible, onDone }: AnimatedSplashProps) {
   const reduceMotion = useReducedMotion();
   const { width, height } = useWindowDimensions();
-  // Far enough to leave the screen by every corner.
-  const reach = Math.hypot(width, height) / 2 + STEP;
+  const rings = useMemo(
+    () => rippleRings(width, height, CELL, STEP),
+    [width, height],
+  );
 
   const buildHere = !NATIVE_INTRO && !reduceMotion;
-  // The ripple layers mount after the first frame, which has to be quick: it
-  // is what lets the native splash hide.
-  const [rippling, setRippling] = useState(false);
+  // The grid is mounted after the first frame, which has to be quick: it is
+  // what lets the native splash hide.
+  const [showGrid, setShowGrid] = useState(false);
   const [played, setPlayed] = useState(reduceMotion);
 
   const start = buildHere ? 0 : 1;
@@ -128,8 +126,9 @@ export function AnimatedSplash({ ready, onVisible, onDone }: AnimatedSplashProps
   ];
   const core = useSharedValue(start);
   const backdrop = useSharedValue(0);
-  const centreGlow = useSharedValue(0);
-  const rings = [useSharedValue(0), useSharedValue(0), useSharedValue(0)];
+  // Enough ring values for the tallest screen; unused ones stay at 0.
+  const ringValues = Array.from({ length: 24 }, () => useSharedValue(0));
+  const content = useSharedValue(1);
   const fade = useSharedValue(1);
 
   // 1. The build-up, where the system did not already play it. Runs once.
@@ -148,49 +147,55 @@ export function AnimatedSplash({ ready, onVisible, onDone }: AnimatedSplashProps
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 2. The ripple across Home's backdrop.
+  // 2. The ripple, once the grid is mounted.
   useEffect(() => {
-    if (!rippling || reduceMotion) return;
-    const at = buildHere ? BUILD_MS - 80 : 0;
-    const ease = Easing.out(Easing.cubic);
+    if (!showGrid || reduceMotion) return;
+    const at = buildHere ? BUILD_MS - 60 : 0;
 
     backdrop.value = withDelay(
       at,
-      withTiming(1, { duration: BACKDROP_IN_MS, easing: ease }),
+      withTiming(1, { duration: BACKDROP_IN_MS, easing: Easing.out(Easing.quad) }),
     );
-    centreGlow.value = withDelay(
-      at,
-      withTiming(1, { duration: RING_MS / 2, easing: ease }),
-    );
-    rings.forEach((ring, i) => {
-      ring.value = withDelay(
-        at + i * RING_STAGGER_MS,
-        withTiming(1, { duration: RING_MS, easing: ease }),
+    rings.forEach((_, k) => {
+      if (k >= ringValues.length) return;
+      ringValues[k].value = withDelay(
+        at + k * RING_STEP_MS,
+        withTiming(RING_REST, {
+          duration: RING_RISE_MS,
+          easing: Easing.inOut(Easing.quad),
+        }),
       );
     });
 
-    const lastRingAt = at + (RING_COUNT - 1) * RING_STAGGER_MS;
+    const spread = Math.min(rings.length, ringValues.length) * RING_STEP_MS;
     const timer = setTimeout(
       () => setPlayed(true),
-      lastRingAt + RING_MS * FADE_AT_SHARE,
+      at + spread + RING_RISE_MS + HOLD_BEFORE_FADE_MS,
     );
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rippling]);
+  }, [showGrid]);
 
-  // 3. Into the app, once the ripple is well across and the app is ready.
+  // 3. Into the app, once the ripple is well under way and the app is ready.
   useEffect(() => {
     if (!played || !ready) return;
     if (reduceMotion) {
       onDone();
       return;
     }
-    fade.value = withTiming(
-      0,
-      { duration: FADE_MS, easing: Easing.inOut(Easing.quad) },
-      (finished) => {
-        if (finished) runOnJS(onDone)();
-      },
+    content.value = withTiming(0, {
+      duration: CONTENT_OUT_MS,
+      easing: Easing.in(Easing.quad),
+    });
+    fade.value = withDelay(
+      CONTENT_OUT_MS - 80,
+      withTiming(
+        0,
+        { duration: FADE_MS, easing: Easing.inOut(Easing.quad) },
+        (finished) => {
+          if (finished) runOnJS(onDone)();
+        },
+      ),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [played, ready]);
@@ -200,20 +205,20 @@ export function AnimatedSplash({ ready, onVisible, onDone }: AnimatedSplashProps
       // Let the system's build-up land, then hand over and start the ripple.
       setTimeout(() => {
         onVisible();
-        setRippling(true);
+        setShowGrid(true);
       }, NATIVE_FINISH_MS);
     } else {
       onVisible();
-      setRippling(true);
+      setShowGrid(true);
     }
   };
 
   const overlayStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
-  const backdropStyle = useAnimatedStyle(() => ({ opacity: backdrop.value }));
-  const centreGlowStyle = useAnimatedStyle(() => ({
-    opacity: centreGlow.value * CENTRE_GLOW_PEAK,
-    transform: [{ scale: 0.6 + 0.4 * centreGlow.value }],
+  const contentStyle = useAnimatedStyle(() => ({
+    opacity: content.value,
+    transform: [{ scale: 1 + (1 - content.value) * 0.04 }],
   }));
+  const backdropStyle = useAnimatedStyle(() => ({ opacity: backdrop.value }));
   const coreStyle = useAnimatedStyle(() => ({
     opacity: core.value > 0.02 ? 1 : 0,
     transform: [{ scale: core.value }],
@@ -227,83 +232,52 @@ export function AnimatedSplash({ ready, onVisible, onDone }: AnimatedSplashProps
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
     >
-      {rippling && !reduceMotion ? (
-        <>
-          <Animated.View style={[StyleSheet.absoluteFill, backdropStyle]}>
-            <ScreenBackdrop variant="home" />
-          </Animated.View>
-          <Animated.View style={[styles.centred, centreGlowStyle]}>
-            <SoftLight radius={STEP * 3} id="splashCentreGlow" />
-          </Animated.View>
-          {rings.map((ring, i) => (
-            <RippleRing key={i} progress={ring} reach={reach} index={i} />
-          ))}
-        </>
+      {showGrid && !reduceMotion ? (
+        <Animated.View style={[StyleSheet.absoluteFill, backdropStyle]}>
+          <ScreenBackdrop variant="splash" />
+        </Animated.View>
       ) : null}
 
-      <View style={styles.logo}>
-        {ARMS.map((arm, i) => (
-          <Arm key={arm.key} progress={arms[i]} x={arm.x} y={arm.y} />
-        ))}
-        <Animated.View style={[styles.cell, styles.core, coreStyle]} />
-      </View>
+      {/* The logo and the grid leave first, then the background dissolves
+          into the app, so neither is ever seen over the app's own content. */}
+      <Animated.View
+        style={[StyleSheet.absoluteFill, styles.centred, contentStyle]}
+      >
+        {showGrid && !reduceMotion
+          ? rings
+              .slice(0, ringValues.length)
+              .map((cells, k) => (
+                <Ring key={k} cells={cells} value={ringValues[k]} />
+              ))
+          : null}
+        <View style={styles.logo}>
+          {ARMS.map((arm, i) => (
+            <Arm key={arm.key} progress={arms[i]} x={arm.x} y={arm.y} />
+          ))}
+          <Animated.View style={[styles.cell, styles.core, coreStyle]} />
+        </View>
+      </Animated.View>
     </Animated.View>
   );
 }
 
-/** A soft gold radial glow, brightest at the centre. */
-function SoftLight({ radius, id }: { radius: number; id: string }) {
-  return (
-    <Svg width={radius * 2} height={radius * 2}>
-      <Defs>
-        <RadialGradient id={id} cx="50%" cy="50%" r="50%">
-          <Stop offset="0" stopColor={GOLD} stopOpacity={1} />
-          <Stop offset="0.5" stopColor={GOLD} stopOpacity={0.35} />
-          <Stop offset="1" stopColor={GOLD} stopOpacity={0} />
-        </RadialGradient>
-      </Defs>
-      <Circle cx={radius} cy={radius} r={radius} fill={`url(#${id})`} />
-    </Svg>
-  );
-}
-
-/**
- * One ring of the ripple: a soft band of gold light, drawn once and scaled
- * outward from the logo, brightening quickly and fading as it spreads.
- */
-const RippleRing = memo(function RippleRing({
-  progress,
-  reach,
-  index,
+/** One ring of the ripple: its cells share a single animated opacity. */
+const Ring = memo(function Ring({
+  cells,
+  value,
 }: {
-  progress: SharedValue<number>;
-  reach: number;
-  index: number;
+  cells: RippleCell[];
+  value: SharedValue<number>;
 }) {
-  const style = useAnimatedStyle(() => {
-    const p = progress.value;
-    // Up to full strength over the first sixth, then away as it travels.
-    const strength = p < 0.16 ? p / 0.16 : 1 - (p - 0.16) / 0.84;
-    return {
-      opacity: p <= 0 ? 0 : RING_PEAK * strength * (1 - index * 0.18),
-      transform: [{ scale: ((0.12 + 0.88 * p) * reach) / RING_DRAWN_RADIUS }],
-    };
-  });
-  const r = RING_DRAWN_RADIUS;
-  const id = `splashRipple${index}`;
+  const style = useAnimatedStyle(() => ({ opacity: value.value }));
   return (
-    <Animated.View style={[styles.centred, style]}>
-      <Svg width={r * 2} height={r * 2}>
-        <Defs>
-          <RadialGradient id={id} cx="50%" cy="50%" r="50%">
-            <Stop offset="0" stopColor={GOLD} stopOpacity={0} />
-            <Stop offset="0.6" stopColor={GOLD} stopOpacity={0.05} />
-            <Stop offset="0.86" stopColor={GOLD} stopOpacity={1} />
-            <Stop offset="1" stopColor={GOLD} stopOpacity={0} />
-          </RadialGradient>
-        </Defs>
-        <Circle cx={r} cy={r} r={r} fill={`url(#${id})`} />
-      </Svg>
+    <Animated.View style={[StyleSheet.absoluteFill, style]}>
+      {cells.map((cell) => (
+        <View
+          key={cell.key}
+          style={[styles.rippleCell, { left: cell.left, top: cell.top }]}
+        />
+      ))}
     </Animated.View>
   );
 });
@@ -337,9 +311,9 @@ const styles = StyleSheet.create({
     zIndex: 1000,
     elevation: 1000,
   },
-  // Centred on the logo; the overlay itself centres its children.
   centred: {
-    position: "absolute",
+    alignItems: "center",
+    justifyContent: "center",
   },
   logo: {
     width: CELL,
@@ -360,5 +334,14 @@ const styles = StyleSheet.create({
   },
   core: {
     backgroundColor: GOLD,
+  },
+  rippleCell: {
+    position: "absolute",
+    width: CELL,
+    height: CELL,
+    borderRadius: RADIUS,
+    borderWidth: 1.5,
+    borderColor: "rgba(238,205,43,0.85)",
+    backgroundColor: "rgba(238,205,43,0.22)",
   },
 });
