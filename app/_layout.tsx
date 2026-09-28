@@ -9,12 +9,13 @@ import {
   useNavigationContainerRef,
 } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import "react-native-reanimated";
 import { enableFreeze } from "react-native-screens";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { useColorScheme } from "@/components/useColorScheme";
+import { AnimatedSplash } from "@/components/ui/AnimatedSplash";
 import { usePuzzleStore } from "@/stores/puzzleStore";
 import {
   Manrope_400Regular,
@@ -99,6 +100,10 @@ function RootLayout() {
     if (error) throw error;
   }, [error]);
 
+  // The logo animation takes over from the native splash the moment it hides,
+  // and plays over the app while it loads underneath.
+  const [showSplash, setShowSplash] = useState(true);
+
   useEffect(() => {
     if (loaded) {
       SplashScreen.hideAsync();
@@ -109,7 +114,12 @@ function RootLayout() {
     return null;
   }
 
-  return <RootLayoutNav />;
+  return (
+    <>
+      <RootLayoutNav />
+      {showSplash && <AnimatedSplash onDone={() => setShowSplash(false)} />}
+    </>
+  );
 }
 
 function RootLayoutNav() {
