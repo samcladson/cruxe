@@ -18,6 +18,9 @@ import { theme } from "../../constants/theme";
 /** The bar's height. The grid keeps the typed row clear of it. */
 export const DONE_BAR_HEIGHT = 40;
 
+/** The arrow's size. */
+const ICON_SIZE = 20;
+
 /**
  * iOS reports the keyboard as it starts to rise, Android once it has risen.
  * On iOS the bar waits for most of the rise, so it does not appear floating
@@ -70,7 +73,7 @@ export function KeyboardDoneBar({ keyboardOverlap }: KeyboardDoneBarProps) {
         <Text style={styles.doneText}>Done</Text>
         <MaterialIcons
           name="keyboard-arrow-down"
-          size={20}
+          size={ICON_SIZE}
           color={theme.colors.accentGold}
         />
       </TouchableOpacity>
@@ -107,5 +110,15 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
     color: theme.colors.accentGold,
+    // Android pads text above the ascender, which sat "Done" about 2pt below
+    // the arrow and the bar's centre (measured on a device). Without it the
+    // lowercase letters, which carry the word visually, centre on the bar.
+    includeFontPadding: false,
+    textAlignVertical: "center",
+    // Optical centring. The word's box is centred, but the eye centres on its
+    // lowercase letters, which Manrope sets 1.5pt below the box's middle
+    // (measured on a device: "one" centred 5.5px below the arrow and the bar).
+    // Lifting the label by that much lines the letters up with both.
+    transform: [{ translateY: -1.5 }],
   },
 });
