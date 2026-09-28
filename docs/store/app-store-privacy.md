@@ -8,7 +8,16 @@ whenever an SDK is added or removed.
 
 **Last derived:** 2026-09-28 against `master`.
 
-## The tracking question
+## The order App Store Connect asks in
+
+1. **Do you or your third-party partners collect data from this app?** → **Yes**.
+   Answering No hides every data type, so nothing below can be selected. Cruxe
+   does collect data (email, user id, purchases, crash reports).
+2. Tick the data types in the table below.
+3. For **each** type Apple asks: the purposes, *linked to the user?* (**Yes**
+   for all), and *used for tracking?* (**No** for all).
+
+## The tracking answer
 
 **Do you or your third-party partners use data from this app for tracking?**
 → **No.** No ad SDK, no advertising identifier, no data sold or passed to data
@@ -25,7 +34,7 @@ account id) and **not used for tracking**.
 | Contact Info | **Email Address** | App Functionality | Required to create an account by any of the three methods. Apple's Hide My Email yields a private relay address, which still counts. |
 | Contact Info | **Name** | App Functionality | The display name on the public leaderboard, or the name a provider supplies. |
 | Identifiers | **User ID** | App Functionality, Analytics | Supabase UUID; sent to RevenueCat to attribute purchases and to Sentry to group one user's crashes. |
-| Purchases | **Purchase History** | App Functionality | `iap_events` and `coin_ledger` record coin-pack purchases so grants and refunds reconcile. No card data reaches the app. |
+| Purchases | **Purchase History** | App Functionality, Analytics | `iap_events` and `coin_ledger` record coin-pack purchases so grants and refunds reconcile. No card data reaches the app. RevenueCat's own guidance asks for *both* purposes: Analytics for its dashboard, App Functionality for receipt validation. |
 | User Content | **Customer Support** | App Functionality | The Send feedback form's free text, stored with account id, app version and platform. Never shown to other players, so not "Other User Content". |
 | Usage Data | **Product Interaction** | Analytics | The 13 events in `analyticsService.ts` (puzzle started/completed, hint used, store viewed and so on), routed to Sentry breadcrumbs only. Scores and completions also feed the leaderboard. |
 | Diagnostics | **Crash Data** | App Functionality | Sentry crash reports. |
@@ -50,9 +59,9 @@ Two a reviewer may ask about:
 
 ## Before you submit
 
-- [ ] Privacy Policy URL is set on the listing (a different field from this
+- [x] Privacy Policy URL is set on the listing (a different field from this
       form): `https://samcladson.github.io/cruxe/privacy.html`
-- [ ] Confirm the hosted page still names the same processors as this sheet:
+- [x] Confirm the hosted page still names the same processors as this sheet:
       Supabase, RevenueCat, Sentry, Google/Apple Sign-In
 - [ ] The build's Info.plist has no permission strings for anything ticked
       "not collected" above (`eas build` output or the `.ipa`'s Info.plist)
