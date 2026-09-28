@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -25,6 +25,8 @@ import { supabase } from "../../services/supabaseClient";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { routeAfterStart } from "../../utils/onboardingRoute";
 import { socialSignInOutcome } from "../../utils/socialSignIn";
+import { useKeyboardTop } from "../../utils/useKeyboardTop";
+import { keyboardLift } from "../../utils/keyboardLift";
 import { ScreenBackdrop } from "../../components/ui/ScreenBackdrop";
 
 /**
@@ -62,6 +64,25 @@ export default function WelcomeScreen() {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const isBusy = busyProvider !== null;
+
+  /**
+   * Keeps the email and code forms above the keyboard. The form is pinned to
+   * the bottom of the screen, and neither platform moves it: iOS never resizes
+   * for the keyboard, and Android 15 edge-to-edge stopped doing so. So the
+   * overlap is measured and the form padded up by exactly that much, while the
+   * wordmark, title and footnote step aside so it fits on a small phone.
+   */
+  const keyboardTop = useKeyboardTop();
+  const keyboardOpen = Number.isFinite(keyboardTop);
+  const contentRef = useRef<View>(null);
+  const [contentBottom, setContentBottom] = useState(0);
+  const measureContent = () => {
+    contentRef.current?.measureInWindow((_x, y, _w, h) => {
+      setContentBottom(y + h);
+    });
+  };
+  // The form's lower edge is the content's, less its bottom padding.
+  const lift = keyboardLift(contentBottom - CONTENT_PADDING, keyboardTop);
 
   useEffect(() => {
     track("onboarding_started");
@@ -154,35 +175,43 @@ export default function WelcomeScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScreenBackdrop variant="welcome" />
-      <View style={styles.content}>
+      <View
+        ref={contentRef}
+        onLayout={measureContent}
+        style={[styles.content, { paddingBottom: CONTENT_PADDING + lift }]}
+      >
         <View style={styles.hero}>
-          <Animated.View
-            entering={FadeIn.duration(700)}
-            style={styles.wordmarkRow}
-            accessibilityRole="header"
-            accessibilityLabel="Cruxe"
-          >
-            {WORDMARK.map((letter, i) => (
-              <Animated.View
-                key={letter}
-                entering={FadeInDown.delay(i * 90).duration(500)}
-                style={[styles.cell, i === 0 && styles.cellAccent]}
-              >
-                <Text
-                  style={[styles.cellText, i === 0 && styles.cellTextAccent]}
+          {/* Hidden rather than unmounted while typing, so the intro
+              animation does not replay when the keyboard closes. */}
+          <View style={keyboardOpen ? styles.hidden : undefined}>
+            <Animated.View
+              entering={FadeIn.duration(700)}
+              style={styles.wordmarkRow}
+              accessibilityRole="header"
+              accessibilityLabel="Cruxe"
+            >
+              {WORDMARK.map((letter, i) => (
+                <Animated.View
+                  key={letter}
+                  entering={FadeInDown.delay(i * 90).duration(500)}
+                  style={[styles.cell, i === 0 && styles.cellAccent]}
                 >
-                  {letter}
-                </Text>
-              </Animated.View>
-            ))}
-          </Animated.View>
+                  <Text
+                    style={[styles.cellText, i === 0 && styles.cellTextAccent]}
+                  >
+                    {letter}
+                  </Text>
+                </Animated.View>
+              ))}
+            </Animated.View>
 
-          <Animated.View entering={FadeInDown.delay(600).duration(600)}>
-            <Text style={styles.title}>The Elite{"\n"}Crossword</Text>
-            <Text style={styles.subtitle}>
-              A new set every day. Made properly, and not especially forgiving.
-            </Text>
-          </Animated.View>
+            <Animated.View entering={FadeInDown.delay(600).duration(600)}>
+              <Text style={styles.title}>The Elite{"\n"}Crossword</Text>
+              <Text style={styles.subtitle}>
+                A new set every day. Made properly, and not especially forgiving.
+              </Text>
+            </Animated.View>
+          </View>
         </View>
 
         <Animated.View
@@ -256,6 +285,10 @@ export default function WelcomeScreen() {
                 autoCapitalize="none"
                 autoComplete="email"
                 autoCorrect={false}
+                returnKeyType="send"
+                onSubmitEditing={() => {
+                  if (!isBusy && email.trim() !== "") void requestCode();
+                }}
                 editable={!isBusy}
                 accessibilityLabel="Email address"
               />
@@ -328,7 +361,7 @@ export default function WelcomeScreen() {
             </>
           )}
 
-          <Text style={styles.footnote}>
+          <Text style={[styles.footnote, keyboardOpen && styles.hidden]}>
             Your streak, coins and history live on your account, so they follow
             you to any device you sign in on.
           </Text>
@@ -339,10 +372,16 @@ export default function WelcomeScreen() {
 }
 
 const CELL = 46;
+const CONTENT_PADDING = 32;
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.bgPrimary },
-  content: { flex: 1, justifyContent: "space-between", padding: 32 },
+  content: {
+    flex: 1,
+    justifyContent: "space-between",
+    padding: CONTENT_PADDING,
+  },
+  hidden: { display: "none" },
   hero: { flex: 1, justifyContent: "center" },
 
   wordmarkRow: { flexDirection: "row", gap: 6, marginBottom: 40 },
