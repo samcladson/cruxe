@@ -31,6 +31,13 @@ describe("animated splash", () => {
     expect(constant("STROKE")).toBe(g.STROKE);
   });
 
+  it("plays the same waiting loop natively and in the app", () => {
+    const g = plugin.GEOMETRY;
+    for (const name of ["NUDGE_REACH", "NUDGE_MS", "NUDGE_STAGGER", "BREATHE_MS", "BREATHE_SCALE"]) {
+      expect([name, constant(name)]).toEqual([name, g[name]]);
+    }
+  });
+
   it("fits the part of the splash icon Android shows (a 192dp circle)", () => {
     const { CELL, GAP } = plugin.GEOMETRY;
     const farthestCorner = Math.hypot(1.5 * CELL + GAP, CELL / 2);

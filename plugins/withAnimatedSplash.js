@@ -39,13 +39,30 @@ const STROKE = 2.5;
 const GOLD = "#FFEECD2B";
 const ARM_FILL = "#FF111111";
 
-/** Last arm lands at 500 + 300 = 800ms: inside Android's 1000ms limit. */
-const DURATION_MS = 800;
-const CORE_POP_MS = 170;
+/**
+ * Most of the build-up is kept until after Android's app-opening zoom (about
+ * the first 400ms), which it otherwise played underneath and hid. The last
+ * arm lands at 400 + 3 * 120 + 240 = 1000ms: Android's limit for this.
+ */
+const DURATION_MS = 1000;
+const CORE_AT = 100;
+const CORE_POP_MS = 200;
 const CORE_SETTLE_MS = 180;
-const FIRST_ARM_AT = 200;
-const ARM_STAGGER = 100;
-const ARM_MS = 300;
+const FIRST_ARM_AT = 400;
+const ARM_STAGGER = 120;
+const ARM_MS = 240;
+
+/**
+ * After the build-up the logo keeps moving until the app takes over, so it is
+ * never seen standing still while the app loads: each arm nudges outward and
+ * back in turn (up, right, down, left) and the centre breathes, repeating.
+ * AnimatedSplash.tsx plays the same loop once it takes over.
+ */
+const NUDGE_REACH = 0.14;
+const NUDGE_MS = 240;
+const NUDGE_STAGGER = 120;
+const BREATHE_MS = 520;
+const BREATHE_SCALE = 1.06;
 
 /** A rounded rectangle as vector path data. */
 function roundRect(x, y, w, h, r) {
@@ -116,6 +133,17 @@ function buildDrawable() {
               android:valueType="floatType"
               android:startOffset="${at}" android:duration="${ARM_MS}"
               android:interpolator="@android:anim/overshoot_interpolator" />`;
+    const nudge = (prop, offset) =>
+      offset === 0
+        ? ""
+        : `
+          <objectAnimator android:propertyName="${prop}"
+              android:valueFrom="0" android:valueTo="${Number((offset * NUDGE_REACH).toFixed(2))}"
+              android:valueType="floatType"
+              android:startOffset="${DURATION_MS + i * NUDGE_STAGGER}"
+              android:duration="${NUDGE_MS}"
+              android:repeatCount="infinite" android:repeatMode="reverse"
+              android:interpolator="@android:anim/accelerate_decelerate_interpolator" />`;
     const show = (prop) => `
           <objectAnimator android:propertyName="${prop}"
               android:valueFrom="0" android:valueTo="1"
@@ -124,7 +152,7 @@ function buildDrawable() {
     return `
   <target android:name="${name}">
     <aapt:attr name="android:animation">
-      <set>${move("translateX", -dx)}${move("translateY", -dy)}${grow("scaleX")}${grow("scaleY")}
+      <set>${move("translateX", -dx)}${move("translateY", -dy)}${grow("scaleX")}${grow("scaleY")}${nudge("translateX", dx)}${nudge("translateY", dy)}
       </set>
     </aapt:attr>
   </target>
@@ -136,11 +164,21 @@ function buildDrawable() {
   </target>`;
   }).join("");
 
+  const breathe = (prop) => `
+          <objectAnimator android:propertyName="${prop}"
+              android:valueFrom="1" android:valueTo="${BREATHE_SCALE}"
+              android:valueType="floatType"
+              android:startOffset="${DURATION_MS}"
+              android:duration="${BREATHE_MS}"
+              android:repeatCount="infinite" android:repeatMode="reverse"
+              android:interpolator="@android:anim/accelerate_decelerate_interpolator" />`;
+
   const corePop = (prop) => `
           <set android:ordering="sequentially">
             <objectAnimator android:propertyName="${prop}"
                 android:valueFrom="0" android:valueTo="1.16"
                 android:valueType="floatType"
+                android:startOffset="${CORE_AT}"
                 android:duration="${CORE_POP_MS}"
                 android:interpolator="@android:anim/decelerate_interpolator" />
             <objectAnimator android:propertyName="${prop}"
@@ -167,7 +205,7 @@ function buildDrawable() {
   </aapt:attr>
   <target android:name="core">
     <aapt:attr name="android:animation">
-      <set>${corePop("scaleX")}${corePop("scaleY")}
+      <set>${corePop("scaleX")}${corePop("scaleY")}${breathe("scaleX")}${breathe("scaleY")}
       </set>
     </aapt:attr>
   </target>${armTargets}
@@ -209,4 +247,16 @@ function withAnimatedSplash(config) {
 
 module.exports = withAnimatedSplash;
 module.exports.buildDrawable = buildDrawable;
-module.exports.GEOMETRY = { SIZE, CELL, GAP, RADIUS, STROKE, DURATION_MS };
+module.exports.GEOMETRY = {
+  SIZE,
+  CELL,
+  GAP,
+  RADIUS,
+  STROKE,
+  DURATION_MS,
+  NUDGE_REACH,
+  NUDGE_MS,
+  NUDGE_STAGGER,
+  BREATHE_MS,
+  BREATHE_SCALE,
+};
