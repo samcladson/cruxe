@@ -6,7 +6,6 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { theme } from "../../constants/theme";
-import { sheetLayout } from "../../utils/sheetLayout";
 import { CluePanel } from "./CluePanel";
 
 /** How much of the screen the sheet covers once raised. */
@@ -15,12 +14,17 @@ const EXPANDED_FRACTION = 0.5;
 /** A raised sheet is always at least this much taller than a resting one. */
 const MIN_RAISE = 120;
 
+/** The sheet's top border, counted into the height its controls need. */
+const BORDER = 1;
+
 interface ClueSheetProps {
-  /** Height the grid leaves free beneath it, which the resting sheet fills. */
-  spaceBelowGrid: number;
+  /** The resting height, decided with the grid's by usePuzzleLayout. */
+  restingHeight: number;
+  /** Whether the resting sheet lists clues. */
+  showList: boolean;
   /**
-   * Reports the height of the controls that stay visible at all times, so
-   * the screen can keep the typed row clear of them and reserve their space.
+   * Reports the height the sheet needs for its controls alone (direction
+   * tabs, action bar, border), so the screen can share its height with it.
    */
   onChromeHeightChange?: (height: number) => void;
 }
@@ -28,10 +32,11 @@ interface ClueSheetProps {
 /**
  * The clue list as a sheet at the foot of the puzzle screen.
  *
- * Resting, it fills the space the grid leaves, listing clues for the current
- * direction when there is room, so a tall phone shows clues rather than an
- * empty band. Raised, it covers the lower half of the screen so every clue in
- * a direction can be read at once.
+ * Resting, it either fills the space below the grid with clues for the
+ * current direction, or, when no clue row fits, is just its controls on the
+ * bottom edge with the grid centred above (utils/sheetLayout.ts). Raised, it
+ * covers the lower half of the screen so every clue in a direction can be
+ * read at once.
  *
  * It never moves for the keyboard. While typing, the keyboard covers it and
  * a slim Done bar rides on the keyboard instead (KeyboardDoneBar), which is
@@ -44,30 +49,30 @@ interface ClueSheetProps {
  * within the layout would be clipped at the grid instead of covering it.
  */
 export function ClueSheet({
-  spaceBelowGrid,
+  restingHeight,
+  showList,
   onChromeHeightChange,
 }: ClueSheetProps) {
   const { height: screenHeight } = useWindowDimensions();
   const [expanded, setExpanded] = useState(false);
   const [chromeHeight, setChromeHeight] = useState(0);
 
-  const layout = sheetLayout({ spaceBelowGrid, chromeHeight });
   const raisedHeight = Math.max(
     Math.round(screenHeight * EXPANDED_FRACTION),
-    layout.restingHeight + MIN_RAISE,
+    restingHeight + MIN_RAISE,
   );
 
   useEffect(() => {
-    if (chromeHeight > 0) onChromeHeightChange?.(chromeHeight);
+    if (chromeHeight > 0) onChromeHeightChange?.(chromeHeight + BORDER);
   }, [chromeHeight, onChromeHeightChange]);
 
-  const height = useSharedValue(layout.restingHeight);
+  const height = useSharedValue(restingHeight);
 
   useEffect(() => {
-    height.value = withTiming(expanded ? raisedHeight : layout.restingHeight, {
+    height.value = withTiming(expanded ? raisedHeight : restingHeight, {
       duration: 240,
     });
-  }, [expanded, raisedHeight, layout.restingHeight]);
+  }, [expanded, raisedHeight, restingHeight]);
 
   const animatedStyle = useAnimatedStyle(() => ({ height: height.value }));
 
@@ -84,7 +89,7 @@ export function ClueSheet({
     <Animated.View style={[styles.sheet, animatedStyle]}>
       <CluePanel
         expanded={expanded}
-        showList={layout.showList}
+        showList={showList}
         onToggleExpanded={toggle}
         onClueSelected={() => setExpanded(false)}
         onChromeHeight={setChromeHeight}
@@ -100,7 +105,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: theme.colors.bgPrimary,
-    borderTopWidth: 1,
+    borderTopWidth: BORDER,
     borderTopColor: "rgba(255,255,255,0.08)",
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,

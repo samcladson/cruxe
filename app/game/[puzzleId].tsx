@@ -321,23 +321,20 @@ export default function GameScreen() {
         {/* Top Active Clue Section */}
         <ActiveClueBar onHintPress={() => setShowHintModal(true)} />
 
-        {/* Crossword Grid */}
-        <CrosswordGrid
-          keyboardTop={layout.keyboardTopInWindow}
-          keyboardChrome={DONE_BAR_HEIGHT}
-        />
-
-        {/* Everything the grid leaves below it. The clue sheet is drawn over
-            this space and fills it; this view only measures it, and never
-            lets it drop below the height of the sheet's controls. */}
-        <View
-          style={{ flex: 1, minHeight: layout.chromeHeight }}
-          onLayout={layout.onSpaceLayout}
-        />
-        <ClueSheet
-          spaceBelowGrid={layout.spaceBelowGrid}
-          onChromeHeightChange={layout.setChromeHeight}
-        />
+        {/* The area below the clue bar, shared by the grid and the clue
+            sheet (utils/sheetLayout.ts). The sheet is drawn over its bottom. */}
+        <View style={{ flex: 1 }} onLayout={layout.onAreaLayout}>
+          <View
+            style={{ marginTop: layout.gridOffset }}
+            onLayout={layout.onGridLayout}
+          >
+            <CrosswordGrid
+              keyboardTop={layout.keyboardTopInWindow}
+              keyboardChrome={DONE_BAR_HEIGHT}
+            />
+          </View>
+        </View>
+        <ClueSheet {...layout.sheet} />
         <KeyboardDoneBar keyboardOverlap={layout.keyboardOverlap} />
 
         <SuccessModal

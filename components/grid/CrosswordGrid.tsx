@@ -94,6 +94,9 @@ export function CrosswordGrid({
             // legible but with nothing around it, which is what every row in
             // the lower half of the grid looked like.
             cell + ACTIVE_ROW_MARGIN,
+            // ...but never past the grid's own bottom edge (the grid border
+            // adds 3), which would leave an empty band above the Done bar.
+            gridTopY + size * cell + 3,
           );
 
     shift.value = withTiming(target, { duration: 180 });

@@ -199,19 +199,20 @@ export default function TutorialScreen() {
         )}
 
         <ActiveClueBar onHintPress={() => revealLetter()} coaching />
-        <CrosswordGrid
-          keyboardTop={layout.keyboardTopInWindow}
-          keyboardChrome={DONE_BAR_HEIGHT}
-        />
-
-        <View
-          style={{ flex: 1, minHeight: layout.chromeHeight }}
-          onLayout={layout.onSpaceLayout}
-        />
-        <ClueSheet
-          spaceBelowGrid={layout.spaceBelowGrid}
-          onChromeHeightChange={layout.setChromeHeight}
-        />
+        {/* The area below the clue bar, shared by the grid and the clue
+            sheet (utils/sheetLayout.ts). The sheet is drawn over its bottom. */}
+        <View style={{ flex: 1 }} onLayout={layout.onAreaLayout}>
+          <View
+            style={{ marginTop: layout.gridOffset }}
+            onLayout={layout.onGridLayout}
+          >
+            <CrosswordGrid
+              keyboardTop={layout.keyboardTopInWindow}
+              keyboardChrome={DONE_BAR_HEIGHT}
+            />
+          </View>
+        </View>
+        <ClueSheet {...layout.sheet} />
         <KeyboardDoneBar keyboardOverlap={layout.keyboardOverlap} />
       </View>
     </SafeAreaView>

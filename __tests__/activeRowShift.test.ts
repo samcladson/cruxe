@@ -58,3 +58,26 @@ describe("activeRowShift", () => {
     );
   });
 });
+
+/**
+ * The grid's own bottom edge caps the slide. Typing in the last row used to
+ * lift the grid a full cell higher than needed, leaving an empty band between
+ * the grid and the keyboard's Done bar.
+ */
+describe("activeRowShift with the grid's bottom edge", () => {
+  it("never lifts the grid's bottom edge further than just above the keyboard", () => {
+    // Last row: row bottom = grid bottom = 700, keyboard at 600, clearance 40.
+    // Without the cap: 700 + 40 - 600 = 140. With it: 700 + 12 - 600 = 112.
+    expect(activeRowShift(700, 600, 40, 700)).toBe(112);
+  });
+
+  it("still keeps a full clearance for a row that is not the last", () => {
+    // Row bottom 620, grid bottom 700: 620 + 40 - 600 = 60 < 112.
+    expect(activeRowShift(620, 600, 40, 700)).toBe(60);
+  });
+
+  it("does not move a grid the keyboard does not reach", () => {
+    expect(activeRowShift(500, 600, 40, 560)).toBe(0);
+    expect(activeRowShift(700, Infinity, 40, 700)).toBe(0);
+  });
+});

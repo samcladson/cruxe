@@ -1,36 +1,50 @@
 import { MIN_LIST_HEIGHT, sheetLayout } from "../utils/sheetLayout";
 
 /**
- * Where the clue sheet rests. It used to rest at the height of its controls
- * alone, leaving an empty band between the grid and the sheet on tall phones.
+ * How the puzzle screen shares its height between the grid and the clue
+ * sheet. Two bugs shaped these: an empty band between the grid and a sheet
+ * that rested at its controls' height, and, after that, an empty band inside
+ * the sheet that lifted the direction tabs off the action bar.
  */
 describe("sheetLayout", () => {
   const chrome = 100;
+  const grid = 400;
 
-  it("fills the space below the grid, and lists clues when there is room", () => {
-    expect(sheetLayout({ spaceBelowGrid: 260, chromeHeight: chrome })).toEqual({
-      restingHeight: 260,
-      showList: true,
-    });
+  it("fills the space below the grid with clues when there is room", () => {
+    expect(
+      sheetLayout({ areaHeight: 760, gridHeight: grid, chromeHeight: chrome }),
+    ).toEqual({ restingHeight: 360, showList: true, gridOffset: 0 });
   });
 
-  it("stays at its controls' height on a short phone", () => {
-    expect(sheetLayout({ spaceBelowGrid: 70, chromeHeight: chrome })).toEqual({
-      restingHeight: 100,
-      showList: false,
-    });
+  it("keeps the controls together and centres the grid when there is not", () => {
+    // 540 - 400 = 140 below the grid; 40 spare, split 20 above and 20 below.
+    expect(
+      sheetLayout({ areaHeight: 540, gridHeight: grid, chromeHeight: chrome }),
+    ).toEqual({ restingHeight: 100, showList: false, gridOffset: 20 });
   });
 
-  it("does not show a list too short to hold a clue", () => {
-    const layout = sheetLayout({
-      spaceBelowGrid: chrome + MIN_LIST_HEIGHT - 1,
-      chromeHeight: chrome,
-    });
-    expect(layout.showList).toBe(false);
-    expect(layout.restingHeight).toBe(chrome + MIN_LIST_HEIGHT - 1);
+  it("switches to listing clues exactly when a clue row fits", () => {
+    const fits = grid + chrome + MIN_LIST_HEIGHT;
+    expect(
+      sheetLayout({ areaHeight: fits, gridHeight: grid, chromeHeight: chrome })
+        .showList,
+    ).toBe(true);
+    expect(
+      sheetLayout({ areaHeight: fits - 1, gridHeight: grid, chromeHeight: chrome })
+        .showList,
+    ).toBe(false);
+  });
+
+  it("never offsets the grid on a screen too short for it", () => {
+    expect(
+      sheetLayout({ areaHeight: 450, gridHeight: grid, chromeHeight: chrome })
+        .gridOffset,
+    ).toBe(0);
   });
 
   it("uses a fallback height before the controls are measured", () => {
-    expect(sheetLayout({ spaceBelowGrid: 0, chromeHeight: 0 }).restingHeight).toBeGreaterThan(0);
+    expect(
+      sheetLayout({ areaHeight: 0, gridHeight: 0, chromeHeight: 0 }).restingHeight,
+    ).toBeGreaterThan(0);
   });
 });
