@@ -4,10 +4,10 @@
  *
  * Android 12 introduced an animated splash icon: an animated vector drawable
  * the system plays before any app code runs. This writes one that builds the
- * Cruxe logo: the gold centre pops in, then the four arms shoot out up, right,
- * down and left. It ends on the complete logo, which components/ui/
- * AnimatedSplash.tsx then shows at exactly the same size and position before
- * fading into the app.
+ * Cruxe logo: the gold centre pops in, the four arms shoot out one at a time
+ * (up, right, down, left), then a soft gold glow swells and fades behind it.
+ * It ends on the complete logo, which components/ui/AnimatedSplash.tsx then
+ * shows at exactly the same size and position before fading into the app.
  *
  * It does not touch `windowSplashScreenAnimatedIcon`, which expo-splash-screen
  * owns. Instead it adds a second `splashscreen_logo` in `drawable-anydpi-v31`:
@@ -16,7 +16,7 @@
  * versions keep the PNG (a blank image, since the in-app animation covers
  * them). iOS has no equivalent: Apple requires launch screens to be static.
  *
- * Geometry must match AnimatedSplash.tsx (CELL, GAP, radius, stroke).
+ * Geometry and timing must match AnimatedSplash.tsx (a test checks this).
  */
 const fs = require("fs");
 const path = require("path");
@@ -40,29 +40,38 @@ const GOLD = "#FFEECD2B";
 const ARM_FILL = "#FF111111";
 
 /**
- * Most of the build-up is kept until after Android's app-opening zoom (about
- * the first 400ms), which it otherwise played underneath and hid. The last
- * arm lands at 400 + 3 * 120 + 240 = 1000ms: Android's limit for this.
+ * The arms are kept until after Android's app-opening zoom (roughly the first
+ * 400ms), which would otherwise play over them and hide the motion. The last
+ * arm lands at 400 + 3 * 120 + 240 = 1000ms.
  */
-const DURATION_MS = 1000;
 const CORE_AT = 100;
 const CORE_POP_MS = 200;
 const CORE_SETTLE_MS = 180;
 const FIRST_ARM_AT = 400;
 const ARM_STAGGER = 120;
 const ARM_MS = 240;
+const BUILD_MS = FIRST_ARM_AT + 3 * ARM_STAGGER + ARM_MS;
 
 /**
- * After the build-up the logo keeps moving until the app takes over, so it is
- * never seen standing still while the app loads: each arm nudges outward and
- * back in turn (up, right, down, left) and the centre breathes, repeating.
- * AnimatedSplash.tsx plays the same loop once it takes over.
+ * The glow swells behind the finished logo, then fades. Android only promises
+ * to show a 96dp-radius circle of the icon, and some phones clip it to their
+ * own icon shape just outside that: a glow reaching past it shows a hard edge.
+ * So its widest point, at full swell, stays inside 90dp.
  */
-const NUDGE_REACH = 0.14;
-const NUDGE_MS = 240;
-const NUDGE_STAGGER = 120;
-const BREATHE_MS = 520;
-const BREATHE_SCALE = 1.06;
+const GLOW_AT = BUILD_MS - 40;
+const GLOW_IN_MS = 140;
+const GLOW_OUT_MS = 260;
+const GLOW_RADIUS = 75;
+const GLOW_MAX_SCALE = 1.2;
+const GLOW_PEAK = 0.4;
+
+/**
+ * Android 12 reads the animation's length from the theme, and caps it at
+ * 1000ms; the glow runs a little past that. Android 13+ takes the length from
+ * the drawable itself.
+ */
+const THEME_DURATION_MS = 1000;
+const TOTAL_MS = GLOW_AT + GLOW_IN_MS + GLOW_OUT_MS;
 
 /** A rounded rectangle as vector path data. */
 function roundRect(x, y, w, h, r) {
@@ -93,6 +102,11 @@ function cellPath(cx, cy, stroked) {
   );
 }
 
+/** A circle centred on the canvas, as vector path data. */
+function circlePath(r) {
+  return `M${MID - r},${MID} A${r},${r} 0 1 1 ${MID + r},${MID} A${r},${r} 0 1 1 ${MID - r},${MID} Z`;
+}
+
 const ARMS = [
   { name: "arm_up", dx: 0, dy: -STEP },
   { name: "arm_right", dx: STEP, dy: 0 },
@@ -100,7 +114,49 @@ const ARMS = [
   { name: "arm_left", dx: -STEP, dy: 0 },
 ];
 
+function animator(prop, from, to, { at = 0, ms, interpolator } = {}) {
+  return `
+          <objectAnimator android:propertyName="${prop}"
+              android:valueFrom="${from}" android:valueTo="${to}"
+              android:valueType="floatType"
+              android:startOffset="${at}" android:duration="${ms}"${
+                interpolator
+                  ? `
+              android:interpolator="@android:anim/${interpolator}"`
+                  : ""
+              } />`;
+}
+
+function target(name, animators) {
+  return `
+  <target android:name="${name}">
+    <aapt:attr name="android:animation">
+      <set>${animators}
+      </set>
+    </aapt:attr>
+  </target>`;
+}
+
 function buildDrawable() {
+  // Soft glow: a gold radial gradient, invisible and small until it swells.
+  const glowGroup = `
+      <group android:name="glow"
+          android:pivotX="${MID}" android:pivotY="${MID}"
+          android:scaleX="0.7" android:scaleY="0.7">
+        <path android:name="glow_path"
+            android:pathData="${circlePath(GLOW_RADIUS)}"
+            android:fillAlpha="0">
+          <aapt:attr name="android:fillColor">
+            <gradient android:type="radial"
+                android:centerX="${MID}" android:centerY="${MID}"
+                android:gradientRadius="${GLOW_RADIUS}"
+                android:startColor="#FFEECD2B"
+                android:centerColor="#6BEECD2B"
+                android:endColor="#00EECD2B" />
+          </aapt:attr>
+        </path>
+      </group>`;
+
   // Each arm is drawn in place and starts translated back to the centre,
   // half size and invisible, so the core covers it until it fires.
   const armGroups = ARMS.map(
@@ -121,71 +177,50 @@ function buildDrawable() {
 
   const armTargets = ARMS.map(({ name, dx, dy }, i) => {
     const at = FIRST_ARM_AT + i * ARM_STAGGER;
-    const move = (prop, from) => `
-          <objectAnimator android:propertyName="${prop}"
-              android:valueFrom="${from}" android:valueTo="0"
-              android:valueType="floatType"
-              android:startOffset="${at}" android:duration="${ARM_MS}"
-              android:interpolator="@android:anim/overshoot_interpolator" />`;
-    const grow = (prop) => `
-          <objectAnimator android:propertyName="${prop}"
-              android:valueFrom="0.5" android:valueTo="1"
-              android:valueType="floatType"
-              android:startOffset="${at}" android:duration="${ARM_MS}"
-              android:interpolator="@android:anim/overshoot_interpolator" />`;
-    const nudge = (prop, offset) =>
-      offset === 0
-        ? ""
-        : `
-          <objectAnimator android:propertyName="${prop}"
-              android:valueFrom="0" android:valueTo="${Number((offset * NUDGE_REACH).toFixed(2))}"
-              android:valueType="floatType"
-              android:startOffset="${DURATION_MS + i * NUDGE_STAGGER}"
-              android:duration="${NUDGE_MS}"
-              android:repeatCount="infinite" android:repeatMode="reverse"
-              android:interpolator="@android:anim/accelerate_decelerate_interpolator" />`;
-    const show = (prop) => `
-          <objectAnimator android:propertyName="${prop}"
-              android:valueFrom="0" android:valueTo="1"
-              android:valueType="floatType"
-              android:startOffset="${at}" android:duration="1" />`;
-    return `
-  <target android:name="${name}">
-    <aapt:attr name="android:animation">
-      <set>${move("translateX", -dx)}${move("translateY", -dy)}${grow("scaleX")}${grow("scaleY")}${nudge("translateX", dx)}${nudge("translateY", dy)}
-      </set>
-    </aapt:attr>
-  </target>
-  <target android:name="${name}_path">
-    <aapt:attr name="android:animation">
-      <set>${show("fillAlpha")}${show("strokeAlpha")}
-      </set>
-    </aapt:attr>
-  </target>`;
+    const shoot = { at, ms: ARM_MS, interpolator: "overshoot_interpolator" };
+    return (
+      target(
+        name,
+        animator("translateX", -dx, 0, shoot) +
+          animator("translateY", -dy, 0, shoot) +
+          animator("scaleX", 0.5, 1, shoot) +
+          animator("scaleY", 0.5, 1, shoot),
+      ) +
+      target(
+        `${name}_path`,
+        animator("fillAlpha", 0, 1, { at, ms: 1 }) +
+          animator("strokeAlpha", 0, 1, { at, ms: 1 }),
+      )
+    );
   }).join("");
 
-  const breathe = (prop) => `
-          <objectAnimator android:propertyName="${prop}"
-              android:valueFrom="1" android:valueTo="${BREATHE_SCALE}"
-              android:valueType="floatType"
-              android:startOffset="${DURATION_MS}"
-              android:duration="${BREATHE_MS}"
-              android:repeatCount="infinite" android:repeatMode="reverse"
-              android:interpolator="@android:anim/accelerate_decelerate_interpolator" />`;
-
   const corePop = (prop) => `
-          <set android:ordering="sequentially">
-            <objectAnimator android:propertyName="${prop}"
-                android:valueFrom="0" android:valueTo="1.16"
-                android:valueType="floatType"
-                android:startOffset="${CORE_AT}"
-                android:duration="${CORE_POP_MS}"
-                android:interpolator="@android:anim/decelerate_interpolator" />
-            <objectAnimator android:propertyName="${prop}"
-                android:valueFrom="1.16" android:valueTo="1"
-                android:valueType="floatType"
-                android:duration="${CORE_SETTLE_MS}"
-                android:interpolator="@android:anim/overshoot_interpolator" />
+          <set android:ordering="sequentially">${animator(prop, 0, 1.16, {
+            at: CORE_AT,
+            ms: CORE_POP_MS,
+            interpolator: "decelerate_interpolator",
+          })}${animator(prop, 1.16, 1, {
+            ms: CORE_SETTLE_MS,
+            interpolator: "overshoot_interpolator",
+          })}
+          </set>`;
+
+  const glowSwell = (prop) => `
+          <set android:ordering="sequentially">${animator(prop, 0.7, 1.05, {
+            at: GLOW_AT,
+            ms: GLOW_IN_MS,
+            interpolator: "decelerate_interpolator",
+          })}${animator(prop, 1.05, GLOW_MAX_SCALE, { ms: GLOW_OUT_MS })}
+          </set>`;
+
+  const glowFade = `
+          <set android:ordering="sequentially">${animator("fillAlpha", 0, GLOW_PEAK, {
+            at: GLOW_AT,
+            ms: GLOW_IN_MS,
+          })}${animator("fillAlpha", GLOW_PEAK, 0, {
+            ms: GLOW_OUT_MS,
+            interpolator: "accelerate_interpolator",
+          })}
           </set>`;
 
   return `<?xml version="1.0" encoding="utf-8"?>
@@ -194,7 +229,7 @@ function buildDrawable() {
     xmlns:aapt="http://schemas.android.com/aapt">
   <aapt:attr name="android:drawable">
     <vector android:width="${SIZE}dp" android:height="${SIZE}dp"
-        android:viewportWidth="${SIZE}" android:viewportHeight="${SIZE}">${armGroups}
+        android:viewportWidth="${SIZE}" android:viewportHeight="${SIZE}">${glowGroup}${armGroups}
       <group android:name="core"
           android:pivotX="${MID}" android:pivotY="${MID}"
           android:scaleX="0" android:scaleY="0">
@@ -202,13 +237,10 @@ function buildDrawable() {
             android:fillColor="${GOLD}" />
       </group>
     </vector>
-  </aapt:attr>
-  <target android:name="core">
-    <aapt:attr name="android:animation">
-      <set>${corePop("scaleX")}${corePop("scaleY")}${breathe("scaleX")}${breathe("scaleY")}
-      </set>
-    </aapt:attr>
-  </target>${armTargets}
+  </aapt:attr>${target("core", corePop("scaleX") + corePop("scaleY"))}${armTargets}${target(
+    "glow",
+    glowSwell("scaleX") + glowSwell("scaleY"),
+  )}${target("glow_path", glowFade)}
 </animated-vector>
 `;
 }
@@ -227,8 +259,7 @@ function withAnimatedSplash(config) {
     },
   ]);
 
-  // Android 12 reads the animation's length from the theme; 13+ from the
-  // drawable itself. expo-splash-screen does not set this item.
+  // expo-splash-screen does not set this item, so the two cannot conflict.
   config = withAndroidStyles(config, (config) => {
     config.modResults = AndroidConfig.Styles.assignStylesValue(
       config.modResults,
@@ -236,7 +267,7 @@ function withAnimatedSplash(config) {
         add: true,
         parent: { name: "Theme.App.SplashScreen", parent: "Theme.SplashScreen" },
         name: "windowSplashScreenAnimationDuration",
-        value: String(DURATION_MS),
+        value: String(THEME_DURATION_MS),
       },
     );
     return config;
@@ -253,10 +284,8 @@ module.exports.GEOMETRY = {
   GAP,
   RADIUS,
   STROKE,
-  DURATION_MS,
-  NUDGE_REACH,
-  NUDGE_MS,
-  NUDGE_STAGGER,
-  BREATHE_MS,
-  BREATHE_SCALE,
+  GLOW_RADIUS,
+  GLOW_MAX_SCALE,
+  THEME_DURATION_MS,
+  TOTAL_MS,
 };

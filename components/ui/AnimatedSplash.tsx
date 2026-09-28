@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Platform, StyleSheet, View } from "react-native";
 import Animated, {
-  cancelAnimation,
   Easing,
   runOnJS,
   SharedValue,
@@ -9,34 +8,33 @@ import Animated, {
   useReducedMotion,
   useSharedValue,
   withDelay,
-  withRepeat,
   withSequence,
   withSpring,
   withTiming,
 } from "react-native-reanimated";
+import Svg, { Circle, Defs, RadialGradient, Stop } from "react-native-svg";
 
 /**
  * AnimatedSplash — the logo's launch moment, "Four directions".
  *
- * The gold centre pops in, then the four arms shoot out one at a time: up,
- * right, down, left, the four ways a Cruxe answer can run. A glow, then it
- * fades into the app, which has been loading underneath.
+ * The gold centre pops in, the four arms shoot out one at a time (up, right,
+ * down, left: the four ways a Cruxe answer can run), a soft gold glow swells
+ * and fades behind the finished logo, and then it fades into the app.
  *
  * Where it plays:
- * - Android 12+: the system plays the build-up itself from the moment the
- *   icon is tapped (plugins/withAnimatedSplash.js), before any app code runs.
- *   This picks up on its final frame, the complete logo at the same size and
- *   position, and carries on with the glow and the fade.
+ * - Android 12+: the system plays all of that from the moment the icon is
+ *   tapped (plugins/withAnimatedSplash.js), before any app code runs. This
+ *   picks up on its final frame, the complete logo at the same size and
+ *   position, and only fades it into the app.
  * - iOS and older Android: launch screens there cannot animate (Apple requires
  *   them static), so the native splash is the dark background alone and this
- *   plays the build-up on the app's first frame.
+ *   plays the whole thing on the app's first frame.
  *
- * If the app is still loading once the logo is built, the logo keeps moving
- * (the arms nudge outward in turn and the centre breathes) until `ready`, so
- * it is never seen standing still and the fade never reveals a blank screen.
- * With reduced motion on, the finished logo is shown still.
+ * If the app is still loading once it has played, the finished logo stays on
+ * screen until `ready`, so the fade never reveals a blank screen. With reduced
+ * motion on, the finished logo is shown still.
  *
- * Geometry must match plugins/withAnimatedSplash.js.
+ * Geometry must match plugins/withAnimatedSplash.js (a test checks this).
  */
 
 const CELL = 40;
@@ -44,6 +42,8 @@ const GAP = 6;
 const STEP = CELL + GAP;
 const RADIUS = 10;
 const STROKE = 2.5;
+/** Kept inside the 90dp the Android splash can show without clipping. */
+const GLOW_RADIUS = 75;
 
 const BG = "#0a0a0a";
 const GOLD = "#eecd2b";
@@ -60,32 +60,21 @@ const ARMS = [
 const FIRST_ARM_AT = 200;
 const ARM_STAGGER = 100;
 const BUILD_MS = 800;
-const GLOW_MS = 400;
+const GLOW_IN_MS = 140;
+const GLOW_OUT_MS = 260;
+const GLOW_PEAK = 0.4;
 const FADE_MS = 260;
 
 /**
- * The wait. If the app is still loading once the logo is built, the logo keeps
- * moving: each arm nudges outward and back in turn, up, right, down, left, and
- * the centre breathes, on a loop. It never sits still. The same loop as the
- * Android 12+ native splash plays (plugins/withAnimatedSplash.js), so the
- * handover mid-loop does not change the motion.
+ * On Android 12+ the app can be ready before the system's animation has
+ * finished. Keeping the native splash up this much longer after the overlay
+ * appears lets it play out, rather than being cut to the complete logo.
  */
-const NUDGE_REACH = 0.14;
-const NUDGE_MS = 240;
-const NUDGE_STAGGER = 120;
-const BREATHE_MS = 520;
-const BREATHE_SCALE = 1.06;
-
-/**
- * On Android 12+ the app can be ready before the system's 1000ms animation
- * has finished. Keeping the native splash up this much longer lets it land on
- * its final frame, rather than being cut to the complete logo.
- */
-const NATIVE_FINISH_MS = 450;
+const NATIVE_FINISH_MS = 500;
 
 const SPRING = { damping: 11, stiffness: 190, mass: 0.7 };
 
-/** Whether the system has already played the build-up (Android 12+). */
+/** Whether the system has already played the animation (Android 12+). */
 const NATIVE_INTRO =
   Platform.OS === "android" && Number(Platform.Version) >= 31;
 
@@ -100,10 +89,10 @@ interface AnimatedSplashProps {
 
 export function AnimatedSplash({ ready, onVisible, onDone }: AnimatedSplashProps) {
   const reduceMotion = useReducedMotion();
-  const buildHere = !NATIVE_INTRO && !reduceMotion;
-  const [introDone, setIntroDone] = useState(false);
+  const playHere = !NATIVE_INTRO && !reduceMotion;
+  const [played, setPlayed] = useState(!playHere);
 
-  const start = buildHere ? 0 : 1;
+  const start = playHere ? 0 : 1;
   const arms = [
     useSharedValue(start),
     useSharedValue(start),
@@ -111,94 +100,48 @@ export function AnimatedSplash({ ready, onVisible, onDone }: AnimatedSplashProps
     useSharedValue(start),
   ];
   const core = useSharedValue(start);
-  const nudges = [
-    useSharedValue(0),
-    useSharedValue(0),
-    useSharedValue(0),
-    useSharedValue(0),
-  ];
-  const breath = useSharedValue(0);
   const glow = useSharedValue(0);
   const fade = useSharedValue(1);
 
-  // 1. The build-up, where the system did not already play it; on Android
-  //    12+ a short wait for the system's to land instead. Runs once.
+  // The build-up and the glow, where the system did not already play them.
+  // Runs once, on mount: this is a single launch moment.
   useEffect(() => {
-    if (reduceMotion) {
-      setIntroDone(true);
-      return;
-    }
+    if (!playHere) return;
 
-    if (buildHere) {
-      core.value = withSequence(
-        withTiming(1.16, { duration: 170, easing: Easing.out(Easing.quad) }),
+    core.value = withSequence(
+      withTiming(1.16, { duration: 170, easing: Easing.out(Easing.quad) }),
+      withSpring(1, SPRING),
+    );
+    arms.forEach((arm, i) => {
+      arm.value = withDelay(
+        FIRST_ARM_AT + i * ARM_STAGGER,
         withSpring(1, SPRING),
       );
-      arms.forEach((arm, i) => {
-        arm.value = withDelay(
-          FIRST_ARM_AT + i * ARM_STAGGER,
-          withSpring(1, SPRING),
-        );
-      });
-    }
-
-    const timer = setTimeout(
-      () => setIntroDone(true),
-      buildHere ? BUILD_MS : NATIVE_FINISH_MS,
+    });
+    glow.value = withDelay(
+      BUILD_MS - 100,
+      withSequence(
+        withTiming(1, { duration: GLOW_IN_MS, easing: Easing.out(Easing.quad) }),
+        withTiming(0, { duration: GLOW_OUT_MS, easing: Easing.in(Easing.quad) }, (finished) => {
+          if (finished) runOnJS(setPlayed)(true);
+        }),
+      ),
     );
-    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 2. The wait: while the app is still loading, the logo keeps moving.
+  // Fade into the app once it has played and the app can be seen.
   useEffect(() => {
-    if (!introDone || ready || reduceMotion) return;
-    const ease = Easing.inOut(Easing.quad);
-    nudges.forEach((nudge, i) => {
-      nudge.value = withDelay(
-        i * NUDGE_STAGGER,
-        withRepeat(
-          withTiming(1, { duration: NUDGE_MS, easing: ease }),
-          -1,
-          true,
-        ),
-      );
-    });
-    breath.value = withRepeat(
-      withTiming(1, { duration: BREATHE_MS, easing: ease }),
-      -1,
-      true,
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [introDone, ready]);
-
-  // 3. The exit, once the intro has played and the app can be seen: the
-  //    arms settle, a glow, and a fade into the app.
-  useEffect(() => {
-    if (!introDone || !ready) return;
+    if (!played || !ready) return;
     if (reduceMotion) {
       onDone();
       return;
     }
-    nudges.forEach((nudge) => {
-      cancelAnimation(nudge);
-      nudge.value = withTiming(0, { duration: 160 });
+    fade.value = withTiming(0, { duration: FADE_MS }, (finished) => {
+      if (finished) runOnJS(onDone)();
     });
-    cancelAnimation(breath);
-    breath.value = withTiming(0, { duration: 160 });
-
-    glow.value = withSequence(
-      withTiming(1, { duration: 140 }),
-      withTiming(0, { duration: GLOW_MS - 140 }),
-    );
-    fade.value = withDelay(
-      GLOW_MS - FADE_MS / 2,
-      withTiming(0, { duration: FADE_MS }, (finished) => {
-        if (finished) runOnJS(onDone)();
-      }),
-    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [introDone, ready]);
+  }, [played, ready]);
 
   const handleLayout = () => {
     if (NATIVE_INTRO) setTimeout(onVisible, NATIVE_FINISH_MS);
@@ -208,11 +151,11 @@ export function AnimatedSplash({ ready, onVisible, onDone }: AnimatedSplashProps
   const overlayStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
   const coreStyle = useAnimatedStyle(() => ({
     opacity: core.value > 0.02 ? 1 : 0,
-    transform: [{ scale: core.value * (1 + (BREATHE_SCALE - 1) * breath.value) }],
+    transform: [{ scale: core.value }],
   }));
   const glowStyle = useAnimatedStyle(() => ({
-    opacity: glow.value,
-    transform: [{ scale: 0.7 + glow.value * 0.5 }],
+    opacity: glow.value * GLOW_PEAK,
+    transform: [{ scale: 0.7 + glow.value * 0.35 }],
   }));
 
   return (
@@ -224,15 +167,25 @@ export function AnimatedSplash({ ready, onVisible, onDone }: AnimatedSplashProps
       importantForAccessibility="no-hide-descendants"
     >
       <View style={styles.logo}>
-        <Animated.View style={[styles.glow, glowStyle]} />
+        <Animated.View style={[styles.glow, glowStyle]}>
+          <Svg width={GLOW_RADIUS * 2} height={GLOW_RADIUS * 2}>
+            <Defs>
+              <RadialGradient id="splashGlow" cx="50%" cy="50%" r="50%">
+                <Stop offset="0" stopColor={GOLD} stopOpacity={1} />
+                <Stop offset="0.5" stopColor={GOLD} stopOpacity={0.42} />
+                <Stop offset="1" stopColor={GOLD} stopOpacity={0} />
+              </RadialGradient>
+            </Defs>
+            <Circle
+              cx={GLOW_RADIUS}
+              cy={GLOW_RADIUS}
+              r={GLOW_RADIUS}
+              fill="url(#splashGlow)"
+            />
+          </Svg>
+        </Animated.View>
         {ARMS.map((arm, i) => (
-          <Arm
-            key={arm.key}
-            progress={arms[i]}
-            nudge={nudges[i]}
-            x={arm.x}
-            y={arm.y}
-          />
+          <Arm key={arm.key} progress={arms[i]} x={arm.x} y={arm.y} />
         ))}
         <Animated.View style={[styles.cell, styles.core, coreStyle]} />
       </View>
@@ -240,32 +193,24 @@ export function AnimatedSplash({ ready, onVisible, onDone }: AnimatedSplashProps
   );
 }
 
-/**
- * One arm. `progress` 0 is tucked behind the centre and 1 is in place;
- * `nudge` pushes it a little further out while the app is still loading.
- */
+/** One arm: at 0 it is tucked behind the centre, at 1 it is in place. */
 function Arm({
   progress,
-  nudge,
   x,
   y,
 }: {
   progress: SharedValue<number>;
-  nudge: SharedValue<number>;
   x: number;
   y: number;
 }) {
-  const style = useAnimatedStyle(() => {
-    const reach = progress.value * (1 + NUDGE_REACH * nudge.value);
-    return {
-      opacity: progress.value > 0.02 ? 1 : 0,
-      transform: [
-        { translateX: x * reach },
-        { translateY: y * reach },
-        { scale: 0.5 + 0.5 * progress.value },
-      ],
-    };
-  });
+  const style = useAnimatedStyle(() => ({
+    opacity: progress.value > 0.02 ? 1 : 0,
+    transform: [
+      { translateX: x * progress.value },
+      { translateY: y * progress.value },
+      { scale: 0.5 + 0.5 * progress.value },
+    ],
+  }));
   return <Animated.View style={[styles.cell, styles.arm, style]} />;
 }
 
@@ -299,9 +244,7 @@ const styles = StyleSheet.create({
   },
   glow: {
     position: "absolute",
-    width: STEP * 4,
-    height: STEP * 4,
-    borderRadius: STEP * 2,
-    backgroundColor: "rgba(238,205,43,0.16)",
+    width: GLOW_RADIUS * 2,
+    height: GLOW_RADIUS * 2,
   },
 });
