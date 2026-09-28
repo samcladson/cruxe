@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { Keyboard, KeyboardEvent, Platform } from "react-native";
+import { Dimensions, Keyboard, KeyboardEvent, Platform } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { keyboardOverlap } from "./keyboardOverlap";
 
 /**
  * The keyboard's top edge in screen coordinates, or Infinity when hidden.
@@ -38,4 +40,19 @@ export function useKeyboardTop(): number {
   }, []);
 
   return top;
+}
+
+/**
+ * How far the keyboard reaches up over content that ends at the bottom safe
+ * area, in dp / pt; 0 when it is hidden. Use this, not `useKeyboardTop`, to
+ * place anything relative to the keyboard (see keyboardOverlap.ts for why).
+ */
+export function useKeyboardOverlap(): number {
+  const keyboardScreenY = useKeyboardTop();
+  const insets = useSafeAreaInsets();
+  return keyboardOverlap({
+    screenHeight: Dimensions.get("screen").height,
+    keyboardScreenY,
+    bottomInset: insets.bottom,
+  });
 }

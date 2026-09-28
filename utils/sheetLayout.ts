@@ -2,9 +2,11 @@
  * sheetLayout.ts — where the clue sheet rests on the puzzle screen.
  *
  * The sheet fills whatever space the grid leaves below it, so a tall phone
- * shows clues there instead of an empty band. While the keyboard is up it
- * shrinks to its controls (direction tabs and CHECK / FINISH) and sits on top
- * of the keyboard, the same on iOS and Android.
+ * shows clues there instead of an empty band. It never moves for the
+ * keyboard: while typing, the keyboard simply covers it and a slim Done bar
+ * sits on top of the keyboard instead (components/game/KeyboardDoneBar.tsx).
+ * A sheet that rode on the keyboard cluttered the screen and shifted out of
+ * line when the keyboard closed.
  */
 
 /** Below this, a list area could not show a single clue, so none is shown. */
@@ -18,25 +20,16 @@ export interface SheetLayout {
   restingHeight: number;
   /** Whether the resting sheet has room to list clues. */
   showList: boolean;
-  /** Distance from the screen's bottom edge: the keyboard's overlap. */
-  bottom: number;
 }
 
 export function sheetLayout(input: {
   spaceBelowGrid: number;
   chromeHeight: number;
-  keyboardOverlap: number;
 }): SheetLayout {
   const chrome = input.chromeHeight || FALLBACK_CHROME_HEIGHT;
-
-  if (input.keyboardOverlap > 0) {
-    return { restingHeight: chrome, showList: false, bottom: input.keyboardOverlap };
-  }
-
   const restingHeight = Math.max(chrome, Math.floor(input.spaceBelowGrid));
   return {
     restingHeight,
     showList: restingHeight - chrome >= MIN_LIST_HEIGHT,
-    bottom: 0,
   };
 }

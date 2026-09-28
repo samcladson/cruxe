@@ -8,18 +8,16 @@ describe("sheetLayout", () => {
   const chrome = 100;
 
   it("fills the space below the grid, and lists clues when there is room", () => {
-    expect(sheetLayout({ spaceBelowGrid: 260, chromeHeight: chrome, keyboardOverlap: 0 })).toEqual({
+    expect(sheetLayout({ spaceBelowGrid: 260, chromeHeight: chrome })).toEqual({
       restingHeight: 260,
       showList: true,
-      bottom: 0,
     });
   });
 
   it("stays at its controls' height on a short phone", () => {
-    expect(sheetLayout({ spaceBelowGrid: 70, chromeHeight: chrome, keyboardOverlap: 0 })).toEqual({
+    expect(sheetLayout({ spaceBelowGrid: 70, chromeHeight: chrome })).toEqual({
       restingHeight: 100,
       showList: false,
-      bottom: 0,
     });
   });
 
@@ -27,21 +25,12 @@ describe("sheetLayout", () => {
     const layout = sheetLayout({
       spaceBelowGrid: chrome + MIN_LIST_HEIGHT - 1,
       chromeHeight: chrome,
-      keyboardOverlap: 0,
     });
     expect(layout.showList).toBe(false);
     expect(layout.restingHeight).toBe(chrome + MIN_LIST_HEIGHT - 1);
   });
 
-  it("rides on the keyboard as controls only while typing", () => {
-    expect(sheetLayout({ spaceBelowGrid: 260, chromeHeight: chrome, keyboardOverlap: 300 })).toEqual({
-      restingHeight: 100,
-      showList: false,
-      bottom: 300,
-    });
-  });
-
   it("uses a fallback height before the controls are measured", () => {
-    expect(sheetLayout({ spaceBelowGrid: 0, chromeHeight: 0, keyboardOverlap: 0 }).restingHeight).toBeGreaterThan(0);
+    expect(sheetLayout({ spaceBelowGrid: 0, chromeHeight: 0 }).restingHeight).toBeGreaterThan(0);
   });
 });

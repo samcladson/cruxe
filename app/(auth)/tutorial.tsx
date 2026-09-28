@@ -13,6 +13,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ActiveClueBar } from "../../components/clues/ActiveClueBar";
 import { ClueSheet } from "../../components/clues/ClueSheet";
 import { CrosswordGrid } from "../../components/grid/CrosswordGrid";
+import {
+  DONE_BAR_HEIGHT,
+  KeyboardDoneBar,
+} from "../../components/grid/KeyboardDoneBar";
 import { CoachBar } from "../../components/tutorial/CoachBar";
 import { Button } from "../../components/ui/Button";
 import { theme } from "../../constants/theme";
@@ -195,7 +199,10 @@ export default function TutorialScreen() {
         )}
 
         <ActiveClueBar onHintPress={() => revealLetter()} coaching />
-        <CrosswordGrid keyboardChrome={layout.chromeHeight} />
+        <CrosswordGrid
+          keyboardTop={layout.keyboardTopInWindow}
+          keyboardChrome={DONE_BAR_HEIGHT}
+        />
 
         <View
           style={{ flex: 1, minHeight: layout.chromeHeight }}
@@ -203,9 +210,9 @@ export default function TutorialScreen() {
         />
         <ClueSheet
           spaceBelowGrid={layout.spaceBelowGrid}
-          keyboardOverlap={layout.keyboardOverlap}
           onChromeHeightChange={layout.setChromeHeight}
         />
+        <KeyboardDoneBar keyboardOverlap={layout.keyboardOverlap} />
       </View>
     </SafeAreaView>
   );

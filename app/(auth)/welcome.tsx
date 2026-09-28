@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -25,8 +25,7 @@ import { supabase } from "../../services/supabaseClient";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { routeAfterStart } from "../../utils/onboardingRoute";
 import { socialSignInOutcome } from "../../utils/socialSignIn";
-import { useKeyboardTop } from "../../utils/useKeyboardTop";
-import { keyboardLift } from "../../utils/keyboardLift";
+import { useKeyboardOverlap } from "../../utils/useKeyboardTop";
 import { ScreenBackdrop } from "../../components/ui/ScreenBackdrop";
 
 /**
@@ -71,18 +70,15 @@ export default function WelcomeScreen() {
    * for the keyboard, and Android 15 edge-to-edge stopped doing so. So the
    * overlap is measured and the form padded up by exactly that much, while the
    * wordmark, title and footnote step aside so it fits on a small phone.
+   *
+   * The overlap is measured from the bottom of the safe area, which is where
+   * this content ends; measuring positions with measureInWindow was offset by
+   * the status bar on Android and left the form partly covered.
    */
-  const keyboardTop = useKeyboardTop();
-  const keyboardOpen = Number.isFinite(keyboardTop);
-  const contentRef = useRef<View>(null);
-  const [contentBottom, setContentBottom] = useState(0);
-  const measureContent = () => {
-    contentRef.current?.measureInWindow((_x, y, _w, h) => {
-      setContentBottom(y + h);
-    });
-  };
-  // The form's lower edge is the content's, less its bottom padding.
-  const lift = keyboardLift(contentBottom - CONTENT_PADDING, keyboardTop);
+  const overlap = useKeyboardOverlap();
+  const keyboardOpen = overlap > 0;
+  // The form already sits CONTENT_PADDING above the content's bottom edge.
+  const lift = Math.max(0, Math.ceil(overlap + KEYBOARD_GAP - CONTENT_PADDING));
 
   useEffect(() => {
     track("onboarding_started");
@@ -176,8 +172,6 @@ export default function WelcomeScreen() {
     <SafeAreaView style={styles.container}>
       <ScreenBackdrop variant="welcome" />
       <View
-        ref={contentRef}
-        onLayout={measureContent}
         style={[styles.content, { paddingBottom: CONTENT_PADDING + lift }]}
       >
         <View style={styles.hero}>
@@ -373,6 +367,8 @@ export default function WelcomeScreen() {
 
 const CELL = 46;
 const CONTENT_PADDING = 32;
+/** Space kept between the lifted form and the keyboard. */
+const KEYBOARD_GAP = 16;
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.bgPrimary },

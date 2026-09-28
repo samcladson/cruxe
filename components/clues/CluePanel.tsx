@@ -221,7 +221,9 @@ export function CluePanel({
       </View>
 
       {/* When raised, and when the resting sheet has room below the grid.
-          Otherwise the tabs and the action bar are the whole panel. */}
+          Otherwise the tabs and the action bar are the whole panel, and any
+          spare height goes between them, so the action bar always sits on
+          the sheet's bottom edge rather than floating above an empty strip. */}
       {expanded || showList ? (
         <ScrollView
           ref={scrollViewRef}
@@ -244,7 +246,9 @@ export function CluePanel({
             ))
           )}
         </ScrollView>
-      ) : null}
+      ) : (
+        <View style={styles.spacer} />
+      )}
 
       {/* Bottom Action Bar */}
       <View
@@ -382,6 +386,9 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.3)",
   },
   scrollArea: {
+    flex: 1,
+  },
+  spacer: {
     flex: 1,
   },
   contentContainer: {

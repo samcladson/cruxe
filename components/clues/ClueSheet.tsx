@@ -18,8 +18,6 @@ const MIN_RAISE = 120;
 interface ClueSheetProps {
   /** Height the grid leaves free beneath it, which the resting sheet fills. */
   spaceBelowGrid: number;
-  /** How far the keyboard reaches up over the bottom of the screen. */
-  keyboardOverlap: number;
   /**
    * Reports the height of the controls that stay visible at all times, so
    * the screen can keep the typed row clear of them and reserve their space.
@@ -33,12 +31,13 @@ interface ClueSheetProps {
  * Resting, it fills the space the grid leaves, listing clues for the current
  * direction when there is room, so a tall phone shows clues rather than an
  * empty band. Raised, it covers the lower half of the screen so every clue in
- * a direction can be read at once. While the keyboard is up it shrinks to its
- * controls and rides on top of the keyboard, the same on iOS and Android.
+ * a direction can be read at once.
  *
- * The action bar stays visible in every state because FINISH lives there; on
- * iOS, which has no back gesture to dismiss the keyboard, hiding it would
- * leave no way to finish while typing.
+ * It never moves for the keyboard. While typing, the keyboard covers it and
+ * a slim Done bar rides on the keyboard instead (KeyboardDoneBar), which is
+ * how FINISH is reached on iOS, where there is no back gesture to close the
+ * keyboard. A sheet that rode on the keyboard cluttered the screen and shifted
+ * out of line when the keyboard closed.
  *
  * Positioned absolutely rather than grown in place: on Android a child cannot
  * be relied on to draw outside its parent's bounds, so a panel that expanded
@@ -46,14 +45,13 @@ interface ClueSheetProps {
  */
 export function ClueSheet({
   spaceBelowGrid,
-  keyboardOverlap,
   onChromeHeightChange,
 }: ClueSheetProps) {
   const { height: screenHeight } = useWindowDimensions();
   const [expanded, setExpanded] = useState(false);
   const [chromeHeight, setChromeHeight] = useState(0);
 
-  const layout = sheetLayout({ spaceBelowGrid, chromeHeight, keyboardOverlap });
+  const layout = sheetLayout({ spaceBelowGrid, chromeHeight });
   const raisedHeight = Math.max(
     Math.round(screenHeight * EXPANDED_FRACTION),
     layout.restingHeight + MIN_RAISE,
@@ -64,7 +62,6 @@ export function ClueSheet({
   }, [chromeHeight, onChromeHeightChange]);
 
   const height = useSharedValue(layout.restingHeight);
-  const bottom = useSharedValue(0);
 
   useEffect(() => {
     height.value = withTiming(expanded ? raisedHeight : layout.restingHeight, {
@@ -72,14 +69,7 @@ export function ClueSheet({
     });
   }, [expanded, raisedHeight, layout.restingHeight]);
 
-  useEffect(() => {
-    bottom.value = withTiming(layout.bottom, { duration: 180 });
-  }, [layout.bottom]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    height: height.value,
-    bottom: bottom.value,
-  }));
+  const animatedStyle = useAnimatedStyle(() => ({ height: height.value }));
 
   const toggle = () => {
     setExpanded((wasExpanded) => {
@@ -108,6 +98,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 0,
     right: 0,
+    bottom: 0,
     backgroundColor: theme.colors.bgPrimary,
     borderTopWidth: 1,
     borderTopColor: "rgba(255,255,255,0.08)",

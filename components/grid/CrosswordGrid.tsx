@@ -12,7 +12,6 @@ import {
   activeRowShift,
   ACTIVE_ROW_MARGIN,
 } from "../../utils/activeRowShift";
-import { useKeyboardTop } from "../../utils/useKeyboardTop";
 
 const { width } = Dimensions.get("window");
 
@@ -23,13 +22,23 @@ const { width } = Dimensions.get("window");
  */
 interface CrosswordGridProps {
   /**
+   * The keyboard's top edge in window coordinates (Infinity when hidden),
+   * from usePuzzleLayout. Window coordinates, like the grid's own position:
+   * the keyboard's raw screen position is offset from them by the status bar
+   * on Android edge-to-edge, which left the typed row partly covered.
+   */
+  keyboardTop?: number;
+  /**
    * Height of the controls that sit on top of the keyboard while typing. The
    * typed row has to clear those as well as the keyboard itself.
    */
   keyboardChrome?: number;
 }
 
-export function CrosswordGrid({ keyboardChrome = 0 }: CrosswordGridProps) {
+export function CrosswordGrid({
+  keyboardTop = Infinity,
+  keyboardChrome = 0,
+}: CrosswordGridProps) {
   const {
     activePuzzle,
     selectedCell,
@@ -49,7 +58,6 @@ export function CrosswordGrid({ keyboardChrome = 0 }: CrosswordGridProps) {
    */
   const wrapRef = useRef<View>(null);
   const [gridTopY, setGridTopY] = useState(0);
-  const keyboardTop = useKeyboardTop();
   const shift = useSharedValue(0);
 
   const measureGrid = () => {

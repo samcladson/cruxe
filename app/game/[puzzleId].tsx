@@ -13,6 +13,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ActiveClueBar } from "../../components/clues/ActiveClueBar";
 import { ClueSheet } from "../../components/clues/ClueSheet";
 import { CrosswordGrid } from "../../components/grid/CrosswordGrid";
+import {
+  DONE_BAR_HEIGHT,
+  KeyboardDoneBar,
+} from "../../components/grid/KeyboardDoneBar";
 import { HintOptionsModal } from "../../components/modals/HintOptionsModal";
 import { SuccessModal } from "../../components/modals/SuccessModal";
 import { theme } from "../../constants/theme";
@@ -318,7 +322,10 @@ export default function GameScreen() {
         <ActiveClueBar onHintPress={() => setShowHintModal(true)} />
 
         {/* Crossword Grid */}
-        <CrosswordGrid keyboardChrome={layout.chromeHeight} />
+        <CrosswordGrid
+          keyboardTop={layout.keyboardTopInWindow}
+          keyboardChrome={DONE_BAR_HEIGHT}
+        />
 
         {/* Everything the grid leaves below it. The clue sheet is drawn over
             this space and fills it; this view only measures it, and never
@@ -329,9 +336,9 @@ export default function GameScreen() {
         />
         <ClueSheet
           spaceBelowGrid={layout.spaceBelowGrid}
-          keyboardOverlap={layout.keyboardOverlap}
           onChromeHeightChange={layout.setChromeHeight}
         />
+        <KeyboardDoneBar keyboardOverlap={layout.keyboardOverlap} />
 
         <SuccessModal
           visible={showSuccessModal}

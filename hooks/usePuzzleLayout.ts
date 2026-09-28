@@ -1,40 +1,48 @@
 import { useRef, useState } from "react";
 import { LayoutChangeEvent, View } from "react-native";
-import { keyboardLift } from "../utils/keyboardLift";
-import { useKeyboardTop } from "../utils/useKeyboardTop";
+import { useKeyboardOverlap } from "../utils/useKeyboardTop";
 
 /**
- * The measurements a puzzle screen needs to lay out its grid and clue sheet.
+ * The measurements a puzzle screen needs to lay out its grid, clue sheet and
+ * keyboard Done bar.
  *
- * The clue sheet fills whatever height the grid leaves, and while typing it
- * rides on the keyboard as controls only; the grid slides its typed row clear
- * of both. All of it is measured the same way on iOS and Android, rather than
- * leaving iOS to a KeyboardAvoidingView that the grid's own sliding knew
- * nothing about.
+ * The clue sheet fills whatever height the grid leaves and never moves for
+ * the keyboard, which simply covers it. The Done bar sits on the keyboard's
+ * top edge (`keyboardOverlap` above the body's bottom), and the grid slides
+ * its typed row clear of both.
  *
- * Wire it up as: `bodyRef` / `onBodyLayout` on the screen's full-height body,
- * `onSpaceLayout` on a `flex: 1` view directly under the grid, and the rest
- * into `<CrosswordGrid>` and `<ClueSheet>`.
+ * Everything is measured from the bottom of the body. The keyboard's own
+ * screen position is never compared with measureInWindow positions, which on
+ * Android edge-to-edge are offset by the status bar (see keyboardOverlap.ts).
+ *
+ * Wire it up as: `bodyRef` / `onBodyLayout` on the screen's full-height body
+ * (inside the SafeAreaView), `onSpaceLayout` on a `flex: 1` view directly
+ * under the grid, and the rest into `<CrosswordGrid>`, `<ClueSheet>` and
+ * `<KeyboardDoneBar>`.
  */
 export function usePuzzleLayout() {
   const bodyRef = useRef<View>(null);
-  const [screenBottom, setScreenBottom] = useState(0);
+  /** The body's bottom edge, in the same (window) coordinates the grid uses. */
+  const [bodyBottom, setBodyBottom] = useState(0);
   const [spaceBelowGrid, setSpaceBelowGrid] = useState(0);
   const [chromeHeight, setChromeHeight] = useState(0);
-  const keyboardTop = useKeyboardTop();
+  const keyboardOverlap = useKeyboardOverlap();
 
   return {
     bodyRef,
     onBodyLayout: () => {
-      bodyRef.current?.measureInWindow((_x, y, _w, h) =>
-        setScreenBottom(y + h),
-      );
+      bodyRef.current?.measureInWindow((_x, y, _w, h) => setBodyBottom(y + h));
     },
     onSpaceLayout: (e: LayoutChangeEvent) =>
       setSpaceBelowGrid(e.nativeEvent.layout.height),
     spaceBelowGrid,
     chromeHeight,
     setChromeHeight,
-    keyboardOverlap: keyboardLift(screenBottom, keyboardTop, 0),
+    keyboardOverlap,
+    /** The keyboard's top edge in window coordinates; Infinity when hidden. */
+    keyboardTopInWindow:
+      keyboardOverlap > 0 && bodyBottom > 0
+        ? bodyBottom - keyboardOverlap
+        : Infinity,
   };
 }
