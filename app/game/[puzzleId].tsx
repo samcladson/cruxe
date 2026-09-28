@@ -131,6 +131,15 @@ export default function GameScreen() {
       setScoreEarned(result.score);
       setScoreBreakdown(result.breakdown);
       setCoinsEarned(result.coinsEarned);
+      // Every difficulty has a positive reward, so a zero here would be the
+      // server's doing rather than the card's. Leave evidence if it happens.
+      if (!(result.coinsEarned > 0) && !result.replayed) {
+        reportError(
+          "sync",
+          new Error(`solve granted ${String(result.coinsEarned)} coins`),
+          { puzzleId: activePuzzle.id, difficulty: activePuzzle.difficulty },
+        );
+      }
       setRewardState("granted");
 
       track("puzzle_completed", {

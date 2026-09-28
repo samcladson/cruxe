@@ -215,36 +215,50 @@ export function SuccessModal({
     }
   }, [phase]);
 
+  // The counter resets with the card, and so does the flame.
   useEffect(() => {
-    if (visible && activePuzzle && phase === "stats") {
-      // Coin counter animation. The interval is held out here so cleanup
-      // can reach it: returned from inside the timeout it was never cleared,
-      // and a rerun mid-count left two counters — and two coin sounds.
-      let interval: ReturnType<typeof setInterval> | undefined;
-      const coinDelay = setTimeout(() => {
-        let current = 0;
-        const step = Math.ceil(finalCoins / 30);
-        interval = setInterval(() => {
-          current += step;
-          if (current >= finalCoins) {
-            setDisplayCoins(finalCoins);
-            clearInterval(interval);
-            // The counter landing is the moment the coins are "yours".
-            if (finalCoins > 0) SFX.coinEarned();
-          } else {
-            setDisplayCoins(current);
-          }
-        }, 30);
-      }, 800);
-      return () => {
-        clearTimeout(coinDelay);
-        clearInterval(interval);
-      };
-    } else if (!visible) {
+    if (!visible) {
       setDisplayCoins(0);
       flameScale.value = 0;
     }
-  }, [visible, activePuzzle, finalCoins, phase]);
+  }, [visible]);
+
+  // Coin counter. It runs once the reward is *granted* and depends on nothing
+  // else. It used to start before the amount was known and to depend on the
+  // puzzle and the phase too, so any unrelated update cancelled its 800ms
+  // lead-in and started it again — and a card that never gets to count shows
+  // "+0" for a reward the server did grant. The interval is held out here so
+  // cleanup can reach it: returned from inside the timeout it was never
+  // cleared, and a rerun mid-count left two counters and two coin sounds.
+  useEffect(() => {
+    if (!visible || rewardState !== "granted") return;
+
+    let interval: ReturnType<typeof setInterval> | undefined;
+    const coinDelay = setTimeout(() => {
+      let current = 0;
+      const step = Math.max(1, Math.ceil(finalCoins / 30));
+      interval = setInterval(() => {
+        current += step;
+        if (current >= finalCoins) {
+          setDisplayCoins(finalCoins);
+          clearInterval(interval);
+          // The counter landing is the moment the coins are "yours".
+          if (finalCoins > 0) SFX.coinEarned();
+        } else {
+          setDisplayCoins(current);
+        }
+      }, 30);
+    }, 800);
+
+    // Whatever the animation does, the card shows the real amount.
+    const settle = setTimeout(() => setDisplayCoins(finalCoins), 3000);
+
+    return () => {
+      clearTimeout(coinDelay);
+      clearTimeout(settle);
+      clearInterval(interval);
+    };
+  }, [visible, rewardState, finalCoins]);
 
   const handleFinalReturn = () => {
     onClose();
