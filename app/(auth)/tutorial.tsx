@@ -52,7 +52,7 @@ export default function TutorialScreen() {
   // kept clearing its throat before letting anyone play.
   const [coachVisible, setCoachVisible] = useState(true);
   /** Grid and clue-sheet layout, including while the keyboard is up. */
-  const layout = usePuzzleLayout();
+  const layout = usePuzzleLayout(activePuzzle?.gridSize ?? 0);
   const [hasTouchedReverse, setHasTouchedReverse] = useState(false);
   const [solved, setSolved] = useState(false);
 
@@ -202,10 +202,7 @@ export default function TutorialScreen() {
         {/* The area below the clue bar, shared by the grid and the clue
             sheet (utils/sheetLayout.ts). The sheet is drawn over its bottom. */}
         <View style={{ flex: 1 }} onLayout={layout.onAreaLayout}>
-          <View
-            style={{ marginTop: layout.gridOffset }}
-            onLayout={layout.onGridLayout}
-          >
+          <View style={{ marginTop: layout.gridOffset }}>
             <CrosswordGrid
               keyboardTop={layout.keyboardTopInWindow}
               keyboardChrome={DONE_BAR_HEIGHT}

@@ -57,7 +57,7 @@ export default function GameScreen() {
 
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   /** Grid and clue-sheet layout, including while the keyboard is up. */
-  const layout = usePuzzleLayout();
+  const layout = usePuzzleLayout(activePuzzle?.gridSize ?? 0);
   const [showHintModal, setShowHintModal] = useState(false);
   const [coinsEarned, setCoinsEarned] = useState(0);
   const [scoreEarned, setScoreEarned] = useState(0);
@@ -324,10 +324,7 @@ export default function GameScreen() {
         {/* The area below the clue bar, shared by the grid and the clue
             sheet (utils/sheetLayout.ts). The sheet is drawn over its bottom. */}
         <View style={{ flex: 1 }} onLayout={layout.onAreaLayout}>
-          <View
-            style={{ marginTop: layout.gridOffset }}
-            onLayout={layout.onGridLayout}
-          >
+          <View style={{ marginTop: layout.gridOffset }}>
             <CrosswordGrid
               keyboardTop={layout.keyboardTopInWindow}
               keyboardChrome={DONE_BAR_HEIGHT}

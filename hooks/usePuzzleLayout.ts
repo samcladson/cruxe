@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
-import { LayoutChangeEvent, View } from "react-native";
+import { LayoutChangeEvent, useWindowDimensions, View } from "react-native";
+import { gridOuterHeight } from "../utils/gridSize";
 import { sheetLayout } from "../utils/sheetLayout";
 import { useKeyboardOverlap } from "../utils/useKeyboardTop";
 
@@ -19,20 +20,29 @@ import { useKeyboardOverlap } from "../utils/useKeyboardTop";
  * positions, which on Android edge-to-edge are offset by the status bar (see
  * keyboardOverlap.ts).
  *
+ * The grid's height is calculated, never measured (utils/gridSize.ts):
+ * measuring it fed a loop that made the centred grid shudder by a pixel. The
+ * other measurements ignore changes under a point for the same reason.
+ *
  * Wire it up as: `bodyRef` / `onBodyLayout` on the screen's full-height body
  * (inside the SafeAreaView); `onAreaLayout` on a `flex: 1` view below the
- * clue bar holding the grid; `onGridLayout` and `gridOffset` (as marginTop)
- * on a view wrapping `<CrosswordGrid>`; `sheet` into `<ClueSheet>`; and
- * `keyboardOverlap` into `<KeyboardDoneBar>`.
+ * clue bar holding the grid; `gridOffset` (as marginTop) on a view wrapping
+ * `<CrosswordGrid>`; `sheet` into `<ClueSheet>`; and `keyboardOverlap` into
+ * `<KeyboardDoneBar>`.
  */
-export function usePuzzleLayout() {
+export function usePuzzleLayout(gridSize: number) {
   const bodyRef = useRef<View>(null);
   /** The body's bottom edge, in the same (window) coordinates the grid uses. */
   const [bodyBottom, setBodyBottom] = useState(0);
   const [areaHeight, setAreaHeight] = useState(0);
-  const [gridHeight, setGridHeight] = useState(0);
   const [chromeHeight, setChromeHeight] = useState(0);
   const keyboardOverlap = useKeyboardOverlap();
+  const { width } = useWindowDimensions();
+  const gridHeight = gridOuterHeight(width, gridSize);
+
+  /** Ignores changes under a point: pixel rounding, not a real resize. */
+  const settle = (set: (fn: (prev: number) => number) => void) => (next: number) =>
+    set((prev) => (Math.abs(prev - next) < 1 ? prev : next));
 
   const sheet = sheetLayout({ areaHeight, gridHeight, chromeHeight });
 
@@ -42,15 +52,13 @@ export function usePuzzleLayout() {
       bodyRef.current?.measureInWindow((_x, y, _w, h) => setBodyBottom(y + h));
     },
     onAreaLayout: (e: LayoutChangeEvent) =>
-      setAreaHeight(e.nativeEvent.layout.height),
-    onGridLayout: (e: LayoutChangeEvent) =>
-      setGridHeight(e.nativeEvent.layout.height),
+      settle(setAreaHeight)(e.nativeEvent.layout.height),
     /** Space above the grid; centres it when the sheet has no clue list. */
     gridOffset: sheet.gridOffset,
     sheet: {
       restingHeight: sheet.restingHeight,
       showList: sheet.showList,
-      onChromeHeightChange: setChromeHeight,
+      onChromeHeightChange: settle(setChromeHeight),
     },
     keyboardOverlap,
     /** The keyboard's top edge in window coordinates; Infinity when hidden. */

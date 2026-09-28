@@ -42,8 +42,6 @@ const DIRECTION_ARROWS: Record<Direction, keyof typeof MaterialIcons.glyphMap> =
 
 const REVERSE_DIRECTIONS: Direction[] = ["reverse_across", "reverse_down"];
 
-const CLUE_LINE_HEIGHT = 24;
-
 /**
  * ActiveClueBar shows the currently selected clue floating above the clue panel.
  * Tapping it toggles through available directions for the selected cell.
@@ -59,48 +57,18 @@ export function ActiveClueBar({
     (s) => s.setHasSeenReverseHint,
   );
 
-  if (!activePuzzle) return null;
+  if (!activePuzzle || !selectedCell) return null;
 
-  const currentCell = selectedCell
-    ? activePuzzle.grid[selectedCell.row][selectedCell.col]
-    : null;
-  const clueIds =
-    currentCell && !currentCell.isBlocked ? currentCell.clueIds : [];
-  const targetClueId =
-    findClueId(clueIds, selectedDirection) ?? clueIds[0] ?? null;
-  const clueObj = targetClueId
-    ? activePuzzle.clues.find((c) => c.id === targetClueId)
-    : undefined;
+  const currentCell = activePuzzle.grid[selectedCell.row][selectedCell.col];
+  if (currentCell.isBlocked || currentCell.clueIds.length === 0) return null;
 
-  // Nothing selected yet: the bar keeps its place and says what to do,
-  // rather than vanishing and then shifting the whole screen down on the
-  // first tap.
-  if (!clueObj) {
-    return (
-      <View style={styles.containerWrap}>
-        <View style={styles.card}>
-          <View style={styles.content}>
-            <View style={styles.topRow}>
-              <Text style={[styles.clueTarget, styles.placeholderLabel]}>
-                CHOOSE A SQUARE
-              </Text>
-            </View>
-            <Text style={[styles.clueText, styles.placeholderText]}>
-              Tap any square in the grid to see its clue.
-            </Text>
-          </View>
-          {/* Hints need a clue, so the bulb is shown dimmed until one is. */}
-          <View style={[styles.bulbBtn, styles.bulbIdle]}>
-            <MaterialIcons
-              name="lightbulb"
-              size={24}
-              color={theme.colors.textMuted}
-            />
-          </View>
-        </View>
-      </View>
-    );
+  let targetClueId = findClueId(currentCell.clueIds, selectedDirection);
+  if (!targetClueId) {
+    targetClueId = currentCell.clueIds[0];
   }
+
+  const clueObj = activePuzzle.clues.find((c) => c.id === targetClueId);
+  if (!clueObj) return null;
 
   const dirLabel =
     DIRECTION_LABELS[clueObj.direction] || clueObj.direction.toUpperCase();
@@ -275,19 +243,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: "#fff",
     fontWeight: "500",
-    lineHeight: CLUE_LINE_HEIGHT,
-    // Two lines are always reserved, so a one-line clue and a two-line clue
-    // leave the bar the same height and the grid below it does not move.
-    minHeight: CLUE_LINE_HEIGHT * 2,
-  },
-  placeholderLabel: {
-    color: theme.colors.textMuted,
-  },
-  placeholderText: {
-    color: theme.colors.textMuted,
-  },
-  bulbIdle: {
-    opacity: 0.5,
+    lineHeight: 24,
   },
   bulbBtn: {
     width: 40,

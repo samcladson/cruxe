@@ -9,6 +9,11 @@ import { usePuzzleStore } from "../../stores/puzzleStore";
 import { GridCell } from "./GridCell";
 import { resolveClueId } from "../../utils/clueId";
 import {
+  GRID_BORDER,
+  GRID_MARGIN_V,
+  gridCellSize,
+} from "../../utils/gridSize";
+import {
   activeRowShift,
   ACTIVE_ROW_MARGIN,
 } from "../../utils/activeRowShift";
@@ -78,7 +83,7 @@ export function CrosswordGrid({
 
   useEffect(() => {
     const size = activePuzzle?.gridSize ?? 0;
-    const cell = size > 0 ? Math.floor((width - 24) / size) : 0;
+    const cell = gridCellSize(width, size);
     const row = selectedCell?.row;
 
     const target =
@@ -94,9 +99,9 @@ export function CrosswordGrid({
             // legible but with nothing around it, which is what every row in
             // the lower half of the grid looked like.
             cell + ACTIVE_ROW_MARGIN,
-            // ...but never past the grid's own bottom edge (the grid border
-            // adds 3), which would leave an empty band above the Done bar.
-            gridTopY + size * cell + 3,
+            // ...but never past the grid's own bottom edge, which would
+            // leave an empty band above the Done bar.
+            gridTopY + size * cell + GRID_BORDER * 2,
           );
 
     shift.value = withTiming(target, { duration: 180 });
@@ -115,8 +120,7 @@ export function CrosswordGrid({
   if (!activePuzzle) return null;
 
   const gridSize = activePuzzle.gridSize;
-  const maxGridWidth = width - 24;
-  const cellSize = Math.floor(maxGridWidth / gridSize);
+  const cellSize = gridCellSize(width, gridSize);
   const actualGridWidth = cellSize * gridSize;
 
   /**
@@ -389,7 +393,7 @@ const styles = StyleSheet.create({
   container: {
     alignItems: "center",
     justifyContent: "center",
-    marginVertical: 8,
+    marginVertical: GRID_MARGIN_V,
     // The grid slides up behind the bars above it when the keyboard opens.
     // Clipping it to its own box is what actually keeps it out of them:
     // relying on the bars being opaque and elevated works only as long as
@@ -398,7 +402,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   gridWrapper: {
-    borderWidth: 1.5,
+    borderWidth: GRID_BORDER,
     borderColor: "rgba(255,255,255,0.3)",
     backgroundColor: "#050505",
   },
