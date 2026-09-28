@@ -11,7 +11,8 @@
     "test:unit": "jest --testPathIgnorePatterns integration",
     "test:integration": "jest __tests__/integration",
     "brand": "node scripts/brand/generate-brand.cjs",
-    "brand:store": "node scripts/brand/generate-store-screenshots.cjs"
+    "brand:store": "node scripts/brand/generate-store-screenshots.cjs",
+    "brand:store:ios": "node scripts/brand/generate-store-screenshots.cjs ios"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",

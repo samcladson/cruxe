@@ -1,17 +1,25 @@
 /**
- * Builds the Play Store phone screenshots from the web page's screens section.
+ * Builds the store phone screenshots from the web page's screens section.
  *
  * Same images (web/assets/screens/), same phone frame and same caption style
  * as web/index.html: a mono gold label, a bold title and a muted line, above a
  * centred phone that is shown in full. The background is the app's ambient
  * dot grid and gold light.
  *
- *   npm run brand:store
+ *   npm run brand:store        Play Store  → assets/store/screenshots/       1080×1920
+ *   npm run brand:store:ios    App Store   → assets/store/screenshots-ios/   1320×2868
  *
- * Outputs: assets/store/screenshots/NN-name.png, 1080×1920, 24-bit PNG.
+ * 24-bit PNG both ways. 1320×2868 is Apple's 6.9" iPhone size, which is the
+ * only iPhone set App Store Connect requires now that supportsTablet is false.
  *
  * To change a screen, replace its image in web/assets/screens/ (the web page
  * then shows it too) and rerun. Keep captions in step with web/index.html.
+ *
+ * iPhone captures: a file in assets/store/ios-captures/ with the same name as
+ * a web screen (welcome.jpg, home.jpg, …) is used instead of it for the iOS
+ * set. The sign-in slide is only in the iOS set if such a capture exists,
+ * because the shared welcome screen shows Google alone, and an iPhone listing
+ * should show the Sign in with Apple button Apple's own rules require.
  */
 const fs = require("fs");
 const path = require("path");
@@ -20,7 +28,7 @@ const { toRgbPng } = require("./png.cjs");
 
 const ROOT = path.resolve(__dirname, "../..");
 const SRC = path.join(ROOT, "web/assets/screens");
-const OUT = path.join(ROOT, "assets/store/screenshots");
+const IOS_CAPTURES = path.join(ROOT, "assets/store/ios-captures");
 const FONTS = path.join(ROOT, "node_modules/@expo-google-fonts");
 
 // Palette — mirrors web/index.html and constants/theme.ts.
@@ -30,19 +38,30 @@ const MUTED = "#a3a39c";
 const GOLD = "#eecd2b";
 const LINE_STRONG = "rgba(248,248,246,0.16)";
 
+// Every layout number below is in a 1080-wide design space. A profile only
+// changes the canvas height and where the phone sits; the SVG is then rendered
+// at the profile's real pixel width, so the design scales cleanly.
 const W = 1080;
-const H = 1920;
 
-// The web page's .phone at store size: aspect 720 / 1458, 7px padding, 32px
-// radius and 26px screen radius at 250px wide, all scaled by the same factor.
-const PHONE_H = 1290;
-const PHONE_W = Math.round((PHONE_H * 720) / 1458);
-const K = PHONE_W / 250;
-const PAD = Math.round(7 * K);
-const RADIUS = Math.round(32 * K);
-const SCREEN_RADIUS = Math.round(26 * K);
-const PHONE_X = Math.round((W - PHONE_W) / 2);
-const PHONE_Y = 560;
+const PROFILES = {
+  play: {
+    dir: "assets/store/screenshots",
+    px: [1080, 1920],
+    phoneH: 1290,
+    phoneY: 560,
+    goldY: 1180,
+    fogY: 1000,
+  },
+  ios: {
+    dir: "assets/store/screenshots-ios",
+    px: [1320, 2868],
+    phoneH: 1600,
+    phoneY: 600,
+    // The light sits at the phone's middle-upper part, as on the Play set.
+    goldY: 600 + 1600 * 0.48,
+    fogY: 600 + 1600 * 0.34,
+  },
+};
 
 // Captions are the web page's figcaptions: <i> label, <b> title, <span> line.
 // Order puts the backwards clue first, since the first screenshot is the one
@@ -68,19 +87,47 @@ function radial(id, cx, cy, r, color, opacity) {
   ];
 }
 
-function slideSvg(slide) {
-  const img = fs.readFileSync(path.join(SRC, `${slide.image}.jpg`)).toString("base64");
+// The web page's .phone at store size: aspect 720 / 1458, 7px padding, 32px
+// radius and 26px screen radius at 250px wide, all scaled by the same factor.
+function phoneMetrics(profile) {
+  const PHONE_H = profile.phoneH;
+  const PHONE_W = Math.round((PHONE_H * 720) / 1458);
+  const K = PHONE_W / 250;
+  return {
+    PHONE_H,
+    PHONE_W,
+    PAD: Math.round(7 * K),
+    RADIUS: Math.round(32 * K),
+    SCREEN_RADIUS: Math.round(26 * K),
+    PHONE_X: Math.round((W - PHONE_W) / 2),
+    PHONE_Y: profile.phoneY,
+  };
+}
+
+function imagePath(slide, platform) {
+  if (platform === "ios") {
+    const capture = path.join(IOS_CAPTURES, `${slide.image}.jpg`);
+    if (fs.existsSync(capture)) return capture;
+  }
+  return path.join(SRC, `${slide.image}.jpg`);
+}
+
+function slideSvg(slide, profile, platform) {
+  const { PHONE_H, PHONE_W, PAD, RADIUS, SCREEN_RADIUS, PHONE_X, PHONE_Y } = phoneMetrics(profile);
+  // Design height keeps the pixel aspect ratio: 1080 wide × (h / w).
+  const H = (W * profile.px[1]) / profile.px[0];
+  const img = fs.readFileSync(imagePath(slide, platform)).toString("base64");
   const defs = [];
   let body = `<rect width="${W}" height="${H}" fill="${BG}"/>`;
 
   // Ambient light, then the dot grid, then fog so the grid fades at the edges.
-  for (const [d, e] of [radial("gGold", W / 2, 1180, 820, GOLD, 0.11), radial("gTop", W / 2, 160, 700, GOLD, 0.05)]) {
+  for (const [d, e] of [radial("gGold", W / 2, profile.goldY, 820, GOLD, 0.11), radial("gTop", W / 2, 160, 700, GOLD, 0.05)]) {
     defs.push(d);
     body += e;
   }
   defs.push(
     `<pattern id="dots" width="36" height="36" patternUnits="userSpaceOnUse"><circle cx="18" cy="18" r="1.7" fill="${TEXT}" fill-opacity="0.12"/></pattern>`,
-    `<radialGradient id="fog" cx="${W / 2}" cy="1000" r="1250" gradientUnits="userSpaceOnUse"><stop offset="0.3" stop-color="${BG}" stop-opacity="0"/><stop offset="1" stop-color="${BG}" stop-opacity="1"/></radialGradient>`,
+    `<radialGradient id="fog" cx="${W / 2}" cy="${profile.fogY}" r="1250" gradientUnits="userSpaceOnUse"><stop offset="0.3" stop-color="${BG}" stop-opacity="0"/><stop offset="1" stop-color="${BG}" stop-opacity="1"/></radialGradient>`,
   );
   body += `<rect width="${W}" height="${H}" fill="url(#dots)"/><rect width="${W}" height="${H}" fill="url(#fog)"/>`;
 
@@ -113,7 +160,23 @@ function slideSvg(slide) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><defs>${defs.join("")}</defs>${body}</svg>`;
 }
 
+// The sign-in slide shows the welcome screen, which differs per platform.
+function slidesFor(platform) {
+  if (platform !== "ios") return SLIDES;
+  return SLIDES.filter(
+    (s) => s.image !== "welcome" || fs.existsSync(path.join(IOS_CAPTURES, "welcome.jpg")),
+  ).map((s) =>
+    s.image === "welcome"
+      ? { ...s, line: ["Apple, Google or an emailed code.", "Your streak and coins follow you."] }
+      : s,
+  );
+}
+
 function main() {
+  const platform = process.argv[2] === "ios" ? "ios" : "play";
+  const profile = PROFILES[platform];
+  const [PX_W, PX_H] = profile.px;
+  const OUT = path.join(ROOT, profile.dir);
   // Clear anything from earlier layouts, so only this set can be uploaded.
   fs.rmSync(OUT, { recursive: true, force: true });
   fs.mkdirSync(OUT, { recursive: true });
@@ -122,15 +185,15 @@ function main() {
     "manrope/800ExtraBold/Manrope_800ExtraBold.ttf",
     "space-mono/400Regular/SpaceMono_400Regular.ttf",
   ].map((f) => path.join(FONTS, f));
-  for (const slide of SLIDES) {
-    const rendered = new Resvg(slideSvg(slide), {
-      fitTo: { mode: "width", value: W },
+  for (const slide of slidesFor(platform)) {
+    const rendered = new Resvg(slideSvg(slide, profile, platform), {
+      fitTo: { mode: "width", value: PX_W },
       font: { fontFiles, loadSystemFonts: false, defaultFontFamily: "Manrope" },
     }).render();
-    // 24-bit RGB: Play rejects screenshots with an alpha channel.
+    // 24-bit RGB: both stores reject screenshots with an alpha channel.
     const png = toRgbPng(rendered);
     fs.writeFileSync(path.join(OUT, `${slide.file}.png`), png);
-    console.log(`${slide.file}.png  ${W}x${H}  ${Math.round(png.length / 1024)} KB`);
+    console.log(`${slide.file}.png  ${rendered.width}x${rendered.height}  ${Math.round(png.length / 1024)} KB`);
   }
 }
 
