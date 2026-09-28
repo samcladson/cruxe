@@ -21,6 +21,7 @@ import {
   signInWithGoogle,
   verifyEmailCode,
 } from "../../services/authService";
+import { supabase } from "../../services/supabaseClient";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { routeAfterStart } from "../../utils/onboardingRoute";
 import { socialSignInOutcome } from "../../utils/socialSignIn";
@@ -70,8 +71,20 @@ export default function WelcomeScreen() {
    * Leaves the start screen. `replace`, not `push`: there is nothing here
    * worth coming back to, and a back gesture should not land on a sign-in
    * screen for a session that already exists.
+   *
+   * It confirms a session exists before leaving, whichever method just ran.
+   * The entry gate only checks at launch and the tabs check nothing, so this
+   * is the one place that can stop someone reaching the app with no account.
    */
-  const proceed = () => {
+  const proceed = async () => {
+    const { data } = await supabase.auth.getSession();
+    if (!data.session) {
+      Alert.alert(
+        "Couldn't sign in",
+        "No account was created, so you haven't been signed in. Please try again.",
+      );
+      return;
+    }
     router.replace(routeAfterStart(hasCompletedOnboarding));
   };
 
@@ -101,7 +114,7 @@ export default function WelcomeScreen() {
         );
         return;
       }
-      proceed();
+      await proceed();
     } catch (e: any) {
       Alert.alert("Couldn't sign in", e?.message ?? "Something went wrong.");
     } finally {
@@ -132,7 +145,7 @@ export default function WelcomeScreen() {
         Alert.alert("That code didn't work", error.message);
         return;
       }
-      proceed();
+      await proceed();
     } finally {
       setBusyProvider(null);
     }
