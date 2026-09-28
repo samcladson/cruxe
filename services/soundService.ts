@@ -35,14 +35,19 @@ const soundCache = new Map<SoundName, AudioPlayer>();
 let audioConfigured = false;
 
 /**
- * Configure audio session for game sounds — silent mode compatible,
- * doesn't interrupt music playback.
+ * Configure audio session for game sounds — plays with the iOS ringer switch
+ * on silent (the in-app sound toggle is the user's control), and ducks rather
+ * than stops music playback.
+ *
+ * `playsInSilentMode` must stay true: iOS rejects `false` combined with
+ * `duckOthers`, and `false` alone puts the session on the ambient category
+ * that the ringer switch mutes.
  */
 async function ensureAudioConfigured(): Promise<void> {
   if (audioConfigured) return;
   try {
     await setAudioModeAsync({
-      playsInSilentMode: false,
+      playsInSilentMode: true,
       interruptionMode: "duckOthers",
       shouldPlayInBackground: false,
     });
