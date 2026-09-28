@@ -25,6 +25,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ActivePuzzleConflictModal } from "../../components/modals/ActivePuzzleConflictModal";
 import { AnimatedNumber } from "../../components/ui/AnimatedNumber";
 import { ScreenBackdrop } from "../../components/ui/ScreenBackdrop";
+import { Wordmark } from "../../components/ui/Wordmark";
 import { CATEGORIES } from "../../constants/categories";
 import { theme } from "../../constants/theme";
 import { usePuzzleLauncher } from "../../hooks/usePuzzleLauncher";
@@ -328,13 +329,9 @@ export default function HomeScreen() {
         {/* Top bar with branding and stats */}
         <View style={styles.topBar}>
           <View style={styles.brandRow}>
-            <PulseDot />
-            <Text style={styles.brandText} numberOfLines={1}>
-              WELCOME,{" "}
-              {profile.displayName
-                ? profile.displayName.toUpperCase()
-                : "PLAYER"}
-            </Text>
+            {/* 20pt cells: the wordmark and the stats pill share the row
+                on a narrow phone without either crowding the other. */}
+            <Wordmark cellSize={20} animated />
           </View>
 
           <View
@@ -835,8 +832,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    // Take the leftover width and truncate, rather than colliding with the
-    // pill. Without flex/minWidth a long display name overlaps it.
+    // Take the leftover width rather than colliding with the pill.
     flex: 1,
     minWidth: 0,
     marginRight: 12,
@@ -846,15 +842,6 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: theme.colors.accentGold,
-  },
-  brandText: {
-    flexShrink: 1,
-    fontFamily: theme.typography.cellLetter.fontFamily,
-    fontSize: 10,
-    fontWeight: "bold",
-    letterSpacing: 2,
-    color: theme.colors.textSecondary,
-    ...theme.shadows.goldGlow,
   },
   statsPill: {
     flexDirection: "row",
