@@ -110,3 +110,112 @@ change:
 - **"free once a month"** — `economy_config.streak.free_repairs_per_month`.
 - **"Play offline"** — solving works offline; the reward syncs on reconnect
   and the app says so plainly rather than implying instant credit.
+
+---
+---
+
+# Apple App Store listing copy
+
+Paste-ready for App Store Connect → the app → iOS App → the version's page.
+Limits are Apple's. Same honesty rules as above: the puzzles are AI-generated,
+so nothing here says "handcrafted".
+
+## Name (30 max)
+
+```
+Cruxe: Daily Crossword
+```
+
+*22 characters.* Names are unique across the whole App Store; if Apple says
+it is taken, fall back to `Cruxe Crossword`.
+
+## Subtitle (30 max)
+
+```
+A new crossword every day
+```
+
+*25 characters.* Shown under the name in search results.
+
+## Promotional text (170 max)
+
+```
+A new Daily Challenge every day, always free. Grids where some answers read backwards or upwards. No ads.
+```
+
+*105 characters.* Editable at any time without a new review, so this is the
+place for anything time-sensitive later.
+
+## Keywords (100 max, comma-separated, no spaces after commas)
+
+```
+crossword,puzzle,word game,daily,brain,clues,trivia,grid,streak,leaderboard
+```
+
+*75 characters.* Do not repeat the app name (Apple already indexes it).
+Deliberately no "cryptic": these are not cryptic crosswords, and a mismatched
+keyword is a metadata-rejection risk.
+
+## Description (4000 max)
+
+Apple shows plain text, so the section rules from the Play copy become short
+headings. Use the Play full description with these two changes: replace the
+`━━━ … ━━━` banners with a plain heading line, and keep "Questions or
+feedback" as the last line.
+
+## What's new
+
+Same as the Play "first release" text above.
+
+## URLs
+
+| Field | Value |
+|---|---|
+| Support URL | `https://samcladson.github.io/cruxe/` |
+| Marketing URL (optional) | `https://samcladson.github.io/cruxe/` |
+| Privacy Policy URL | `https://samcladson.github.io/cruxe/privacy.html` |
+
+Apple requires a Support URL that loads a real page; the landing page counts
+and carries the contact address in its footer.
+
+## Category and rating
+
+- Primary category: **Games → Word**. Secondary: optional; leave empty.
+- Age rating: answer the questionnaire the same way as Play's content rating
+  (no violence, no gambling, no user-generated content shown to others, no
+  web access). Cruxe has **no gambling** — coins buy puzzles and hints, not
+  chance-based rewards.
+- Not made for kids; do not enrol in the Kids category.
+
+## App Review Information
+
+**Sign-in required:** tick it, but leave the username and password blank, and
+paste this into the notes field verbatim:
+
+```
+No demo account is required. On the welcome screen, tap Sign in with Apple and
+use the reviewer Apple ID already signed in on the device. Google sign-in and
+an emailed one-time code are alternatives.
+
+Coin packs are consumable in-app purchases (Store tab). Puzzles are generated
+centrally with AI before anyone plays them and are labelled as such in the
+Terms of Service.
+```
+
+Contact: the developer email and a phone number (Apple requires one; it is
+not shown publicly).
+
+## In-app purchase metadata (all four are in "Missing Metadata")
+
+Each of the four consumables needs, before it can leave "Missing Metadata":
+
+- **Display name** and **description** (already entered when created)
+- **Review screenshot** — one screenshot of the Store screen, reused for all
+  four. It is for App Review only and is never shown to customers. It must be
+  a real iPhone screenshot of the Store screen with prices showing, so take it
+  on the device.
+- **Review note:** `Consumable pack of coins, used to unlock extra puzzles and
+  hints.`
+
+Then attach all four to the app version under **In-App Purchases and
+Subscriptions** on the version page, or they will not be submitted with it.
