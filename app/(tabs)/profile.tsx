@@ -24,6 +24,7 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import { useUserStore } from "../../stores/userStore";
 
 import { formatCompactNumber } from "../../utils/formatNumber";
+import { accountLabel } from "../../utils/accountLabel";
 import {
   deleteAccountAndReset,
   getLinkedProviders,
@@ -663,12 +664,7 @@ export default function ProfileScreen() {
               <View>
                 <Text style={styles.settingText}>Signed in</Text>
                 <Text style={styles.connectedLabel}>
-                  {linked.email ??
-                    (linked.hasApple
-                      ? "Apple account"
-                      : linked.hasGoogle
-                        ? "Google account"
-                        : "This device")}
+                  {accountLabel(linked)}
                 </Text>
               </View>
             </View>

@@ -666,7 +666,8 @@ export async function getLinkedProviders(): Promise<LinkedProviders> {
     // Shown on the settings screen so a player can tell which account they
     // are in. With three ways to sign in, "signed in" on its own is not
     // enough to know whether you will land back in the same account.
-    email: data.user.email ?? null,
+    // "" when the provider shared none (Apple can withhold it), not null.
+    email: data.user.email || null,
   };
 }
 
