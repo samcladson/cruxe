@@ -132,10 +132,14 @@ it is taken, fall back to `Cruxe Crossword`.
 ## Subtitle (30 max)
 
 ```
-A new crossword every day
+Word Puzzle & Brain Game
 ```
 
-*25 characters.* Shown under the name in search results.
+*24 characters.* Shown under the name in search results. Revised 2026-09-29
+(ASO pass): the old subtitle, "A new crossword every day", repeated
+"crossword" from the name and spent the rest on words nobody searches ("a",
+"new", "every"). Apple indexes name + subtitle + keywords as one pool, so every
+word here should be new. The daily habit is still carried by the name.
 
 ## Promotional text (170 max)
 
@@ -149,12 +153,24 @@ place for anything time-sensitive later.
 ## Keywords (100 max, comma-separated, no spaces after commas)
 
 ```
-crossword,puzzle,word game,daily,brain,clues,trivia,grid,streak,leaderboard
+trivia,clue,quiz,mini,grid,streak,knowledge,history,sports,vocabulary,solve,challenge,offline,mind
 ```
 
-*75 characters.* Do not repeat the app name (Apple already indexes it).
-Deliberately no "cryptic": these are not cryptic crosswords, and a mismatched
-keyword is a metadata-rejection risk.
+*98 characters.* Revised 2026-09-29 (ASO pass). Rules it follows:
+- **No word already in the name or subtitle** (Cruxe, daily, crossword, word,
+  puzzle, brain, game). The old list spent 16 characters re-indexing
+  "crossword" and "daily".
+- **Single words, commas, no spaces.** Apple combines them into phrases itself
+  ("mini" + "crossword" matches "mini crossword").
+- **Only true terms.** mini = the 6×6 grids; history, sports = real categories;
+  challenge = the Daily Challenge; offline = solving works offline; streak and
+  the leaderboard are features.
+- **Deliberately absent:** "cryptic" (not cryptic crosswords), "anagram", and any
+  competitor or trademark (e.g. NYT) — each is a metadata-rejection risk.
+
+Keywords can only be changed with a new version, so set these before
+submitting. After 2–4 weeks live, check which terms bring impressions in App
+Store Connect → App Analytics and swap out the dead ones.
 
 ## Description (4000 max)
 
@@ -189,13 +205,16 @@ and carries the contact address in its footer.
 
 ## App Review Information
 
-**Sign-in required:** tick it, but leave the username and password blank, and
-paste this into the notes field verbatim:
+**Sign-in required:** leave it **unticked**. Ticking it makes the username and
+password fields mandatory, and Cruxe has no password login to give. Put the
+explanation in the notes field instead, verbatim:
 
 ```
-No demo account is required. On the welcome screen, tap Sign in with Apple and
-use the reviewer Apple ID already signed in on the device. Google sign-in and
-an emailed one-time code are alternatives.
+Sign-in is required. No demo account or password exists, because Cruxe has no
+password login. Please use Sign in with Apple: on the welcome screen tap
+"Continue with Apple" and use the Apple ID already signed in on the review
+device. It creates a fresh account instantly, with no email verification.
+Google sign-in and an emailed one-time code are alternatives.
 
 Coin packs are consumable in-app purchases (Store tab). Puzzles are generated
 centrally with AI before anyone plays them and are labelled as such in the
