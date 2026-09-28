@@ -331,6 +331,21 @@ const BACKDROPS = {
       ],
       focus: [195, 360, 760, 0.3],
     }),
+
+  /**
+   * Launch: gold light where the logo builds, a cool counterweight in two
+   * corners, and the dot grid around the centre. The crossword ripple plays
+   * over it (components/ui/AnimatedSplash.tsx).
+   */
+  splash: () =>
+    ambient({
+      lights: [
+        [195, 422, 300, GOLD, 0.12],
+        [380, 60, 280, BLUE, 0.07],
+        [20, 800, 280, PURPLE, 0.06],
+      ],
+      focus: [195, 422, 560, 0.3],
+    }),
 };
 
 /* -------------------------------------------------------------------------- */

@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { Platform, StyleSheet, View } from "react-native";
+import React, { memo, useEffect, useMemo, useState } from "react";
+import { Platform, StyleSheet, useWindowDimensions, View } from "react-native";
 import Animated, {
   Easing,
   runOnJS,
@@ -12,29 +12,34 @@ import Animated, {
   withSpring,
   withTiming,
 } from "react-native-reanimated";
-import Svg, { Circle, Defs, RadialGradient, Stop } from "react-native-svg";
+import { ScreenBackdrop } from "./ScreenBackdrop";
+import { RippleCell, rippleRings } from "../../utils/splashRipple";
 
 /**
- * AnimatedSplash — the logo's launch moment, "Four directions".
+ * AnimatedSplash — the launch moment: "Four directions", then the crossword
+ * ripple.
  *
- * The gold centre pops in, the four arms shoot out one at a time (up, right,
- * down, left: the four ways a Cruxe answer can run), a soft gold glow swells
- * and fades behind the finished logo, and then it fades into the app.
+ * 1. Build-up: the gold centre pops in and the four arms shoot out one at a
+ *    time (up, right, down, left: the four ways a Cruxe answer can run).
+ * 2. Ripple: the page background fades in (the same light and dot grid as
+ *    every other screen), and a crossword grid spreads outward from the logo,
+ *    its cells lighting up gold ring by ring to the edges of the screen.
+ * 3. The whole thing fades into the app.
  *
- * Where it plays:
- * - Android 12+: the system plays all of that from the moment the icon is
- *   tapped (plugins/withAnimatedSplash.js), before any app code runs. This
- *   picks up on its final frame, the complete logo at the same size and
- *   position, and only fades it into the app.
+ * Where the build-up plays:
+ * - Android 12+: the system plays it from the moment the icon is tapped
+ *   (plugins/withAnimatedSplash.js). This picks up on its final frame, the
+ *   complete logo at the same size and position, and plays the ripple, which
+ *   needs the whole screen that the system splash cannot draw on.
  * - iOS and older Android: launch screens there cannot animate (Apple requires
  *   them static), so the native splash is the dark background alone and this
- *   plays the whole thing on the app's first frame.
+ *   plays the build-up too.
  *
- * If the app is still loading once it has played, the finished logo stays on
- * screen until `ready`, so the fade never reveals a blank screen. With reduced
- * motion on, the finished logo is shown still.
+ * If the app is still loading once the ripple has spread, the logo and the
+ * settled grid stay on screen until `ready`, so the fade never reveals a blank
+ * screen. With reduced motion on, the finished logo is shown still.
  *
- * Geometry must match plugins/withAnimatedSplash.js (a test checks this).
+ * Logo geometry must match plugins/withAnimatedSplash.js (a test checks this).
  */
 
 const CELL = 40;
@@ -42,8 +47,6 @@ const GAP = 6;
 const STEP = CELL + GAP;
 const RADIUS = 10;
 const STROKE = 2.5;
-/** Kept inside the 90dp the Android splash can show without clipping. */
-const GLOW_RADIUS = 75;
 
 const BG = "#0a0a0a";
 const GOLD = "#eecd2b";
@@ -60,21 +63,31 @@ const ARMS = [
 const FIRST_ARM_AT = 200;
 const ARM_STAGGER = 100;
 const BUILD_MS = 800;
-const GLOW_IN_MS = 140;
-const GLOW_OUT_MS = 260;
-const GLOW_PEAK = 0.4;
-const FADE_MS = 260;
+
+/** The ripple: one ring of cells lights up every RING_STEP_MS. */
+const RING_STEP_MS = 60;
+const RING_FLASH_IN_MS = 140;
+const RING_FLASH_OUT_MS = 420;
+/** Where a ring settles after its flash, so the grid stays faintly visible. */
+const RING_REST = 0.16;
+const BACKDROP_IN_MS = 300;
+/**
+ * Fade into the app only once the last ring has flashed and begun to settle.
+ * Fading any earlier crossfades bright gold cells over the app's own screen.
+ */
+const SETTLE_BEFORE_FADE_MS = RING_FLASH_IN_MS + 220;
+const FADE_MS = 320;
 
 /**
- * On Android 12+ the app can be ready before the system's animation has
+ * On Android 12+ the app can be ready before the system's build-up has
  * finished. Keeping the native splash up this much longer after the overlay
- * appears lets it play out, rather than being cut to the complete logo.
+ * appears lets it land on its final frame, rather than being cut short.
  */
 const NATIVE_FINISH_MS = 500;
 
 const SPRING = { damping: 11, stiffness: 190, mass: 0.7 };
 
-/** Whether the system has already played the animation (Android 12+). */
+/** Whether the system has already played the build-up (Android 12+). */
 const NATIVE_INTRO =
   Platform.OS === "android" && Number(Platform.Version) >= 31;
 
@@ -89,10 +102,19 @@ interface AnimatedSplashProps {
 
 export function AnimatedSplash({ ready, onVisible, onDone }: AnimatedSplashProps) {
   const reduceMotion = useReducedMotion();
-  const playHere = !NATIVE_INTRO && !reduceMotion;
-  const [played, setPlayed] = useState(!playHere);
+  const { width, height } = useWindowDimensions();
+  const rings = useMemo(
+    () => rippleRings(width, height, CELL, STEP),
+    [width, height],
+  );
 
-  const start = playHere ? 0 : 1;
+  const buildHere = !NATIVE_INTRO && !reduceMotion;
+  // The grid is mounted after the first frame, which has to be quick: it is
+  // what lets the native splash hide.
+  const [showGrid, setShowGrid] = useState(false);
+  const [played, setPlayed] = useState(reduceMotion);
+
+  const start = buildHere ? 0 : 1;
   const arms = [
     useSharedValue(start),
     useSharedValue(start),
@@ -100,14 +122,14 @@ export function AnimatedSplash({ ready, onVisible, onDone }: AnimatedSplashProps
     useSharedValue(start),
   ];
   const core = useSharedValue(start);
-  const glow = useSharedValue(0);
+  const backdrop = useSharedValue(0);
+  // Enough ring values for the tallest screen; unused ones stay at 0.
+  const ringValues = Array.from({ length: 24 }, () => useSharedValue(0));
   const fade = useSharedValue(1);
 
-  // The build-up and the glow, where the system did not already play them.
-  // Runs once, on mount: this is a single launch moment.
+  // 1. The build-up, where the system did not already play it. Runs once.
   useEffect(() => {
-    if (!playHere) return;
-
+    if (!buildHere) return;
     core.value = withSequence(
       withTiming(1.16, { duration: 170, easing: Easing.out(Easing.quad) }),
       withSpring(1, SPRING),
@@ -118,44 +140,69 @@ export function AnimatedSplash({ ready, onVisible, onDone }: AnimatedSplashProps
         withSpring(1, SPRING),
       );
     });
-    glow.value = withDelay(
-      BUILD_MS - 100,
-      withSequence(
-        withTiming(1, { duration: GLOW_IN_MS, easing: Easing.out(Easing.quad) }),
-        withTiming(0, { duration: GLOW_OUT_MS, easing: Easing.in(Easing.quad) }, (finished) => {
-          if (finished) runOnJS(setPlayed)(true);
-        }),
-      ),
-    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Fade into the app once it has played and the app can be seen.
+  // 2. The ripple, once the grid is mounted.
+  useEffect(() => {
+    if (!showGrid || reduceMotion) return;
+    const at = buildHere ? BUILD_MS - 60 : 0;
+
+    backdrop.value = withDelay(
+      at,
+      withTiming(1, { duration: BACKDROP_IN_MS, easing: Easing.out(Easing.quad) }),
+    );
+    rings.forEach((_, k) => {
+      if (k >= ringValues.length) return;
+      ringValues[k].value = withDelay(
+        at + k * RING_STEP_MS,
+        withSequence(
+          withTiming(1, { duration: RING_FLASH_IN_MS, easing: Easing.out(Easing.quad) }),
+          withTiming(RING_REST, { duration: RING_FLASH_OUT_MS, easing: Easing.in(Easing.quad) }),
+        ),
+      );
+    });
+
+    const spread = Math.min(rings.length, ringValues.length) * RING_STEP_MS;
+    const timer = setTimeout(
+      () => setPlayed(true),
+      at + spread + SETTLE_BEFORE_FADE_MS,
+    );
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showGrid]);
+
+  // 3. Into the app, once the ripple is well under way and the app is ready.
   useEffect(() => {
     if (!played || !ready) return;
     if (reduceMotion) {
       onDone();
       return;
     }
-    fade.value = withTiming(0, { duration: FADE_MS }, (finished) => {
+    fade.value = withTiming(0, { duration: FADE_MS, easing: Easing.in(Easing.quad) }, (finished) => {
       if (finished) runOnJS(onDone)();
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [played, ready]);
 
   const handleLayout = () => {
-    if (NATIVE_INTRO) setTimeout(onVisible, NATIVE_FINISH_MS);
-    else onVisible();
+    if (NATIVE_INTRO) {
+      // Let the system's build-up land, then hand over and start the ripple.
+      setTimeout(() => {
+        onVisible();
+        setShowGrid(true);
+      }, NATIVE_FINISH_MS);
+    } else {
+      onVisible();
+      setShowGrid(true);
+    }
   };
 
   const overlayStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
+  const backdropStyle = useAnimatedStyle(() => ({ opacity: backdrop.value }));
   const coreStyle = useAnimatedStyle(() => ({
     opacity: core.value > 0.02 ? 1 : 0,
     transform: [{ scale: core.value }],
-  }));
-  const glowStyle = useAnimatedStyle(() => ({
-    opacity: glow.value * GLOW_PEAK,
-    transform: [{ scale: 0.7 + glow.value * 0.35 }],
   }));
 
   return (
@@ -166,24 +213,18 @@ export function AnimatedSplash({ ready, onVisible, onDone }: AnimatedSplashProps
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
     >
+      {showGrid && !reduceMotion ? (
+        <>
+          <Animated.View style={[StyleSheet.absoluteFill, backdropStyle]}>
+            <ScreenBackdrop variant="splash" />
+          </Animated.View>
+          {rings.slice(0, ringValues.length).map((cells, k) => (
+            <Ring key={k} cells={cells} value={ringValues[k]} />
+          ))}
+        </>
+      ) : null}
+
       <View style={styles.logo}>
-        <Animated.View style={[styles.glow, glowStyle]}>
-          <Svg width={GLOW_RADIUS * 2} height={GLOW_RADIUS * 2}>
-            <Defs>
-              <RadialGradient id="splashGlow" cx="50%" cy="50%" r="50%">
-                <Stop offset="0" stopColor={GOLD} stopOpacity={1} />
-                <Stop offset="0.5" stopColor={GOLD} stopOpacity={0.42} />
-                <Stop offset="1" stopColor={GOLD} stopOpacity={0} />
-              </RadialGradient>
-            </Defs>
-            <Circle
-              cx={GLOW_RADIUS}
-              cy={GLOW_RADIUS}
-              r={GLOW_RADIUS}
-              fill="url(#splashGlow)"
-            />
-          </Svg>
-        </Animated.View>
         {ARMS.map((arm, i) => (
           <Arm key={arm.key} progress={arms[i]} x={arm.x} y={arm.y} />
         ))}
@@ -192,6 +233,27 @@ export function AnimatedSplash({ ready, onVisible, onDone }: AnimatedSplashProps
     </Animated.View>
   );
 }
+
+/** One ring of the ripple: its cells share a single animated opacity. */
+const Ring = memo(function Ring({
+  cells,
+  value,
+}: {
+  cells: RippleCell[];
+  value: SharedValue<number>;
+}) {
+  const style = useAnimatedStyle(() => ({ opacity: value.value }));
+  return (
+    <Animated.View style={[StyleSheet.absoluteFill, style]}>
+      {cells.map((cell) => (
+        <View
+          key={cell.key}
+          style={[styles.rippleCell, { left: cell.left, top: cell.top }]}
+        />
+      ))}
+    </Animated.View>
+  );
+});
 
 /** One arm: at 0 it is tucked behind the centre, at 1 it is in place. */
 function Arm({
@@ -242,9 +304,13 @@ const styles = StyleSheet.create({
   core: {
     backgroundColor: GOLD,
   },
-  glow: {
+  rippleCell: {
     position: "absolute",
-    width: GLOW_RADIUS * 2,
-    height: GLOW_RADIUS * 2,
+    width: CELL,
+    height: CELL,
+    borderRadius: RADIUS,
+    borderWidth: 1.5,
+    borderColor: "rgba(238,205,43,0.85)",
+    backgroundColor: "rgba(238,205,43,0.22)",
   },
 });
