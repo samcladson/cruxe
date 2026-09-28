@@ -23,6 +23,7 @@ import {
 } from "../../services/authService";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { routeAfterStart } from "../../utils/onboardingRoute";
+import { socialSignInOutcome } from "../../utils/socialSignIn";
 import { ScreenBackdrop } from "../../components/ui/ScreenBackdrop";
 
 /**
@@ -84,14 +85,18 @@ export default function WelcomeScreen() {
   const signIn = async (provider: "google" | "apple") => {
     setBusyProvider(provider);
     try {
-      const { error } =
+      const result =
         provider === "google"
           ? await signInWithGoogle()
           : await signInWithApple();
-      if (error) {
+      const outcome = socialSignInOutcome(result);
+      // Dismissing the provider's sheet is a choice: stay here, say nothing.
+      // It used to fall through to proceed() and open the app with no account.
+      if (outcome === "cancelled") return;
+      if (outcome === "failed") {
         Alert.alert(
           "Couldn't sign in",
-          error.message +
+          (result.error?.message ?? "Something went wrong.") +
             "\n\nYou can try again, or sign in with an emailed code instead.",
         );
         return;

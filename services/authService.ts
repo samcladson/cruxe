@@ -337,6 +337,12 @@ export interface SocialAuthResult {
   user?: User;
   /** True when an existing account was signed into rather than upgraded. */
   signedIntoExisting?: boolean;
+  /**
+   * True when the player dismissed the provider's sheet, or another attempt
+   * was already running. Not an error, but not a sign-in: a screen that
+   * carries on into the app must check this.
+   */
+  cancelled?: boolean;
 }
 
 /**
@@ -482,7 +488,7 @@ export async function signInWithApple(): Promise<SocialAuthResult> {
   } catch (error: any) {
     if (error.code === "ERR_REQUEST_CANCELED") {
       console.log("[Auth] Apple Sign-In canceled by user");
-      return { error: null }; // Silent cancel
+      return { error: null, cancelled: true };
     }
     console.error("[Auth] Apple Sign-In error:", error);
     return { error };
@@ -524,7 +530,7 @@ export async function signInWithGoogle(): Promise<SocialAuthResult> {
       idToken = (response as any).idToken;
     } else {
       console.log("[Auth] Google Sign-In not successful (type !== success)");
-      return { error: null };
+      return { error: null, cancelled: true };
     }
 
     if (!idToken) {
@@ -609,7 +615,7 @@ export async function signInWithGoogle(): Promise<SocialAuthResult> {
       error.code === "SIGN_IN_CANCELLED"
     ) {
       console.log("[Auth] Google Sign-In canceled or already in progress");
-      return { error: null }; // Silent cancel
+      return { error: null, cancelled: true };
     }
     if (error?.code === "DEVELOPER_ERROR") {
       const pkg = Constants.expoConfig?.android?.package ?? "com.cruxe.app";
