@@ -12,6 +12,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from "react-native-reanimated";
+import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg";
 import { ScreenBackdrop } from "./ScreenBackdrop";
 import { RippleCell, rippleRings } from "../../utils/splashRipple";
 
@@ -214,7 +215,13 @@ export function AnimatedSplash({ ready, onVisible, onDone }: AnimatedSplashProps
   };
 
   const overlayStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
-  const contentStyle = useAnimatedStyle(() => ({
+  // The grid and the logo leave together; they are separate layers only so
+  // the vignette can sit between them.
+  const gridStyle = useAnimatedStyle(() => ({
+    opacity: content.value,
+    transform: [{ scale: 1 + (1 - content.value) * 0.04 }],
+  }));
+  const logoStyle = useAnimatedStyle(() => ({
     opacity: content.value,
     transform: [{ scale: 1 + (1 - content.value) * 0.04 }],
   }));
@@ -240,16 +247,29 @@ export function AnimatedSplash({ ready, onVisible, onDone }: AnimatedSplashProps
 
       {/* The logo and the grid leave first, then the background dissolves
           into the app, so neither is ever seen over the app's own content. */}
+      {showGrid && !reduceMotion ? (
+        <Animated.View style={[StyleSheet.absoluteFill, gridStyle]}>
+          {rings.slice(0, ringValues.length).map((cells, k) => (
+            <Ring key={k} cells={cells} value={ringValues[k]} />
+          ))}
+        </Animated.View>
+      ) : null}
+
+      {/* The edges darken to the page colour, like an old photograph, so the
+          grid and the background fade away before they reach the screen's
+          edge. Above the grid, below the logo; it leaves with the backdrop. */}
+      {showGrid && !reduceMotion ? (
+        <Animated.View
+          style={[StyleSheet.absoluteFill, backdropStyle]}
+          pointerEvents="none"
+        >
+          <Vignette />
+        </Animated.View>
+      ) : null}
+
       <Animated.View
-        style={[StyleSheet.absoluteFill, styles.centred, contentStyle]}
+        style={[StyleSheet.absoluteFill, styles.centred, logoStyle]}
       >
-        {showGrid && !reduceMotion
-          ? rings
-              .slice(0, ringValues.length)
-              .map((cells, k) => (
-                <Ring key={k} cells={cells} value={ringValues[k]} />
-              ))
-          : null}
         <View style={styles.logo}>
           {ARMS.map((arm, i) => (
             <Arm key={arm.key} progress={arms[i]} x={arm.x} y={arm.y} />
@@ -260,6 +280,30 @@ export function AnimatedSplash({ ready, onVisible, onDone }: AnimatedSplashProps
     </Animated.View>
   );
 }
+
+/**
+ * A soft vignette in the page colour: clear through the middle, deepening
+ * toward every edge. Its gradient follows the screen's proportions, so it is
+ * an oval on a tall phone and reaches all four edges evenly.
+ */
+const Vignette = memo(function Vignette() {
+  return (
+    <Svg width="100%" height="100%">
+      <Defs>
+        {/* r 58%: each edge falls at ~0.86 of the gradient, nearly opaque;
+            the corners are fully covered. */}
+        <RadialGradient id="splashVignette" cx="50%" cy="50%" r="58%">
+          <Stop offset="0" stopColor={BG} stopOpacity={0} />
+          <Stop offset="0.4" stopColor={BG} stopOpacity={0} />
+          <Stop offset="0.65" stopColor={BG} stopOpacity={0.45} />
+          <Stop offset="0.82" stopColor={BG} stopOpacity={0.88} />
+          <Stop offset="1" stopColor={BG} stopOpacity={1} />
+        </RadialGradient>
+      </Defs>
+      <Rect width="100%" height="100%" fill="url(#splashVignette)" />
+    </Svg>
+  );
+});
 
 /** One ring of the ripple: its cells share a single animated opacity. */
 const Ring = memo(function Ring({
