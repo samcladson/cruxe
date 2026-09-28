@@ -58,13 +58,15 @@ const DIRECTION_TABS: { key: Direction; label: string; icon: string }[] = [
 interface CluePanelProps {
   /** Whether the sheet holding this panel is raised over the grid. */
   expanded?: boolean;
+  /** Whether the resting sheet has room to list clues without being raised. */
+  showList?: boolean;
   /** Toggles that. Omitted, the chevron is not rendered at all. */
   onToggleExpanded?: () => void;
   /** Fired when a clue is chosen, so the sheet can get out of the way. */
   onClueSelected?: () => void;
   /**
    * Combined height of the parts that stay on screen when collapsed: the
-   * direction tabs and the action bar. The sheet rests at this height.
+   * direction tabs and the action bar. The sheet never rests below this.
    */
   onChromeHeight?: (height: number) => void;
 }
@@ -75,6 +77,7 @@ interface CluePanelProps {
  */
 export function CluePanel({
   expanded = false,
+  showList = false,
   onToggleExpanded,
   onClueSelected,
   onChromeHeight,
@@ -217,9 +220,9 @@ export function CluePanel({
         ) : null}
       </View>
 
-      {/* Only while raised. Collapsed, the tabs and the action bar are the
-          whole panel, and the space goes back to the grid. */}
-      {expanded ? (
+      {/* When raised, and when the resting sheet has room below the grid.
+          Otherwise the tabs and the action bar are the whole panel. */}
+      {expanded || showList ? (
         <ScrollView
           ref={scrollViewRef}
           style={styles.scrollArea}

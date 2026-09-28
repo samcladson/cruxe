@@ -3,8 +3,6 @@ import * as Haptics from "expo-haptics";
 import { router, Stack } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
-  KeyboardAvoidingView,
-  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -27,6 +25,7 @@ import { SFX } from "../../services/soundService";
 import { usePuzzleStore } from "../../stores/puzzleStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { ScreenBackdrop } from "../../components/ui/ScreenBackdrop";
+import { usePuzzleLayout } from "../../hooks/usePuzzleLayout";
 
 /**
  * TutorialScreen — a bundled warm-up puzzle with non-blocking coaching.
@@ -48,9 +47,8 @@ export default function TutorialScreen() {
   // says what the warm-up is, and saying it twice made the app feel like it
   // kept clearing its throat before letting anyone play.
   const [coachVisible, setCoachVisible] = useState(true);
-  /** Reserved beneath the grid for the collapsed clue sheet, which reports
-   *  its own resting height rather than being given a guessed one. */
-  const [clueRestHeight, setClueRestHeight] = useState(0);
+  /** Grid and clue-sheet layout, including while the keyboard is up. */
+  const layout = usePuzzleLayout();
   const [hasTouchedReverse, setHasTouchedReverse] = useState(false);
   const [solved, setSolved] = useState(false);
 
@@ -170,9 +168,10 @@ export default function TutorialScreen() {
     <SafeAreaView style={styles.container}>
       <ScreenBackdrop variant="tutorial" />
       <Stack.Screen options={{ headerShown: false }} />
-      <KeyboardAvoidingView
+      <View
+        ref={layout.bodyRef}
         style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        onLayout={layout.onBodyLayout}
       >
         <View style={styles.header}>
           <Text style={styles.headerTitle}>WARM-UP</Text>
@@ -196,11 +195,18 @@ export default function TutorialScreen() {
         )}
 
         <ActiveClueBar onHintPress={() => revealLetter()} coaching />
-        <CrosswordGrid />
+        <CrosswordGrid keyboardChrome={layout.chromeHeight} />
 
-        <View style={{ height: clueRestHeight }} />
-        <ClueSheet onRestHeightChange={setClueRestHeight} />
-      </KeyboardAvoidingView>
+        <View
+          style={{ flex: 1, minHeight: layout.chromeHeight }}
+          onLayout={layout.onSpaceLayout}
+        />
+        <ClueSheet
+          spaceBelowGrid={layout.spaceBelowGrid}
+          keyboardOverlap={layout.keyboardOverlap}
+          onChromeHeightChange={layout.setChromeHeight}
+        />
+      </View>
     </SafeAreaView>
   );
 }

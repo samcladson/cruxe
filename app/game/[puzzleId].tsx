@@ -4,8 +4,6 @@ import { router, Stack, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -36,6 +34,7 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import { useUserStore } from "../../stores/userStore";
 import { Difficulty } from "../../types/puzzle.types";
 import { ScreenBackdrop } from "../../components/ui/ScreenBackdrop";
+import { usePuzzleLayout } from "../../hooks/usePuzzleLayout";
 
 // Coin rewards live in economy_config on the server. The client is told what
 // it earned; it never decides.
@@ -53,9 +52,8 @@ export default function GameScreen() {
   const { profile, completePuzzle, enqueuePendingSolve } = useUserStore();
 
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  /** Reserved beneath the grid for the collapsed clue sheet, which reports
-   *  its own resting height rather than being given a guessed one. */
-  const [clueRestHeight, setClueRestHeight] = useState(0);
+  /** Grid and clue-sheet layout, including while the keyboard is up. */
+  const layout = usePuzzleLayout();
   const [showHintModal, setShowHintModal] = useState(false);
   const [coinsEarned, setCoinsEarned] = useState(0);
   const [scoreEarned, setScoreEarned] = useState(0);
@@ -264,9 +262,10 @@ export default function GameScreen() {
     <SafeAreaView style={styles.container}>
       <ScreenBackdrop variant="game" />
       <Stack.Screen options={{ headerShown: false }} />
-      <KeyboardAvoidingView
+      <View
+        ref={layout.bodyRef}
         style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        onLayout={layout.onBodyLayout}
       >
         {/* Top Status Bar */}
         <View style={styles.header}>
@@ -319,12 +318,20 @@ export default function GameScreen() {
         <ActiveClueBar onHintPress={() => setShowHintModal(true)} />
 
         {/* Crossword Grid */}
-        <CrosswordGrid />
+        <CrosswordGrid keyboardChrome={layout.chromeHeight} />
 
-        {/* The clue list sits here when resting, and is raised over the
-            grid from its own chevron. This view only reserves the space. */}
-        <View style={{ height: clueRestHeight }} />
-        <ClueSheet onRestHeightChange={setClueRestHeight} />
+        {/* Everything the grid leaves below it. The clue sheet is drawn over
+            this space and fills it; this view only measures it, and never
+            lets it drop below the height of the sheet's controls. */}
+        <View
+          style={{ flex: 1, minHeight: layout.chromeHeight }}
+          onLayout={layout.onSpaceLayout}
+        />
+        <ClueSheet
+          spaceBelowGrid={layout.spaceBelowGrid}
+          keyboardOverlap={layout.keyboardOverlap}
+          onChromeHeightChange={layout.setChromeHeight}
+        />
 
         <SuccessModal
           visible={showSuccessModal}
@@ -338,7 +345,7 @@ export default function GameScreen() {
           visible={showHintModal}
           onClose={() => setShowHintModal(false)}
         />
-      </KeyboardAvoidingView>
+      </View>
     </SafeAreaView>
   );
 }

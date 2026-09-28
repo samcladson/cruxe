@@ -6,58 +6,80 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { theme } from "../../constants/theme";
+import { sheetLayout } from "../../utils/sheetLayout";
 import { CluePanel } from "./CluePanel";
 
 /** How much of the screen the sheet covers once raised. */
 const EXPANDED_FRACTION = 0.5;
 
-/** Used until the panel has reported how tall its controls are. */
-const FALLBACK_COLLAPSED_HEIGHT = 96;
+/** A raised sheet is always at least this much taller than a resting one. */
+const MIN_RAISE = 120;
 
 interface ClueSheetProps {
+  /** Height the grid leaves free beneath it, which the resting sheet fills. */
+  spaceBelowGrid: number;
+  /** How far the keyboard reaches up over the bottom of the screen. */
+  keyboardOverlap: number;
   /**
-   * Reports the height the sheet rests at, so the screen can reserve exactly
-   * that much beneath the grid and no more.
+   * Reports the height of the controls that stay visible at all times, so
+   * the screen can keep the typed row clear of them and reserve their space.
    */
-  onRestHeightChange?: (height: number) => void;
+  onChromeHeightChange?: (height: number) => void;
 }
 
 /**
- * The clue list as a sheet that can be raised over the grid.
+ * The clue list as a sheet at the foot of the puzzle screen.
  *
- * Collapsed, it is only the direction tabs and the action bar — the clue
- * list is hidden and that space belongs to the grid. Raised, it covers the
- * lower half of the screen so every clue in a direction can be read at once.
+ * Resting, it fills the space the grid leaves, listing clues for the current
+ * direction when there is room, so a tall phone shows clues rather than an
+ * empty band. Raised, it covers the lower half of the screen so every clue in
+ * a direction can be read at once. While the keyboard is up it shrinks to its
+ * controls and rides on top of the keyboard, the same on iOS and Android.
  *
- * The action bar stays visible in both states because FINISH lives there;
- * hiding it would mean a puzzle that cannot be completed without first
- * opening a list you do not need.
+ * The action bar stays visible in every state because FINISH lives there; on
+ * iOS, which has no back gesture to dismiss the keyboard, hiding it would
+ * leave no way to finish while typing.
  *
  * Positioned absolutely rather than grown in place: on Android a child cannot
  * be relied on to draw outside its parent's bounds, so a panel that expanded
  * within the layout would be clipped at the grid instead of covering it.
  */
-export function ClueSheet({ onRestHeightChange }: ClueSheetProps) {
+export function ClueSheet({
+  spaceBelowGrid,
+  keyboardOverlap,
+  onChromeHeightChange,
+}: ClueSheetProps) {
   const { height: screenHeight } = useWindowDimensions();
   const [expanded, setExpanded] = useState(false);
   const [chromeHeight, setChromeHeight] = useState(0);
 
-  const restingHeight = chromeHeight || FALLBACK_COLLAPSED_HEIGHT;
+  const layout = sheetLayout({ spaceBelowGrid, chromeHeight, keyboardOverlap });
+  const raisedHeight = Math.max(
+    Math.round(screenHeight * EXPANDED_FRACTION),
+    layout.restingHeight + MIN_RAISE,
+  );
 
   useEffect(() => {
-    onRestHeightChange?.(restingHeight);
-  }, [restingHeight, onRestHeightChange]);
-  const raisedHeight = Math.round(screenHeight * EXPANDED_FRACTION);
+    if (chromeHeight > 0) onChromeHeightChange?.(chromeHeight);
+  }, [chromeHeight, onChromeHeightChange]);
 
-  const height = useSharedValue(restingHeight);
+  const height = useSharedValue(layout.restingHeight);
+  const bottom = useSharedValue(0);
 
   useEffect(() => {
-    height.value = withTiming(expanded ? raisedHeight : restingHeight, {
+    height.value = withTiming(expanded ? raisedHeight : layout.restingHeight, {
       duration: 240,
     });
-  }, [expanded, raisedHeight, restingHeight]);
+  }, [expanded, raisedHeight, layout.restingHeight]);
 
-  const animatedStyle = useAnimatedStyle(() => ({ height: height.value }));
+  useEffect(() => {
+    bottom.value = withTiming(layout.bottom, { duration: 180 });
+  }, [layout.bottom]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    height: height.value,
+    bottom: bottom.value,
+  }));
 
   const toggle = () => {
     setExpanded((wasExpanded) => {
@@ -72,6 +94,7 @@ export function ClueSheet({ onRestHeightChange }: ClueSheetProps) {
     <Animated.View style={[styles.sheet, animatedStyle]}>
       <CluePanel
         expanded={expanded}
+        showList={layout.showList}
         onToggleExpanded={toggle}
         onClueSelected={() => setExpanded(false)}
         onChromeHeight={setChromeHeight}
@@ -85,7 +108,6 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 0,
     right: 0,
-    bottom: 0,
     backgroundColor: theme.colors.bgPrimary,
     borderTopWidth: 1,
     borderTopColor: "rgba(255,255,255,0.08)",

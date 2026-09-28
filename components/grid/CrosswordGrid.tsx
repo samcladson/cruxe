@@ -21,7 +21,15 @@ const { width } = Dimensions.get("window");
  * Uses a classic crossword layout — cells are tightly packed in a square
  * with thin borders between them. A hidden TextInput captures keyboard events.
  */
-export function CrosswordGrid() {
+interface CrosswordGridProps {
+  /**
+   * Height of the controls that sit on top of the keyboard while typing. The
+   * typed row has to clear those as well as the keyboard itself.
+   */
+  keyboardChrome?: number;
+}
+
+export function CrosswordGrid({ keyboardChrome = 0 }: CrosswordGridProps) {
   const {
     activePuzzle,
     selectedCell,
@@ -70,7 +78,9 @@ export function CrosswordGrid() {
         ? 0
         : activeRowShift(
             gridTopY + (row + 1) * cell,
-            keyboardTop,
+            // The typed row clears the controls riding on the keyboard, not
+            // just the keyboard. Infinity (no keyboard) stays Infinity.
+            keyboardTop - keyboardChrome,
             // A full cell of clearance, so the row below the active one stays
             // visible. Clearing the keyboard by a few pixels leaves the cell
             // legible but with nothing around it, which is what every row in
@@ -79,7 +89,13 @@ export function CrosswordGrid() {
           );
 
     shift.value = withTiming(target, { duration: 180 });
-  }, [activePuzzle?.gridSize, selectedCell?.row, gridTopY, keyboardTop]);
+  }, [
+    activePuzzle?.gridSize,
+    selectedCell?.row,
+    gridTopY,
+    keyboardTop,
+    keyboardChrome,
+  ]);
 
   const shiftStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: -shift.value }],
