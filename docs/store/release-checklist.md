@@ -511,8 +511,8 @@ own time zone instead of UTC. Design: `docs/superpowers/specs/2026-09-28-user-ti
 - [x] Incoming `cruxe://game/...` links land on Home (`app/+native-intent.tsx`):
       entering a puzzle charges a free play or coins, and a link skipped the
       price shown on the in-app button.
-- [ ] **Apply migration 027** (committed, tested in a rolled-back transaction,
-      not applied — needs the owner's go-ahead): leaderboard stops publishing
+- [x] **Migration 027 applied live 2026-09-29** (tested first in a rolled-back
+      transaction): leaderboard stops publishing
       account ids (they double as RevenueCat customer ids) and requires sign-in;
       table write grants revoked (TRUNCATE ignores RLS); feedback rate-limited
       to 10/hour and side fields bounded. Compatible with installed builds.
@@ -566,8 +566,7 @@ Deliberate, recorded so they are decisions rather than oversights.
   The policy is written and gated behind `GEMINI_GROUNDING`. Until then the
   prompt asks for durable material rather than current events, because a
   model guessing at recent news invents it.
-- **No rate limit on feedback** — fixed by migration 027 (10 per hour) once
-  applied.
+- **No rate limit on feedback** — fixed by migration 027 (10 per hour).
 - **An account is required to play.** There is no trial of the real app
   without signing in. The warm-up tutorial now sits *after* sign-in, so a
   visitor cannot try the game before committing to an account. This is a
