@@ -38,11 +38,14 @@ interface CrosswordGridProps {
    * typed row has to clear those as well as the keyboard itself.
    */
   keyboardChrome?: number;
+  /** Told whether the grid is slid up, so the screen can fade its top edge. */
+  onShiftedChange?: (shifted: boolean) => void;
 }
 
 export function CrosswordGrid({
   keyboardTop = Infinity,
   keyboardChrome = 0,
+  onShiftedChange,
 }: CrosswordGridProps) {
   const {
     activePuzzle,
@@ -105,6 +108,7 @@ export function CrosswordGrid({
           );
 
     shift.value = withTiming(target, { duration: 180 });
+    onShiftedChange?.(target > 0);
   }, [
     activePuzzle?.gridSize,
     selectedCell?.row,
@@ -394,12 +398,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginVertical: GRID_MARGIN_V,
-    // The grid slides up behind the bars above it when the keyboard opens.
-    // Clipping it to its own box is what actually keeps it out of them:
-    // relying on the bars being opaque and elevated works only as long as
-    // every one of them is, and z-order on Android is easy to get wrong.
-    // Rows that scroll past the top edge are simply not drawn.
-    overflow: "hidden",
+    // Not clipped here: when the keyboard opens the grid slides up past its
+    // own box, into the space below the clue bar, and the screen clips it
+    // at the clue bar's edge with a fade (GridTopFade).
   },
   gridWrapper: {
     borderWidth: GRID_BORDER,

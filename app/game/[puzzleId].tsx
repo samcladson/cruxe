@@ -13,6 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ActiveClueBar } from "../../components/clues/ActiveClueBar";
 import { ClueSheet } from "../../components/clues/ClueSheet";
 import { CrosswordGrid } from "../../components/grid/CrosswordGrid";
+import { GridTopFade } from "../../components/grid/GridTopFade";
 import {
   DONE_BAR_HEIGHT,
   KeyboardDoneBar,
@@ -58,6 +59,8 @@ export default function GameScreen() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   /** Grid and clue-sheet layout, including while the keyboard is up. */
   const layout = usePuzzleLayout(activePuzzle?.gridSize ?? 0);
+  /** Whether the grid is slid up under the clue bar, to fade its edge. */
+  const [gridShifted, setGridShifted] = useState(false);
   const [showHintModal, setShowHintModal] = useState(false);
   const [coinsEarned, setCoinsEarned] = useState(0);
   const [scoreEarned, setScoreEarned] = useState(0);
@@ -323,13 +326,20 @@ export default function GameScreen() {
 
         {/* The area below the clue bar, shared by the grid and the clue
             sheet (utils/sheetLayout.ts). The sheet is drawn over its bottom. */}
-        <View style={{ flex: 1 }} onLayout={layout.onAreaLayout}>
+        {/* Clipped at the clue bar's edge: while typing, the grid slides up
+            into this area and fades away under the clue bar. */}
+        <View
+          style={{ flex: 1, overflow: "hidden" }}
+          onLayout={layout.onAreaLayout}
+        >
           <View style={{ marginTop: layout.gridOffset }}>
             <CrosswordGrid
               keyboardTop={layout.keyboardTopInWindow}
               keyboardChrome={DONE_BAR_HEIGHT}
+              onShiftedChange={setGridShifted}
             />
           </View>
+          <GridTopFade visible={gridShifted} />
         </View>
         <ClueSheet {...layout.sheet} />
         <KeyboardDoneBar keyboardOverlap={layout.keyboardOverlap} />
