@@ -6,15 +6,20 @@
  * puzzle, which is how it stops being one.
  */
 
+import { dateInZone } from "./timezone";
+
 /**
- * True when `lastPlayedDate` falls on an earlier day than `now`.
+ * True when `lastPlayedDate` falls on an earlier day than today in `zone`.
  *
- * Compared in **UTC**, deliberately. The streak itself is the server's to
- * decide, and `claim_daily_bonus` and `submit_solve` both work from
- * `(NOW() AT TIME ZONE 'UTC')::DATE`. Asking this question in local time
- * would let the client believe a new day had begun hours before the server
- * agreed, and the celebration would appear for a streak that had not
- * actually advanced.
+ * "Today" is the player's own day, the same one the server uses for the streak
+ * (`user_today` in migration 026), so the client never believes a new day has
+ * begun before the server does. `zone` is the zone the server confirmed; it
+ * defaults to UTC, the server's fallback for a player with none stored.
+ *
+ * `lastPlayedDate` arrives as a calendar date the server stored at UTC
+ * midnight, so its UTC date *is* that calendar date and is read as such. A date
+ * on or after today counts as today — the edge case migration 026 also handles
+ * on the server, where a US evening play is dated the next UTC day.
  *
  * A missing or unparseable date counts as first-of-day: a player with no
  * recorded history who has just solved a puzzle has indeed done so for the
@@ -23,16 +28,13 @@
 export function isFirstSolveOfDay(
   lastPlayedDate: string | null | undefined,
   now: Date = new Date(),
+  zone: string | null | undefined = "UTC",
 ): boolean {
   if (!lastPlayedDate) return true;
 
   const last = new Date(lastPlayedDate);
   if (Number.isNaN(last.getTime())) return true;
 
-  return utcDay(last) !== utcDay(now);
-}
-
-/** YYYY-MM-DD in UTC, matching how the server dates a play. */
-function utcDay(date: Date): string {
-  return date.toISOString().slice(0, 10);
+  const lastDay = last.toISOString().slice(0, 10);
+  return lastDay < dateInZone(zone, now);
 }

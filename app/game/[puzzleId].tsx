@@ -114,7 +114,13 @@ export default function GameScreen() {
 
     // Read before the solve is submitted, so it reflects the day's history
     // up to this puzzle rather than including it.
-    setIsNewStreak(isFirstSolveOfDay(profile.lastPlayedDate));
+    setIsNewStreak(
+      isFirstSolveOfDay(
+        profile.lastPlayedDate,
+        new Date(),
+        useSettingsStore.getState().timeZone,
+      ),
+    );
 
     setShowSuccessModal(true);
 

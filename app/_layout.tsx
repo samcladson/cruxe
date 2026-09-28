@@ -30,6 +30,7 @@ import {
 } from "../services/authService";
 import { reportError } from "../services/errorReporting";
 import { drainPendingSolves } from "../services/offlineSyncService";
+import { syncTimeZone } from "../services/timezoneService";
 import { initRevenueCat, loginToRevenueCat } from "../services/revenueCatService";
 import { preloadSounds } from "../services/soundService";
 import { useUserStore } from "../stores/userStore";
@@ -151,6 +152,8 @@ function RootLayoutNav() {
         // nothing that identifies a person.
         Sentry.setUser({ id: userId });
         await loginToRevenueCat(userId);
+        // Before the profile and puzzle lists, so they load for the right day.
+        await syncTimeZone();
         await syncFromSupabase(userId);
         // Backfills accounts that linked Google or Apple before the link
         // path started carrying the name across. A no-op for everyone
@@ -178,6 +181,7 @@ function RootLayoutNav() {
             setUserId(uid);
             void (async () => {
               await loginToRevenueCat(uid);
+              await syncTimeZone();
               await useUserStore.getState().syncFromSupabase(uid);
               await adoptProviderDisplayName();
             })();
@@ -200,6 +204,7 @@ function RootLayoutNav() {
   useEffect(() => {
     const handleAppStateChange = (nextState: AppStateStatus) => {
       if (nextState === "active") {
+        void syncTimeZone();
         drainPendingSolves().catch((err) => {
           console.warn("[Layout] Offline drain error:", err);
           // A solve that never drains is a player whose progress silently

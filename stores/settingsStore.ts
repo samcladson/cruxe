@@ -29,6 +29,14 @@ interface SettingsState {
   dailyReminderMinute: number;
   /** Warn in the evening when an unplayed day would break the streak. */
   streakWarningEnabled: boolean;
+  /**
+   * The time zone the server confirmed for this player, or null until it has.
+   * Every "today" in the app is read in this zone. It can trail the phone's own
+   * zone for a few days after travelling, because the server accepts a change
+   * only every 3 days (migration 026); using the confirmed zone keeps the app
+   * and the server agreeing on where the day starts.
+   */
+  timeZone: string | null;
   setHaptics: (enabled: boolean) => void;
   setSound: (enabled: boolean) => void;
   setTheme: (theme: "dark" | "light" | "system") => void;
@@ -37,6 +45,7 @@ interface SettingsState {
   setDailyReminder: (enabled: boolean, hour?: number) => void;
   setDailyReminderTime: (hour: number, minute: number) => void;
   setStreakWarning: (enabled: boolean) => void;
+  setTimeZone: (zone: string | null) => void;
   /**
    * Returns the app to its first-run state after account deletion.
    *
@@ -62,6 +71,7 @@ export const useSettingsStore = create<SettingsState>()(
       dailyReminderHour: 6,
       dailyReminderMinute: 30,
       streakWarningEnabled: false,
+      timeZone: null,
       setHaptics: (enabled) => set({ hapticsEnabled: enabled }),
       setSound: (enabled) => set({ soundEnabled: enabled }),
       setTheme: (theme) => set({ theme }),
@@ -75,6 +85,7 @@ export const useSettingsStore = create<SettingsState>()(
       setDailyReminderTime: (hour, minute) =>
         set({ dailyReminderHour: hour, dailyReminderMinute: minute }),
       setStreakWarning: (enabled) => set({ streakWarningEnabled: enabled }),
+      setTimeZone: (zone) => set({ timeZone: zone }),
       resetFirstRun: () =>
         set({
           hasCompletedOnboarding: false,

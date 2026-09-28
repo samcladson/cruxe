@@ -77,3 +77,49 @@ describe("isFirstSolveOfDay", () => {
     ).toBe(true);
   });
 });
+
+/**
+ * The player's own day. `lastPlayedDate` arrives from the server as a calendar
+ * date stored at UTC midnight ("2026-09-03T00:00:00.000Z" means the 3rd), so it
+ * is read as that date and compared with today in the player's zone.
+ */
+describe("isFirstSolveOfDay in the player's zone", () => {
+  it("is false for a US evening solve the server dated the 3rd", () => {
+    // 8 PM in New York on the 3rd is already the 4th in UTC.
+    expect(
+      isFirstSolveOfDay(
+        "2026-09-03T00:00:00.000Z",
+        new Date("2026-09-04T00:00:00.000Z"),
+        "America/New_York",
+      ),
+    ).toBe(false);
+  });
+
+  it("is true once the player's own midnight has passed", () => {
+    // 5:30 AM in Kolkata on the 3rd is still the 2nd in UTC.
+    expect(
+      isFirstSolveOfDay(
+        "2026-09-02T00:00:00.000Z",
+        new Date("2026-09-02T20:00:00.000Z"),
+        "Asia/Kolkata",
+      ),
+    ).toBe(true);
+  });
+
+  it("treats a date ahead of today as already played", () => {
+    // The edge case migration 026 fixes on the server: a last-played date on
+    // or after today counts as today.
+    expect(
+      isFirstSolveOfDay(
+        "2026-09-04T00:00:00.000Z",
+        new Date("2026-09-04T02:00:00.000Z"),
+        "America/New_York", // still the 3rd there
+      ),
+    ).toBe(false);
+  });
+
+  it("stays true for a player with no history in any zone", () => {
+    expect(isFirstSolveOfDay(null, new Date(), "Asia/Kolkata")).toBe(true);
+    expect(isFirstSolveOfDay("garbage", new Date(), "Asia/Kolkata")).toBe(true);
+  });
+});

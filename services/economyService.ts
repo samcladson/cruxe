@@ -297,6 +297,17 @@ export const syncPurchases = () =>
  * `appleAuthorizationCode` is a fresh one-time code from Sign in with Apple,
  * which the server uses to revoke the Apple grant (guideline 5.1.1(v)).
  */
+/**
+ * Reports the phone's time zone. Returns the zone the server now uses, which is
+ * the same one unless the last change was under 3 days ago or the name was not
+ * recognised. Always use the returned value, never the one sent.
+ */
+export async function setTimezone(zone: string): Promise<string> {
+  const { data, error } = await supabase.rpc("set_timezone", { p_zone: zone });
+  if (error) throw new Error(error.message);
+  return data as string;
+}
+
 export const deleteAccount = (appleAuthorizationCode?: string) =>
   invoke<{ ok: boolean; apple?: { status: string; reason?: string } }>(
     "delete-account",

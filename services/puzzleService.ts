@@ -16,6 +16,8 @@ import {
   Puzzle,
 } from "../types/puzzle.types";
 import { supabase } from "./supabaseClient";
+import { useSettingsStore } from "../stores/settingsStore";
+import { addDays, dateInZone } from "../utils/timezone";
 
 // ─── API Cache ───────────────────────────────────────────────────────
 
@@ -120,30 +122,27 @@ export interface CompletionData {
 }
 
 /**
- * Returns today's date as YYYY-MM-DD in **UTC**.
+ * Returns today's date as YYYY-MM-DD in the **player's own time zone**.
  *
- * The GitHub Actions cron that generates puzzles always writes puzzle_date
- * using `new Date().toISOString().split('T')[0]` — which is a UTC date.
- * The client must query with the same UTC date to match the DB rows correctly.
+ * Puzzles are generated three days ahead, each row dated by the day it is for,
+ * so showing a player "today's set" is just asking for the row dated their
+ * today. The zone is the one the server confirmed (see `syncTimeZone`), the
+ * same one it uses for free plays and streaks, so the set changes at the same
+ * moment those reset. Before a zone is confirmed the phone's own date is used.
  *
- * Using local device timezone (e.g. IST = UTC+5:30) would cause the app to
- * query for a date one day ahead of what the server actually stored, making
- * every puzzle appear missing until the next UTC midnight.
+ * Generation needs no change: the three-day buffer covers every zone — UTC+14
+ * is a day ahead of UTC and UTC-12 a day behind, and both sets already exist.
  */
-function getTodayUTC(): string {
-  return new Date().toISOString().split("T")[0];
+function getToday(): string {
+  return dateInZone(useSettingsStore.getState().timeZone);
 }
 
 /**
- * Returns yesterday's date as YYYY-MM-DD in **UTC**.
- * Used as a graceful fallback when today's UTC puzzles haven't been generated
- * yet (e.g. the cron job runs at 00:05 UTC and the user opens the app just
- * after UTC midnight before the job completes).
+ * Returns yesterday's date as YYYY-MM-DD in the player's zone.
+ * Used as a graceful fallback when today's puzzles are not there yet.
  */
-function getYesterdayUTC(): string {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() - 1);
-  return d.toISOString().split("T")[0];
+function getYesterday(): string {
+  return addDays(getToday(), -1);
 }
 
 // ─── Puzzle fetching ─────────────────────────────────────────────────
@@ -152,8 +151,8 @@ function getYesterdayUTC(): string {
  * Fetches today's Daily Challenge puzzle metadata for the home screen.
  *
  * Resolution order:
- *  1. Today UTC with is_daily_challenge = true  (ideal)
- *  2. Yesterday UTC with is_daily_challenge = true  (cron delay fallback)
+ *  1. Today (player's zone) with is_daily_challenge = true  (ideal)
+ *  2. Yesterday with is_daily_challenge = true  (fallback)
  *  3. Any puzzle from the most recent available date  (when the dedicated
  *     daily_challenge row was never generated, e.g. due to API rate limits)
  */
@@ -164,8 +163,8 @@ export async function fetchDailyChallenge(
   const cached = puzzleCache.get<PuzzleMeta>(cacheKey);
   if (cached) return cached;
 
-  const today = getTodayUTC();
-  const yesterday = getYesterdayUTC();
+  const today = getToday();
+  const yesterday = getYesterday();
 
   // ── Step 1 & 2: Try today then yesterday for a proper daily-challenge row ──
   let data: any = null;
@@ -281,7 +280,7 @@ export async function getDailyPlayerCount(puzzleId: string): Promise<number> {
  * Fetches all puzzle metadata for a given category.
  * Returns lightweight cards for the category listing screen — no full puzzle data.
  *
- * Strategy: try today (UTC) first, then search back up to 7 days to find the
+ * Strategy: try today (player's zone) first, then search back up to 7 days to find the
  * most recent date that has puzzles for this category. This handles the rotating
  * schedule where not every category has a puzzle generated every single day.
  *
@@ -295,16 +294,12 @@ export async function fetchCategoryPuzzles(
   const cached = puzzleCache.get<PuzzleMeta[]>(cacheKey);
   if (cached) return cached;
 
-  const today = getTodayUTC();
+  const today = getToday();
 
   // Search the last 7 days for this category (rotating schedule means
   // not every category exists on every date).
   // Use a single range query ordered by date desc for efficiency.
-  const sevenDaysAgo = (() => {
-    const d = new Date();
-    d.setUTCDate(d.getUTCDate() - 7);
-    return d.toISOString().split("T")[0];
-  })();
+  const sevenDaysAgo = addDays(today, -7);
 
   const { data: allRows, error: queryError } = await supabase
     .from("daily_puzzles")
@@ -395,8 +390,8 @@ export async function fetchTodayCollectionSummary(): Promise<CollectionSummary |
   const cached = puzzleCache.get<CollectionSummary>(cacheKey);
   if (cached) return cached;
 
-  const today = getTodayUTC();
-  const yesterday = getYesterdayUTC();
+  const today = getToday();
+  const yesterday = getYesterday();
 
   // Try today first, fallback to yesterday
   for (const date of [today, yesterday]) {
@@ -437,8 +432,8 @@ export async function fetchAllPuzzlesForToday(
   const cached = puzzleCache.get<PuzzleMeta[]>(cacheKey);
   if (cached) return cached;
 
-  const today = getTodayUTC();
-  const yesterday = getYesterdayUTC();
+  const today = getToday();
+  const yesterday = getYesterday();
 
   let targetDate = today;
 
@@ -510,7 +505,7 @@ export async function fetchTodayAvailableCategories(): Promise<Set<string>> {
   const cached = puzzleCache.get<Set<string>>(cacheKey);
   if (cached) return cached;
 
-  const today = getTodayUTC();
+  const today = getToday();
 
   const { data, error } = await supabase
     .from("daily_puzzles")
@@ -725,7 +720,7 @@ export async function fetchDailyPuzzle(
   date?: string,
 ): Promise<Puzzle | null> {
   // Use the explicitly provided date as-is, or auto-select today with fallback.
-  const targetDate = date || getTodayUTC();
+  const targetDate = date || getToday();
   const isAutoDate = !date; // Only fall back when the caller didn't pin a specific date
 
   const { data, error } = await supabase
@@ -752,7 +747,7 @@ export async function fetchDailyPuzzle(
       `[puzzleService] No daily puzzle for today (${category}/${difficulty}/${gridSize}), trying yesterday as fallback`,
     );
 
-    const yesterday = getYesterdayUTC();
+    const yesterday = getYesterday();
     const fallback = await supabase
       .from("daily_puzzles")
       .select("id, puzzle_data")
