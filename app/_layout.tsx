@@ -100,24 +100,25 @@ function RootLayout() {
     if (error) throw error;
   }, [error]);
 
-  // The logo animation takes over from the native splash the moment it hides,
-  // and plays over the app while it loads underneath.
+  // The logo animation needs no fonts, so it starts the moment the app can
+  // draw: the native splash (background only) hides as soon as the logo's
+  // first frame is on screen, and the app loads underneath the animation.
   const [showSplash, setShowSplash] = useState(true);
 
-  useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [loaded]);
-
-  if (!loaded) {
-    return null;
-  }
-
+  // The app underneath still waits for its fonts. Kept in the same slot as
+  // before, so the splash beside it is never remounted when they arrive.
   return (
     <>
-      <RootLayoutNav />
-      {showSplash && <AnimatedSplash onDone={() => setShowSplash(false)} />}
+      {loaded ? <RootLayoutNav /> : null}
+      {showSplash && (
+        <AnimatedSplash
+          ready={loaded}
+          // Layout can fire more than once; hiding an already hidden splash
+          // rejects, harmlessly.
+          onVisible={() => SplashScreen.hideAsync().catch(() => {})}
+          onDone={() => setShowSplash(false)}
+        />
+      )}
     </>
   );
 }

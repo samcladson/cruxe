@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import Animated, {
   Easing,
@@ -16,15 +16,17 @@ import Animated, {
 /**
  * AnimatedSplash — the logo's launch moment, "Four directions".
  *
- * The native splash shows the still logo: a gold centre cell with four arms.
- * This takes over from it as soon as the app can draw. The arms draw back into
- * the centre (which also hides any small difference between the system's
- * splash size and ours, since the OS sizes that image itself), the centre
- * pops, and the arms shoot out one at a time: up, right, down, left, the four
- * ways a Cruxe answer can run. A glow, then the whole thing fades into the app
- * that has been loading underneath all along, so it adds no waiting time.
+ * The native splash is only the dark background, with no logo on it (see
+ * `splash-blank.png` in app.json), so the logo is never seen standing still:
+ * the first thing a player sees is it building. The gold centre pops in, then
+ * the four arms shoot out one at a time: up, right, down, left, the four ways
+ * a Cruxe answer can run. A glow, then it fades into the app.
  *
- * Skipped entirely when the phone asks for reduced motion.
+ * It needs no fonts, so it starts the moment the app can draw, while fonts and
+ * everything else load underneath. If loading outlasts the animation, the
+ * finished logo holds until `ready`, so the fade never reveals a blank screen.
+ *
+ * With reduced motion on, the finished logo is shown still until `ready`.
  */
 
 const CELL = 32;
@@ -43,73 +45,85 @@ const ARMS = [
   { key: "left", x: -STEP, y: 0 },
 ] as const;
 
-const DRAW_BACK_MS = 180;
-const FIRST_ARM_AT = 330;
+const FIRST_ARM_AT = 200;
 const ARM_STAGGER = 100;
-const GLOW_AT = 820;
-const FADE_AT = 1080;
+const GLOW_AT = 700;
+const GLOW_MS = 400;
 const FADE_MS = 260;
 
 const SPRING = { damping: 11, stiffness: 190, mass: 0.7 };
 
-export function AnimatedSplash({ onDone }: { onDone: () => void }) {
-  const reduceMotion = useReducedMotion();
+interface AnimatedSplashProps {
+  /** True once the app underneath can be shown. */
+  ready: boolean;
+  /** Fired once the logo's first frame is on screen: hide the native splash. */
+  onVisible: () => void;
+  /** Fired when the overlay has faded out and can be removed. */
+  onDone: () => void;
+}
 
+export function AnimatedSplash({ ready, onVisible, onDone }: AnimatedSplashProps) {
+  const reduceMotion = useReducedMotion();
+  const [introDone, setIntroDone] = useState(false);
+
+  const start = reduceMotion ? 1 : 0;
   const arms = [
-    useSharedValue(1),
-    useSharedValue(1),
-    useSharedValue(1),
-    useSharedValue(1),
+    useSharedValue(start),
+    useSharedValue(start),
+    useSharedValue(start),
+    useSharedValue(start),
   ];
-  const core = useSharedValue(1);
+  const core = useSharedValue(start);
   const glow = useSharedValue(0);
   const fade = useSharedValue(1);
 
+  // The build-up. Runs once, on mount: this is a single launch moment.
   useEffect(() => {
     if (reduceMotion) {
-      onDone();
+      setIntroDone(true);
       return;
     }
 
-    arms.forEach((arm, i) => {
-      arm.value = withSequence(
-        withTiming(0, {
-          duration: DRAW_BACK_MS,
-          easing: Easing.in(Easing.quad),
-        }),
-        withDelay(
-          FIRST_ARM_AT - DRAW_BACK_MS + i * ARM_STAGGER,
-          withSpring(1, SPRING),
-        ),
-      );
-    });
-
     core.value = withSequence(
-      withTiming(0.88, { duration: DRAW_BACK_MS }),
-      withTiming(1.16, { duration: 110, easing: Easing.out(Easing.quad) }),
+      withTiming(1.16, { duration: 170, easing: Easing.out(Easing.quad) }),
       withSpring(1, SPRING),
     );
+
+    arms.forEach((arm, i) => {
+      arm.value = withDelay(
+        FIRST_ARM_AT + i * ARM_STAGGER,
+        withSpring(1, SPRING),
+      );
+    });
 
     glow.value = withDelay(
       GLOW_AT,
       withSequence(
         withTiming(1, { duration: 140 }),
-        withTiming(0, { duration: 260 }),
+        withTiming(0, { duration: GLOW_MS - 140 }, (finished) => {
+          if (finished) runOnJS(setIntroDone)(true);
+        }),
       ),
     );
-
-    fade.value = withDelay(
-      FADE_AT,
-      withTiming(0, { duration: FADE_MS }, (finished) => {
-        if (finished) runOnJS(onDone)();
-      }),
-    );
-    // Runs once, on mount: this is a single launch moment.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reduceMotion]);
+  }, []);
+
+  // Leave only when the intro has played and the app is ready to be seen.
+  useEffect(() => {
+    if (!introDone || !ready) return;
+    if (reduceMotion) {
+      onDone();
+      return;
+    }
+    fade.value = withTiming(0, { duration: FADE_MS }, (finished) => {
+      if (finished) runOnJS(onDone)();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [introDone, ready]);
 
   const overlayStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
   const coreStyle = useAnimatedStyle(() => ({
+    opacity: core.value > 0.02 ? 1 : 0,
     transform: [{ scale: core.value }],
   }));
   const glowStyle = useAnimatedStyle(() => ({
@@ -117,11 +131,10 @@ export function AnimatedSplash({ onDone }: { onDone: () => void }) {
     transform: [{ scale: 0.7 + glow.value * 0.5 }],
   }));
 
-  if (reduceMotion) return null;
-
   return (
     <Animated.View
       style={[StyleSheet.absoluteFill, styles.overlay, overlayStyle]}
+      onLayout={onVisible}
       pointerEvents="none"
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
