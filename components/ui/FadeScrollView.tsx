@@ -1,9 +1,7 @@
 import MaskedView from "@react-native-masked-view/masked-view";
 import { LinearGradient } from "expo-linear-gradient";
-import React, { forwardRef, useState } from "react";
+import React, { forwardRef } from "react";
 import {
-  NativeScrollEvent,
-  NativeSyntheticEvent,
   ScrollView,
   ScrollViewProps,
   StyleSheet,
@@ -13,10 +11,6 @@ import { useTabBarHeight } from "../../utils/tabBar";
 
 /** Height of the fade under the header. Tall enough to read as a fade. */
 const TOP_FADE = 56;
-/** Scrolling this far brings the top fade to full strength. */
-const TOP_FULL_AT = 44;
-/** The fade strengthens in this many steps: each one redraws the mask. */
-const TOP_STEPS = 6;
 /** Fade above the tab bar, on top of the bar's own height. */
 const BOTTOM_FADE = 26;
 
@@ -24,11 +18,13 @@ const BOTTOM_FADE = 26;
  * A ScrollView whose content dissolves into the page at the top and bottom
  * instead of being cut off by the header above and the tab bar below.
  *
- * The top fade grows with the first few points of scrolling: at rest nothing
- * is dimmed and there is no gap under the header, and as content moves up
- * under it, it melts away. (A permanent fade would either dim the first item
- * or need blank space above it.) The mask is redrawn in a few steps rather
- * than animated, because Android's masking does not follow animations.
+ * The mask never changes, so nothing redraws while scrolling. To keep the
+ * first item clear of the top fade at rest, the scroll area starts TOP_FADE
+ * above where the content should sit, under the header (which draws above
+ * it: see ScreenHeader), and its content pads down by the same amount. At
+ * rest the fade lies over the header's own empty space; scrolling moves
+ * content up into it and it melts away under the title. A fade that strengthened
+ * as you scrolled popped in visibly at the first step.
  *
  * It is a mask, not an overlay: the content itself fades to transparent, so
  * whatever the screen has behind it (its lit, dotted backdrop) shows through.
@@ -46,29 +42,21 @@ export const FadeScrollView = forwardRef<ScrollView, ScrollViewProps>(
     const bottomZone = tabBar + BOTTOM_FADE;
 
     const pad = StyleSheet.flatten(contentContainerStyle) ?? {};
-    const paddingTop = Number(pad.paddingTop ?? 0);
+    const paddingTop = Number(pad.paddingTop ?? 0) + TOP_FADE;
     const paddingBottom = Number(pad.paddingBottom ?? 0) + bottomZone;
-
-    const [step, setStep] = useState(0);
-    const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const y = Math.max(0, e.nativeEvent.contentOffset.y);
-      const next = Math.min(TOP_STEPS, Math.ceil((y / TOP_FULL_AT) * TOP_STEPS));
-      if (next !== step) setStep(next);
-      props.onScroll?.(e);
-    };
-    // Alpha at the very top edge: opaque at rest, clear at full strength.
-    const edge = 1 - step / TOP_STEPS;
 
     return (
       <MaskedView
         style={styles.fill}
+        // Draws over the header's lower edge; the header sits above it.
+        pointerEvents="box-none"
         maskElement={
           <View style={styles.mask}>
             <LinearGradient
               colors={[
-                `rgba(0,0,0,${edge})`,
-                `rgba(0,0,0,${edge + (1 - edge) * 0.35})`,
-                `rgba(0,0,0,${edge + (1 - edge) * 0.8})`,
+                "rgba(0,0,0,0)",
+                "rgba(0,0,0,0.35)",
+                "rgba(0,0,0,0.8)",
                 "#000",
               ]}
               locations={[0, 0.4, 0.75, 1]}
@@ -86,8 +74,6 @@ export const FadeScrollView = forwardRef<ScrollView, ScrollViewProps>(
         <ScrollView
           ref={ref}
           {...props}
-          onScroll={handleScroll}
-          scrollEventThrottle={props.scrollEventThrottle ?? 16}
           contentContainerStyle={[
             contentContainerStyle,
             { paddingTop, paddingBottom },
@@ -99,7 +85,8 @@ export const FadeScrollView = forwardRef<ScrollView, ScrollViewProps>(
 );
 
 const styles = StyleSheet.create({
-  fill: { flex: 1 },
+  // Starts TOP_FADE above its slot, under the header.
+  fill: { flex: 1, marginTop: -TOP_FADE },
   mask: { flex: 1, backgroundColor: "transparent" },
   solid: { flex: 1, backgroundColor: "#000" },
 });

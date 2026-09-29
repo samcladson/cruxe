@@ -105,8 +105,11 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     // Content scrolls up under the header and fades, so no dead gap is needed.
     paddingBottom: 8,
-    // Transparent, so the screen's backdrop runs up behind the title.
+    // Transparent, so the screen's backdrop runs up behind the title, and
+    // above the scroll area, which starts under this header and fades beneath
+    // it. Android orders siblings by elevation, not zIndex.
     zIndex: 20,
+    elevation: 20,
   },
   navRow: {
     flexDirection: "row",

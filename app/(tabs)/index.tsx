@@ -828,7 +828,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 8,
     paddingBottom: 16,
+    // Above the scroll area, which starts under this header and fades beneath
+    // it. Android orders siblings by elevation, not zIndex.
     zIndex: 20,
+    elevation: 20,
   },
   topBar: {
     flexDirection: "row",
