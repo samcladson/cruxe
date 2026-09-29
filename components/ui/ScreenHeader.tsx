@@ -103,7 +103,8 @@ const styles = StyleSheet.create({
   wrap: {
     paddingHorizontal: 24,
     paddingTop: 8,
-    paddingBottom: 20,
+    // Content scrolls up under the header and fades, so no dead gap is needed.
+    paddingBottom: 8,
     // Transparent, so the screen's backdrop runs up behind the title.
     zIndex: 20,
   },

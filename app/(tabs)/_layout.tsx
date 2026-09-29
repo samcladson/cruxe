@@ -3,9 +3,8 @@ import { Tabs } from "expo-router";
 import React from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { theme } from "../../constants/theme";
+import { TAB_BAR_CONTENT_HEIGHT } from "../../utils/tabBar";
 
-/** The bar itself, above whatever the system reserves beneath it. */
-const TAB_BAR_CONTENT_HEIGHT = 56;
 
 /**
  * Tab layout with a clean bottom navigation bar.
@@ -30,9 +29,15 @@ export default function TabLayout() {
         tabBarActiveTintColor: "#ffffff",
         tabBarInactiveTintColor: theme.colors.accentGold,
         tabBarStyle: {
-          backgroundColor: theme.colors.bgPrimary,
-          borderTopWidth: 1,
-          borderTopColor: "rgba(255, 255, 255, 0.06)",
+          // Transparent and floating: screens draw their own backdrop under
+          // it, and their content fades out beneath the icons instead of
+          // ending at a solid bar with a line above it.
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: "transparent",
+          borderTopWidth: 0,
           height: TAB_BAR_CONTENT_HEIGHT + bottomPadding,
           paddingBottom: bottomPadding,
           paddingTop: 8,

@@ -1,116 +1,77 @@
+import MaskedView from "@react-native-masked-view/masked-view";
 import { LinearGradient } from "expo-linear-gradient";
-import React, { forwardRef, useState } from "react";
+import React, { forwardRef } from "react";
 import {
-  LayoutChangeEvent,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
   ScrollView,
   ScrollViewProps,
   StyleSheet,
   View,
 } from "react-native";
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from "react-native-reanimated";
-import { theme } from "../../constants/theme";
+import { useTabBarHeight } from "../../utils/tabBar";
 
-/** How far each fade reaches into the content. */
-const FADE_HEIGHT = 36;
-/** A scroll position this close to an end counts as being at it. */
-const EDGE_SLACK = 2;
-
-const BG = theme.colors.bgPrimary;
-const CLEAR = "rgba(10,10,10,0)";
-const SOFT = "rgba(10,10,10,0.75)";
+/** Height of the fade under the header. */
+const TOP_FADE = 22;
+/** Fade above the tab bar, on top of the bar's own height. */
+const BOTTOM_FADE = 26;
+/** Blank space above the first item at rest, so it clears the top fade. */
+const TOP_REST = 10;
 
 /**
- * A ScrollView whose top and bottom edges dissolve into the page instead of
- * ending at a hard line under the header and above the tab bar.
+ * A ScrollView whose content dissolves into the page at the top and bottom
+ * instead of being cut off by the header above and the tab bar below.
  *
- * The fades only appear where there is more content in that direction: the
- * top one once you have scrolled down, the bottom one until you reach the end.
- * So at rest the first item is never dimmed, and the last one is never faded
- * away when you have scrolled to it. Drop-in for ScrollView; every prop passes
- * through.
+ * It is a mask, not an overlay: the content itself fades to transparent, so
+ * whatever the screen has behind it (its lit, dotted backdrop) shows through.
+ * A coloured strip laid over the content shows as a dark band on that
+ * backdrop instead. The tab bar floats over the screen (see the tabs layout),
+ * so the bottom fade runs out under its icons and the content pads by its
+ * height so the last item can scroll fully clear.
+ *
+ * Drop-in for ScrollView: every prop passes through, and contentContainerStyle
+ * is extended rather than replaced.
  */
 export const FadeScrollView = forwardRef<ScrollView, ScrollViewProps>(
-  function FadeScrollView({ onScroll, onLayout, onContentSizeChange, ...props }, ref) {
-    const [viewHeight, setViewHeight] = useState(0);
-    const [contentHeight, setContentHeight] = useState(0);
-    const top = useSharedValue(0);
-    const bottom = useSharedValue(0);
+  function FadeScrollView({ contentContainerStyle, ...props }, ref) {
+    const tabBar = useTabBarHeight();
+    const bottomZone = tabBar + BOTTOM_FADE;
 
-    const update = (y: number, view: number, content: number) => {
-      const scrollable = content > view + EDGE_SLACK;
-      top.value = withTiming(scrollable && y > EDGE_SLACK ? 1 : 0, { duration: 140 });
-      bottom.value = withTiming(
-        scrollable && y < content - view - EDGE_SLACK ? 1 : 0,
-        { duration: 140 },
-      );
-    };
-
-    const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const { contentOffset, layoutMeasurement, contentSize } = e.nativeEvent;
-      update(contentOffset.y, layoutMeasurement.height, contentSize.height);
-      onScroll?.(e);
-    };
-
-    const handleLayout = (e: LayoutChangeEvent) => {
-      const h = e.nativeEvent.layout.height;
-      setViewHeight(h);
-      update(0, h, contentHeight);
-      onLayout?.(e);
-    };
-
-    const handleContentSize = (w: number, h: number) => {
-      setContentHeight(h);
-      update(0, viewHeight, h);
-      onContentSizeChange?.(w, h);
-    };
-
-    const topStyle = useAnimatedStyle(() => ({ opacity: top.value }));
-    const bottomStyle = useAnimatedStyle(() => ({ opacity: bottom.value }));
+    const pad = StyleSheet.flatten(contentContainerStyle) ?? {};
+    const paddingTop = Number(pad.paddingTop ?? 0) + TOP_REST;
+    const paddingBottom = Number(pad.paddingBottom ?? 0) + bottomZone;
 
     return (
-      <View style={styles.fill}>
+      <MaskedView
+        style={styles.fill}
+        maskElement={
+          <View style={styles.mask}>
+            <LinearGradient
+              colors={["rgba(0,0,0,0)", "#000"]}
+              style={{ height: TOP_FADE }}
+            />
+            <View style={styles.solid} />
+            <LinearGradient
+              colors={["#000", "rgba(0,0,0,0)"]}
+              locations={[0, 0.6]}
+              style={{ height: bottomZone }}
+            />
+          </View>
+        }
+      >
         <ScrollView
           ref={ref}
           {...props}
-          onScroll={handleScroll}
-          onLayout={handleLayout}
-          onContentSizeChange={handleContentSize}
-          scrollEventThrottle={props.scrollEventThrottle ?? 16}
+          contentContainerStyle={[
+            contentContainerStyle,
+            { paddingTop, paddingBottom },
+          ]}
         />
-        <Animated.View
-          pointerEvents="none"
-          style={[styles.fade, styles.fadeTop, topStyle]}
-        >
-          <LinearGradient
-            colors={[BG, SOFT, CLEAR]}
-            locations={[0, 0.35, 1]}
-            style={StyleSheet.absoluteFill}
-          />
-        </Animated.View>
-        <Animated.View
-          pointerEvents="none"
-          style={[styles.fade, styles.fadeBottom, bottomStyle]}
-        >
-          <LinearGradient
-            colors={[CLEAR, SOFT, BG]}
-            locations={[0, 0.65, 1]}
-            style={StyleSheet.absoluteFill}
-          />
-        </Animated.View>
-      </View>
+      </MaskedView>
     );
   },
 );
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  fade: { position: "absolute", left: 0, right: 0, height: FADE_HEIGHT },
-  fadeTop: { top: 0 },
-  fadeBottom: { bottom: 0 },
+  mask: { flex: 1, backgroundColor: "transparent" },
+  solid: { flex: 1, backgroundColor: "#000" },
 });
