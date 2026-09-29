@@ -827,7 +827,8 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 24,
     paddingTop: 8,
-    paddingBottom: 16,
+    // The room the content fades through as it scrolls under the header.
+    paddingBottom: 24,
     // Above the scroll area, which starts under this header and fades beneath
     // it. Android orders siblings by elevation, not zIndex.
     zIndex: 20,

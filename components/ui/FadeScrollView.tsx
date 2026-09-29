@@ -9,8 +9,13 @@ import {
 } from "react-native";
 import { useTabBarHeight } from "../../utils/tabBar";
 
-/** Height of the fade under the header. Tall enough to read as a fade. */
-const TOP_FADE = 56;
+/**
+ * The zone the content fades through, overlapping the header's lower edge. It
+ * matches the header's bottom padding plus a little: the first 40% is fully
+ * clear (behind the subtitle, so nothing shows through the text) and the
+ * ramp back to solid runs below the text, in the padding.
+ */
+const TOP_FADE = 40;
 /** Fade above the tab bar, on top of the bar's own height. */
 const BOTTOM_FADE = 26;
 
@@ -55,11 +60,12 @@ export const FadeScrollView = forwardRef<ScrollView, ScrollViewProps>(
             <LinearGradient
               colors={[
                 "rgba(0,0,0,0)",
-                "rgba(0,0,0,0.35)",
-                "rgba(0,0,0,0.8)",
+                "rgba(0,0,0,0)",
+                "rgba(0,0,0,0.25)",
+                "rgba(0,0,0,0.7)",
                 "#000",
               ]}
-              locations={[0, 0.4, 0.75, 1]}
+              locations={[0, 0.4, 0.55, 0.78, 1]}
               style={{ height: TOP_FADE }}
             />
             <View style={styles.solid} />

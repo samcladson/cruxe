@@ -103,8 +103,9 @@ const styles = StyleSheet.create({
   wrap: {
     paddingHorizontal: 24,
     paddingTop: 8,
-    // Content scrolls up under the header and fades, so no dead gap is needed.
-    paddingBottom: 8,
+    // The room the content fades through as it scrolls under the subtitle
+    // (see FadeScrollView). Empty at rest, so kept modest.
+    paddingBottom: 24,
     // Transparent, so the screen's backdrop runs up behind the title, and
     // above the scroll area, which starts under this header and fades beneath
     // it. Android orders siblings by elevation, not zIndex.
