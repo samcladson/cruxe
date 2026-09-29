@@ -409,11 +409,13 @@ export default function HomeScreen() {
 
         {streak?.can_repair && (
           <View style={styles.repairBanner}>
-            <MaterialIcons
-              name="local-fire-department"
-              size={22}
-              color="#F59E0B"
-            />
+            <View style={styles.repairIcon}>
+              <MaterialIcons
+                name="local-fire-department"
+                size={20}
+                color={theme.colors.accentGold}
+              />
+            </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.repairTitle}>
                 Your {streak.restores_to - 1} day streak broke
@@ -435,9 +437,13 @@ export default function HomeScreen() {
                   : `Restore my streak for ${streak.repair_cost} coins`
               }
             >
-              <Text style={styles.repairBtnText}>
-                {repairing ? "..." : "Restore"}
-              </Text>
+              {/* Same width either way, so the card does not shift while the
+                  restore is in flight. */}
+              {repairing ? (
+                <ActivityIndicator size="small" color={theme.colors.bgPrimary} />
+              ) : (
+                <Text style={styles.repairBtnText}>RESTORE</Text>
+              )}
             </TouchableOpacity>
           </View>
         )}
@@ -1157,16 +1163,26 @@ const styles = StyleSheet.create({
     color: theme.colors.textPrimary,
     fontWeight: "bold",
   },
+  // Styled like the other banners on this screen: the app's gold, not a
+  // second accent colour of its own.
   repairBanner: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    backgroundColor: "rgba(245, 158, 11, 0.1)",
+    backgroundColor: "rgba(238, 205, 43, 0.08)",
     borderWidth: 1,
-    borderColor: "rgba(245, 158, 11, 0.3)",
+    borderColor: "rgba(238, 205, 43, 0.2)",
     borderRadius: 12,
     padding: 14,
     marginBottom: 16,
+  },
+  repairIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(238, 205, 43, 0.12)",
   },
   repairTitle: {
     fontFamily: theme.typography.subheading.fontFamily,
@@ -1181,16 +1197,19 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   repairBtn: {
-    backgroundColor: "#F59E0B",
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 100,
+    backgroundColor: theme.colors.accentGold,
+    minWidth: 92,
+    height: 36,
+    paddingHorizontal: 14,
+    borderRadius: theme.borderRadius.button,
+    alignItems: "center",
+    justifyContent: "center",
   },
   repairBtnText: {
     fontFamily: theme.typography.cellLetter.fontFamily,
     fontSize: 12,
     fontWeight: "bold",
-    color: "#1a1200",
+    color: theme.colors.bgPrimary,
     letterSpacing: 1,
   },
   setCompleteBanner: {

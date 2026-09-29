@@ -12,8 +12,9 @@ import {
   View,
 } from "react-native";
 import { captureRef } from "react-native-view-shot";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScreenHeader } from "../../../components/ui/ScreenHeader";
+import { Button } from "../../../components/ui/Button";
 import { ShareCard, ShareCardData } from "../../../components/modals/ShareCard";
 import { theme } from "../../../constants/theme";
 import {
@@ -34,6 +35,7 @@ export default function ActivityReviewScreen() {
   const [loading, setLoading] = useState(true);
 
   const shareCardRef = useRef<View>(null);
+  const insets = useSafeAreaInsets();
   const [sharing, setSharing] = useState(false);
 
   useEffect(() => {
@@ -160,29 +162,6 @@ export default function ActivityReviewScreen() {
       <ScreenHeader
         title="Performance Insights"
         subtitle={[heading, detail, formattedDate].filter(Boolean).join(" • ")}
-        right={
-          <TouchableOpacity
-            style={styles.shareBtn}
-            onPress={handleShare}
-            disabled={sharing}
-            accessibilityRole="button"
-            accessibilityLabel="Share your result"
-          >
-            {sharing ? (
-              <ActivityIndicator
-                size="small"
-                color={theme.colors.textSecondary}
-              />
-            ) : (
-              <MaterialIcons
-                name="ios-share"
-                size={16}
-                color={theme.colors.textSecondary}
-              />
-            )}
-            <Text style={styles.shareBtnText}>SHARE</Text>
-          </TouchableOpacity>
-        }
       />
 
       {/* Rendered off-screen — still laid out for view-shot to capture,
@@ -284,6 +263,18 @@ export default function ActivityReviewScreen() {
           </View>
         </View>
       </ScrollView>
+
+      {/* Share sits at the foot of the screen, where the thumb is, after the
+          player has read their result rather than before. */}
+      <View style={[styles.footer, { paddingBottom: 16 + insets.bottom }]}>
+        <Button
+          title="Share result"
+          variant="secondary"
+          onPress={handleShare}
+          isLoading={sharing}
+          accessibilityLabel="Share your result"
+        />
+      </View>
     </SafeAreaView>
   );
 }
@@ -304,22 +295,11 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     paddingBottom: 40,
   },
-  shareBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-  },
-  shareBtnText: {
-    fontFamily: theme.typography.body.fontFamily,
-    fontSize: 12,
-    color: theme.colors.textSecondary,
-    fontWeight: "bold",
-    letterSpacing: 1,
+  footer: {
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.06)",
   },
   offscreenShareCard: {
     position: "absolute",

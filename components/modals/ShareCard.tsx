@@ -1,10 +1,10 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { forwardRef } from "react";
-import { Image, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { theme } from "../../constants/theme";
+import { Wordmark } from "../ui/Wordmark";
 
-const LOGO = require("../../assets/brand/png/icon-outline.png");
 
 export const SHARE_CARD_WIDTH = 360;
 export const SHARE_CARD_HEIGHT = 700;
@@ -60,10 +60,10 @@ export const ShareCard = forwardRef<View, { data: ShareCardData }>(
           style={StyleSheet.absoluteFillObject}
         />
 
-        {/* Logo lockup */}
+        {/* The CRUXE wordmark, the same brand mark as the app's home screen
+            (still, since this is a picture). */}
         <View style={styles.brandRow}>
-          <Image source={LOGO} style={styles.logo} />
-          <Text style={styles.brandText}>CRUXE</Text>
+          <Wordmark cellSize={32} />
         </View>
 
         {/* Eyebrow */}
@@ -130,21 +130,8 @@ const styles = StyleSheet.create({
   },
 
   brandRow: {
-    flexDirection: "row",
     alignItems: "center",
-    gap: 10,
     marginBottom: 56,
-  },
-  logo: {
-    width: 34,
-    height: 34,
-    borderRadius: 9,
-  },
-  brandText: {
-    fontFamily: theme.typography.heading.fontFamily,
-    fontSize: 18,
-    color: theme.colors.textPrimary,
-    letterSpacing: 3,
   },
 
   eyebrow: {
