@@ -1,7 +1,9 @@
 import MaskedView from "@react-native-masked-view/masked-view";
 import { LinearGradient } from "expo-linear-gradient";
-import React, { forwardRef } from "react";
+import React, { forwardRef, useState } from "react";
 import {
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   ScrollView,
   ScrollViewProps,
   StyleSheet,
@@ -9,16 +11,24 @@ import {
 } from "react-native";
 import { useTabBarHeight } from "../../utils/tabBar";
 
-/** Height of the fade under the header. */
-const TOP_FADE = 22;
+/** Height of the fade under the header. Tall enough to read as a fade. */
+const TOP_FADE = 56;
+/** Scrolling this far brings the top fade to full strength. */
+const TOP_FULL_AT = 44;
+/** The fade strengthens in this many steps: each one redraws the mask. */
+const TOP_STEPS = 6;
 /** Fade above the tab bar, on top of the bar's own height. */
 const BOTTOM_FADE = 26;
-/** Blank space above the first item at rest, so it clears the top fade. */
-const TOP_REST = 10;
 
 /**
  * A ScrollView whose content dissolves into the page at the top and bottom
  * instead of being cut off by the header above and the tab bar below.
+ *
+ * The top fade grows with the first few points of scrolling: at rest nothing
+ * is dimmed and there is no gap under the header, and as content moves up
+ * under it, it melts away. (A permanent fade would either dim the first item
+ * or need blank space above it.) The mask is redrawn in a few steps rather
+ * than animated, because Android's masking does not follow animations.
  *
  * It is a mask, not an overlay: the content itself fades to transparent, so
  * whatever the screen has behind it (its lit, dotted backdrop) shows through.
@@ -36,8 +46,18 @@ export const FadeScrollView = forwardRef<ScrollView, ScrollViewProps>(
     const bottomZone = tabBar + BOTTOM_FADE;
 
     const pad = StyleSheet.flatten(contentContainerStyle) ?? {};
-    const paddingTop = Number(pad.paddingTop ?? 0) + TOP_REST;
+    const paddingTop = Number(pad.paddingTop ?? 0);
     const paddingBottom = Number(pad.paddingBottom ?? 0) + bottomZone;
+
+    const [step, setStep] = useState(0);
+    const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const y = Math.max(0, e.nativeEvent.contentOffset.y);
+      const next = Math.min(TOP_STEPS, Math.ceil((y / TOP_FULL_AT) * TOP_STEPS));
+      if (next !== step) setStep(next);
+      props.onScroll?.(e);
+    };
+    // Alpha at the very top edge: opaque at rest, clear at full strength.
+    const edge = 1 - step / TOP_STEPS;
 
     return (
       <MaskedView
@@ -45,13 +65,19 @@ export const FadeScrollView = forwardRef<ScrollView, ScrollViewProps>(
         maskElement={
           <View style={styles.mask}>
             <LinearGradient
-              colors={["rgba(0,0,0,0)", "#000"]}
+              colors={[
+                `rgba(0,0,0,${edge})`,
+                `rgba(0,0,0,${edge + (1 - edge) * 0.35})`,
+                `rgba(0,0,0,${edge + (1 - edge) * 0.8})`,
+                "#000",
+              ]}
+              locations={[0, 0.4, 0.75, 1]}
               style={{ height: TOP_FADE }}
             />
             <View style={styles.solid} />
             <LinearGradient
-              colors={["#000", "rgba(0,0,0,0)"]}
-              locations={[0, 0.6]}
+              colors={["#000", "rgba(0,0,0,0.35)", "rgba(0,0,0,0)"]}
+              locations={[0, 0.3, 0.52]}
               style={{ height: bottomZone }}
             />
           </View>
@@ -60,6 +86,8 @@ export const FadeScrollView = forwardRef<ScrollView, ScrollViewProps>(
         <ScrollView
           ref={ref}
           {...props}
+          onScroll={handleScroll}
+          scrollEventThrottle={props.scrollEventThrottle ?? 16}
           contentContainerStyle={[
             contentContainerStyle,
             { paddingTop, paddingBottom },
