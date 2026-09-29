@@ -392,8 +392,16 @@ Apple's serial steps are slow. Start the agreement and the Service ID first.
       a local entity Cruxe doesn't have. Excluding them removes the request
       and doesn't affect any other region; add them later if a licence is
       obtained. Do the same for any other region that asks for a certificate.
-- [ ] **Attach the four in-app purchases and the processed build** to the
-      version, then Submit for Review. Needs the production build first (§8d).
+- [x] **Attach the four in-app purchases and the processed build** to the
+      version, then Submit for Review — **submitted 2026-09-29** (user report)
+      with **1.0.0 build 4** (EAS `9679c322-2ce7-4e0a-84bc-b9102bef61ca`),
+      which replaced build 3 in the draft. Build 4 adds the fading screen
+      edges, Share at the end of Performance Insights, the floating Done pill
+      on iOS, and the new Home screenshot (`02-daily.png`, both sizes).
+- [ ] **Wait for review.** Typically 24–48 hours; answer any App Review
+      message in App Store Connect → Resolution Center. Once approved,
+      release the version (manually or automatically, per the version's
+      release setting), then confirm the web page's App Store button resolves.
 
 ### 8d. Build and verify
 
