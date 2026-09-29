@@ -22,6 +22,7 @@ import { supabase } from "../../services/supabaseClient";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useUserStore } from "../../stores/userStore";
 import { ScreenBackdrop } from "../../components/ui/ScreenBackdrop";
+import { FadeScrollView } from "../../components/ui/FadeScrollView";
 
 // Coin amounts come from the `coin_products` table, never from parsing the
 // product identifier. The old regex granted 2 coins for a SKU like
@@ -195,7 +196,7 @@ export default function StoreScreen() {
       <ScreenBackdrop variant="store" />
       <ScreenHeader title="Store" subtitle="Top up your coin balance" />
 
-      <ScrollView
+      <FadeScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
@@ -316,7 +317,7 @@ export default function StoreScreen() {
         >
           <Text style={styles.restoreText}>RESTORE PURCHASES</Text>
         </TouchableOpacity>
-      </ScrollView>
+      </FadeScrollView>
 
       {confirming && (
         <View style={styles.confirmOverlay}>

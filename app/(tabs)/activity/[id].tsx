@@ -12,9 +12,8 @@ import {
   View,
 } from "react-native";
 import { captureRef } from "react-native-view-shot";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { ScreenHeader } from "../../../components/ui/ScreenHeader";
-import { Button } from "../../../components/ui/Button";
 import { ShareCard, ShareCardData } from "../../../components/modals/ShareCard";
 import { theme } from "../../../constants/theme";
 import {
@@ -24,6 +23,7 @@ import {
 } from "../../../services/puzzleService";
 import { useUserStore } from "../../../stores/userStore";
 import { ScreenBackdrop } from "../../../components/ui/ScreenBackdrop";
+import { FadeScrollView } from "../../../components/ui/FadeScrollView";
 import { activityLabel } from "../../../utils/activityLabel";
 import { Category } from "../../../types/puzzle.types";
 
@@ -35,7 +35,6 @@ export default function ActivityReviewScreen() {
   const [loading, setLoading] = useState(true);
 
   const shareCardRef = useRef<View>(null);
-  const insets = useSafeAreaInsets();
   const [sharing, setSharing] = useState(false);
 
   useEffect(() => {
@@ -170,7 +169,7 @@ export default function ActivityReviewScreen() {
         <ShareCard ref={shareCardRef} data={shareCardData} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <FadeScrollView contentContainerStyle={styles.scrollContent}>
         {/* Primary Stats Grid */}
         <Text style={styles.sectionHeader}>Core Metrics</Text>
         <View style={styles.metricsGrid}>
@@ -262,19 +261,28 @@ export default function ActivityReviewScreen() {
             </View>
           </View>
         </View>
-      </ScrollView>
 
-      {/* Share sits at the foot of the screen, where the thumb is, after the
-          player has read their result rather than before. */}
-      <View style={[styles.footer, { paddingBottom: 16 + insets.bottom }]}>
-        <Button
-          title="Share result"
-          variant="secondary"
+        {/* The end of the page, like SHARE and HOME on the completion screen:
+            part of the content, not fixed to the screen. */}
+        <TouchableOpacity
+          style={styles.shareBtn}
           onPress={handleShare}
-          isLoading={sharing}
+          disabled={sharing}
+          accessibilityRole="button"
           accessibilityLabel="Share your result"
-        />
-      </View>
+        >
+          {sharing ? (
+            <ActivityIndicator size="small" color={theme.colors.textSecondary} />
+          ) : (
+            <MaterialIcons
+              name="ios-share"
+              size={18}
+              color={theme.colors.textSecondary}
+            />
+          )}
+          <Text style={styles.shareBtnText}>SHARE</Text>
+        </TouchableOpacity>
+      </FadeScrollView>
     </SafeAreaView>
   );
 }
@@ -295,11 +303,24 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     paddingBottom: 40,
   },
-  footer: {
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.06)",
+  // The same outlined button as SHARE / HOME on the completion screen.
+  shareBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    marginTop: 24,
+    paddingVertical: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+  },
+  shareBtnText: {
+    fontFamily: theme.typography.body.fontFamily,
+    fontSize: 14,
+    color: theme.colors.textSecondary,
+    fontWeight: "bold",
+    letterSpacing: 1.2,
   },
   offscreenShareCard: {
     position: "absolute",

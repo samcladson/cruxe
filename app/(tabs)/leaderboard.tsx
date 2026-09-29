@@ -35,6 +35,7 @@ import {
 import { useUserStore } from "../../stores/userStore";
 import { formatCompactNumber } from "../../utils/formatNumber";
 import { ScreenBackdrop } from "../../components/ui/ScreenBackdrop";
+import { FadeScrollView } from "../../components/ui/FadeScrollView";
 
 // ─── Podium Bar ───────────────────────────────────────────────────────
 
@@ -219,7 +220,7 @@ export default function LeaderboardScreen() {
       <ScreenBackdrop variant="leaderboard" />
       <ScreenHeader title="Leaderboard" subtitle="Top players globally" />
 
-      <ScrollView
+      <FadeScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -340,7 +341,7 @@ export default function LeaderboardScreen() {
           })}
           <View style={{ height: 100 }} />
         </View>
-      </ScrollView>
+      </FadeScrollView>
     </SafeAreaView>
   );
 }

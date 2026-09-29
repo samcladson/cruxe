@@ -19,6 +19,7 @@ import {
 } from "../../../services/puzzleService";
 import { useUserStore } from "../../../stores/userStore";
 import { ScreenBackdrop } from "../../../components/ui/ScreenBackdrop";
+import { FadeScrollView } from "../../../components/ui/FadeScrollView";
 import { activityLabel } from "../../../utils/activityLabel";
 
 /**
@@ -83,7 +84,7 @@ export default function ActivityHistoryScreen() {
         }
       />
 
-      <ScrollView
+      <FadeScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
@@ -116,7 +117,7 @@ export default function ActivityHistoryScreen() {
           ))
         )}
         <View style={{ height: 24 }} />
-      </ScrollView>
+      </FadeScrollView>
     </SafeAreaView>
   );
 }

@@ -41,6 +41,7 @@ import {
   scheduleDailyReminder,
 } from "../../services/notificationService";
 import { ScreenBackdrop } from "../../components/ui/ScreenBackdrop";
+import { FadeScrollView } from "../../components/ui/FadeScrollView";
 
 export default function ProfileScreen() {
   const profile = useUserStore((state) => state.profile);
@@ -342,7 +343,7 @@ export default function ProfileScreen() {
       <ScreenBackdrop variant="profile" />
       <ScreenHeader title="Profile" subtitle="Your stats, account and settings" />
 
-      <ScrollView
+      <FadeScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
@@ -854,7 +855,7 @@ export default function ProfileScreen() {
         <View style={styles.footer}>
           <Text style={styles.versionText}>Cruxe v1.0.0</Text>
         </View>
-      </ScrollView>
+      </FadeScrollView>
 
       <FeedbackModal
         visible={feedbackOpen}

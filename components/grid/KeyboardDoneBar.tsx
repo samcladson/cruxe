@@ -15,8 +15,19 @@ import Animated, {
 } from "react-native-reanimated";
 import { theme } from "../../constants/theme";
 
-/** The bar's height. The grid keeps the typed row clear of it. */
-export const DONE_BAR_HEIGHT = 40;
+/**
+ * On iOS the keyboard has rounded top corners, so a full-width square bar
+ * leaves a gap at each end and looks detached. There the bar is a rounded pill
+ * floating just above the keyboard, inset from the edges: it never has to
+ * match the keyboard's shape. Android's keyboard is flat, so a flat bar sits
+ * flush on it.
+ */
+const FLOATING = Platform.OS === "ios";
+const BAR_HEIGHT = 40;
+const FLOAT_GAP = 6;
+
+/** Height the grid keeps the typed row clear of: the bar and its gap. */
+export const DONE_BAR_HEIGHT = BAR_HEIGHT + (FLOATING ? FLOAT_GAP : 0);
 
 /** The arrow's size. */
 const ICON_SIZE = 20;
@@ -60,7 +71,12 @@ export function KeyboardDoneBar({ keyboardOverlap }: KeyboardDoneBarProps) {
 
   return (
     <Animated.View
-      style={[styles.bar, { bottom: keyboardOverlap }, style]}
+      style={[
+        styles.bar,
+        FLOATING && styles.barFloating,
+        { bottom: keyboardOverlap + (FLOATING ? FLOAT_GAP : 0) },
+        style,
+      ]}
       pointerEvents="box-none"
     >
       <TouchableOpacity
@@ -86,7 +102,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 0,
     right: 0,
-    height: DONE_BAR_HEIGHT,
+    height: BAR_HEIGHT,
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
@@ -98,12 +114,20 @@ const styles = StyleSheet.create({
     zIndex: 40,
     elevation: 40,
   },
+  barFloating: {
+    left: 12,
+    right: 12,
+    borderRadius: BAR_HEIGHT / 2,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.14)",
+    overflow: "hidden",
+  },
   done: {
     flexDirection: "row",
     alignItems: "center",
     gap: 2,
     paddingHorizontal: 8,
-    height: DONE_BAR_HEIGHT,
+    height: BAR_HEIGHT,
   },
   doneText: {
     fontFamily: theme.typography.subheading.fontFamily,

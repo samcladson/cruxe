@@ -25,6 +25,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ActivePuzzleConflictModal } from "../../components/modals/ActivePuzzleConflictModal";
 import { AnimatedNumber } from "../../components/ui/AnimatedNumber";
 import { ScreenBackdrop } from "../../components/ui/ScreenBackdrop";
+import { FadeScrollView } from "../../components/ui/FadeScrollView";
 import { Wordmark } from "../../components/ui/Wordmark";
 import { CATEGORIES } from "../../constants/categories";
 import { theme } from "../../constants/theme";
@@ -376,7 +377,7 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      <ScrollView
+      <FadeScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
@@ -803,7 +804,7 @@ export default function HomeScreen() {
             })
           )}
         </View>
-      </ScrollView>
+      </FadeScrollView>
 
       {/* Categories modal removed in V1 to focus strictly on Daily Edition */}
 

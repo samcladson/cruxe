@@ -30,6 +30,7 @@ import { supabase } from "../../services/supabaseClient";
 import { Difficulty } from "../../types/puzzle.types";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { ScreenBackdrop } from "../../components/ui/ScreenBackdrop";
+import { FadeScrollView } from "../../components/ui/FadeScrollView";
 import { ActivePuzzleConflictModal } from "../../components/modals/ActivePuzzleConflictModal";
 import { usePuzzleLauncher } from "../../hooks/usePuzzleLauncher";
 
@@ -109,7 +110,7 @@ export default function CollectionScreen() {
         subtitle="Every puzzle published today"
       />
 
-      <ScrollView style={styles.scrollArea} showsVerticalScrollIndicator={false}>
+      <FadeScrollView style={styles.scrollArea} showsVerticalScrollIndicator={false}>
         {/* Filters */}
         <View style={styles.filtersSection}>
           <Text style={styles.filterLabel}>DIFFICULTY</Text>
@@ -402,7 +403,7 @@ export default function CollectionScreen() {
           )}
           <View style={{ height: 40 }} />
         </View>
-      </ScrollView>
+      </FadeScrollView>
 
       <ActivePuzzleConflictModal
         visible={conflictPuzzle !== null}
