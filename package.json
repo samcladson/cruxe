@@ -12,7 +12,8 @@
     "test:integration": "jest __tests__/integration",
     "brand": "node scripts/brand/generate-brand.cjs",
     "brand:store": "node scripts/brand/generate-store-screenshots.cjs",
-    "brand:store:ios": "node scripts/brand/generate-app-store-screenshots.cjs"
+    "brand:store:ios": "node scripts/brand/generate-app-store-screenshots.cjs",
+    "brand:store:creative": "node scripts/brand/generate-store-creative.cjs"
   },
   "dependencies": {
     "@expo-google-fonts/manrope": "^0.4.2",
