@@ -233,8 +233,56 @@ Each of the four consumables needs, before it can leave "Missing Metadata":
   four. It is for App Review only and is never shown to customers. It must be
   a real iPhone screenshot of the Store screen with prices showing, so take it
   on the device.
-- **Review note:** `Consumable pack of coins, used to unlock extra puzzles and
-  hints.`
+- **Review note:** one per pack, below. Paste each into that pack's
+  Review Information → Review Notes.
+
+**Starter** (`com.cruxe.coins.starter2`)
+
+```
+Starter Pack: a consumable In-App Purchase that adds 300 coins to the player's balance ($0.99).
+
+Coins are Cruxe's in-game currency. They unlock extra puzzles beyond the 5 free plays each day, reveal hints (a letter, a word, or a check for errors) and unlock the facts behind answers on the Takeaway screen. Coins are also earned by solving, so buying is optional; the Daily Challenge is always free.
+
+To test: sign in with "Continue with Apple", tap the Store tab (bottom bar, middle), then tap $0.99 on the Starter card. The balance at the top of the Store updates once the purchase completes. Restore Purchases is at the bottom of the Store.
+
+The App Store image is an original illustration of this pack, not a screenshot of the app (Guideline 2.3.2).
+```
+
+**Plus** (`com.cruxe.coins.plus`)
+
+```
+Plus Pack: a consumable In-App Purchase that adds 1,800 coins to the player's balance ($4.99). It is marked "Popular" in the Store.
+
+Coins are Cruxe's in-game currency. They unlock extra puzzles beyond the 5 free plays each day, reveal hints (a letter, a word, or a check for errors) and unlock the facts behind answers on the Takeaway screen. Coins are also earned by solving, so buying is optional; the Daily Challenge is always free.
+
+To test: sign in with "Continue with Apple", tap the Store tab (bottom bar, middle), then tap $4.99 on the Plus card. The balance at the top of the Store updates once the purchase completes. Restore Purchases is at the bottom of the Store.
+
+The App Store image is an original illustration of this pack, not a screenshot of the app (Guideline 2.3.2).
+```
+
+**Pro** (`com.cruxe.coins.pro`)
+
+```
+Pro Pack: a consumable In-App Purchase that adds 3,900 coins to the player's balance ($9.99).
+
+Coins are Cruxe's in-game currency. They unlock extra puzzles beyond the 5 free plays each day, reveal hints (a letter, a word, or a check for errors) and unlock the facts behind answers on the Takeaway screen. Coins are also earned by solving, so buying is optional; the Daily Challenge is always free.
+
+To test: sign in with "Continue with Apple", tap the Store tab (bottom bar, middle), then tap $9.99 on the Pro card. The balance at the top of the Store updates once the purchase completes. Restore Purchases is at the bottom of the Store.
+
+The App Store image is an original illustration of this pack, not a screenshot of the app (Guideline 2.3.2).
+```
+
+**Elite** (`com.cruxe.coins.elite`)
+
+```
+Elite Pack: a consumable In-App Purchase that adds 9,000 coins to the player's balance ($19.99).
+
+Coins are Cruxe's in-game currency. They unlock extra puzzles beyond the 5 free plays each day, reveal hints (a letter, a word, or a check for errors) and unlock the facts behind answers on the Takeaway screen. Coins are also earned by solving, so buying is optional; the Daily Challenge is always free.
+
+To test: sign in with "Continue with Apple", tap the Store tab (bottom bar, middle), then tap $19.99 on the Elite card. The balance at the top of the Store updates once the purchase completes. Restore Purchases is at the bottom of the Store.
+
+The App Store image is an original illustration of this pack, not a screenshot of the app (Guideline 2.3.2).
+```
 
 Then attach all four to the app version under **In-App Purchases and
 Subscriptions** on the version page, or they will not be submitted with it.

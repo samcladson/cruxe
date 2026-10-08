@@ -86,3 +86,30 @@ Sign in with Apple token.
 - **Restore Purchases** exists on the Store tab (verified in store.tsx).
 - Whether the leaderboard shows names is a fact about the app; if it ever shows
   anything a player types beyond their display name, the UGC line changes.
+
+---
+
+# App Review reply — Guideline 2.3.2 "Accurate Metadata" (2026-10-08)
+
+Second review of 1.0.0 (build 4), on an iPad Air: rejected because the four
+coin packs' promotional images (In-App Purchase → Image) were screenshots of
+the app. Fixed by replacing them with the illustrations from
+`npm run brand:store:creative` (`assets/store/iap-promo/`), adding a Store
+screen review screenshot and a review note per pack (`listing-copy.md`), and
+resubmitting the packs with the version. Reply in App Store Connect → App Review
+→ the message:
+
+```
+Hello,
+
+Thank you for the review. We have resolved the Guideline 2.3.2 issue.
+
+The promotional images for all four In-App Purchases (Starter, Plus, Pro and Elite) were screenshots taken from the app. Each one has been replaced with an original illustration made for that pack: its name, its coin amount (300, 1,800, 3,900 and 9,000 coins), and a pile of coins that grows with the pack. No image contains any part of the app's interface, and each is unique to its pack.
+
+We have also added a review screenshot of the Store screen and review notes to each In-App Purchase. All four have been resubmitted together with version 1.0.0 (4).
+
+To reach the purchases: sign in with "Continue with Apple", then tap the Store tab in the bottom bar.
+
+Thank you,
+Sam Cladson
+```
